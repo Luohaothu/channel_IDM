@@ -1,0 +1,31 @@
+// file paths
+fieldpath = "../data/fielddata/"
+probepath = "../data/probedata/"
+statpath = "../data/statdata/"
+postpath = "../data/postdata/"
+
+// physical parameters
+Re = 2850.0		// Reynolds number
+init_ener = 0.5	// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
+
+// grid settings
+Nx = 96			// grid number of streamwise direction
+Ny = 97			// grid number of wall normal direction
+Nz = 96			// grid number of spanwise direction
+Lx = 6.2832		// domain length of streamwise direction
+Ly = 2.0		// channel height. Not adjustable (must be 2.0 if the non-dimensional equation is solved)
+Lz = 3.1416		// domain length of spanwise direction
+dy_min = 3e-3	// y coordinate at first grid off wall
+
+// time evolution control
+Nt = 1000000	// total time steps to evolve
+dt = 5e-3		// time step length
+
+// output control
+nwrite = 5000	// step interval for writing whole fields (0 for not outputing)
+nprint = 20		// step interval for printing and updating log of computation state (0 for not outputing)
+nprobe = 0		// step interval for writing time serials of probed layers (0 for not outputing)
+
+// input control
+nread = 0		// step number of whole field files to read for continuing computation (0 for not inputing)
+jprbs = 0		// layer indexes of layers to be probed (jprbs[0] store the number of layers)
