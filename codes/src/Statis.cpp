@@ -1,5 +1,5 @@
 # include <iostream>
-
+// # include <string.h>
 
 # include "Statis.h"
 
@@ -47,7 +47,6 @@ double Statis::checkDiv(double **U, class Mesh *pmesh)
 			divpos[0] = i;
 			divpos[1] = j;
 			divpos[2] = k;
-
 		}
 	}}}
 	return ( div = divmax );
@@ -91,27 +90,31 @@ double Statis::checkMean(double **UP, class Mesh *pmesh)
 	return velm[0];
 }
 
-double Statis::checkTauw(class Mesh *pmesh)
+// note: checkMean() must be called before this function
+double Statis::checkTauw(class Mesh *pmesh, double Re)
 /* calculate three components of wall stress */
-{	// note: must call checkMean() before this function
-	double taud, tauu, *vel[3] = {Um, Vm, Wm};	for (int i=0; i<3; i++) {
+/* tau_2i = 2 nu S_2i; S_2i = 0.5 ( du_i/dy + dv/dx_i ) */
+/* applying no-slip BC, tau_21 = nu du/dy, tau_22 = 2 nu dv/dy, tau_23 = nu dw/dy */
+{
+	double taud, tauu, *vel[3] = {Um, Vm, Wm};
+	for (int i=0; i<3; i++) {
 		taud = ( vel[i][1]	- vel[i][0]		) / pmesh->h[1];
 		tauu = ( vel[i][Ny] - vel[i][Ny-1]	) / pmesh->h[Ny];
-		tauw[i] = 0.5 * ( taud - tauu );
+		tauw[i] = 0.5 * ( taud - tauu ) * ( i==1 ? (2.0/Re) : (1.0/Re) );
 	}
 	return tauw[0];
 }
 
+// note: must call checkMean() before this function
 double Statis::checkEner(double **UP, class Mesh *pmesh, class Field *pfield)
 /* calculate Reynolds stresses, pressure-velocity correlations, and the total fluctuation energy */
-{	// note: must call checkMean() before this function
+{
 	int i, j, k, idx, ip, kp;
 	double *u = UP[0], *v = UP[1], *w = UP[2], *p = UP[3];
 	double *ul = new double [Nxz];
 	double *vl = new double [Nxz];
 	double *wl = new double [Nxz];
 	double *pl = new double [Nxz];
-	// double vm1, vm2;
 	double *vl1 = vl, *vl2 = new double [Nxz];
 	double *ql = new double [Nxz];
 	
@@ -173,21 +176,18 @@ void Statis::writeProfile(char *path, int tstep, double *yc)
 	fclose(fp);
 }
 
-
 void Statis::writeLogfile(char *path, int tstep, double time)
 {
 	FILE *fp;
 	char str[1024];
-	bool fileexist = true;
+	long int pos = this->readLogfile(path, tstep);
 
 	sprintf(str, "%sLOG.dat", path?path:"");
 
-	if ( ( fp = fopen(str, "r") ) ) fclose(fp);
-	else fileexist = false;
-
-	fp = fopen(str, "a");
+	fp = fopen(str, pos ? "r+" : "w");
 	
-		if (! fileexist) {
+		if (pos) fseek(fp, pos, SEEK_SET);
+		else {
 			fputs("Title = \"Running log\"\n", fp);
 			fputs("variables = \"n\", \"t\", \"ener\", \"tauw21\", \"tauw22\", \"tauw23\", \"Um\", \"Vm\", \"Wm\", \"div\", \"divposx\", \"divposy\", \"divposz\", \"cfl\", \"cflposx\", \"cflposy\", \"cflposz\"\n", fp);
 			fputs("zone t = \"statis\"\n", fp);
@@ -201,10 +201,47 @@ void Statis::writeLogfile(char *path, int tstep, double time)
 			cfl, cflpos[0], cflpos[1], cflpos[2]	);
 		fputs(str, fp);
 
+		// because line lengths are not necessarily the same,
+		// undesired lines may be caused by inserting line in the middle of the file.
+		// These lines are overwritten by ' ' to keep the text format,
+		// and the empty line will be finally removed when the writing reaches the end of file.
+		pos = ftell(fp);
+		if (fgets(str, 1024, fp) && str[0] != ' ') {
+			fseek(fp, pos, SEEK_SET);
+			for (char *c = str; *c != '\0'; c++) fputc(' ', fp);
+		}
+
 	fclose(fp);
 }
 
 
+long int Statis::readLogfile(char *path, int tstep, double *time)
+/* find the first line whose time step >= tstep, return the beginning position and record the time of this line */
+{
+	FILE *fp;
+	char str[1024];
+	long int pos = 0;
+	int n = 0;
+	double t = 0.0;
+
+	sprintf(str, "%sLOG.dat", path?path:"");
+
+	if ( ( fp = fopen(str, "r") ) ) {
+		fgets(str, 1024, fp);	// skip header
+		fgets(str, 1024, fp);	// skip header
+		fgets(str, 1024, fp);	// skip header
+
+		while ( n < tstep ) {
+			pos = ftell(fp);
+			if ( ! fgets(str, 1024, fp) ) break; // reach the end of file
+			sscanf(str, "%i\t%lf", &n, &t);	// if str is empty line or spaces, n and t will not be assigned
+		}
+		fclose(fp);
+	}
+
+	if (time) *time = t;
+	return pos;
+}
 
 
 

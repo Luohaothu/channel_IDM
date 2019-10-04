@@ -32,18 +32,14 @@ Nx(dim[0]), Ny(dim[1]), Nz(dim[2]), Nxz(dim[0]*dim[2])
 	vbc = new double [Nxz * 2];		// 0 -> lower wall, 1 -> upper wall
 	wbc = new double [Nxz * 2];		// 0 -> lower wall, 1 -> upper wall
 
-	fdp = new double [Nxzr * Ny];	// the complex party of fft should be a bit larger
+	fdp = new double [Nxzr * (Ny+1)];	// the complex party of fft should be a bit larger
 
-	frcs = new fftw_plan [Ny-1];
-	fcrs = new fftw_plan [Ny-1];
+	frcs = new fftw_plan [Ny+1];
+	fcrs = new fftw_plan [Ny+1];
 
-	// set up fft plans
-	double *rs = (double*) &( dp[Nxz] );	// the effective domain of DP starts from the second layer, since the wall layer do not participate in computation
-	double *cs = (double*) &( fdp[Nxzr] );	// the effective domain of FDP starts from the second layer, since the wall layer do not participate in computation
-	
-	for (int j=0; j<Ny-1; j++) {
-		double *r = (double*) &( rs[Nxz * j] );
-		fcmplx *c = (fcmplx*) &( cs[Nxzr * j] );
+	for (int j=0; j<=Ny; j++) {	// note: the effective domain of DP actually starts from the second layer, since the wall layers do not participate in computation
+		double *r = (double*) &( dp[Nxz * j] );
+		fcmplx *c = (fcmplx*) &( fdp[Nxzr * j] );
 		frcs[j] = fftw_plan_dft_r2c_2d(Nz, Nx, r, c, FFTW_MEASURE);
 		fcrs[j] = fftw_plan_dft_c2r_2d(Nz, Nx, c, r, FFTW_MEASURE); // note: the inverse transform (complex to real) has the side-effect of overwriting its input array
 	}
@@ -54,10 +50,9 @@ Field::~Field()
 {
 	delete [] u; delete [] v; delete [] w; delete [] p;
 	delete [] uh; delete [] vh; delete [] wh; delete [] dp;
-	delete [] vbc; delete [] vbc; delete [] vbc;
+	delete [] ubc; delete [] vbc; delete [] wbc;
 	delete [] fdp;
-
-	for (int j=0; j<Ny-1; j++) {
+	for (int j=0; j<=Ny; j++) {
 		fftw_destroy_plan(frcs[j]);
 		fftw_destroy_plan(fcrs[j]);
 	}
@@ -66,13 +61,87 @@ Field::~Field()
 }
 
 
+void Field::initField(class Field *pf0, class Mesh *pm0, class Mesh *pm)
+/* initiate flow field from given fields, interpolated to the current grid */
+{
+	int i, j, k, idx, j0, idx0, jm0;
+	int *i0 = new int [Nx], *k0 = new int [Nz];
+	int Nx0 = pm0->Nx, Ny0 = pm0->Ny, Nz0 = pm0->Nz;
+	double *y = pm->y, *yc = pm->yc, *y0 = pm0->y, *yc0 = pm0->yc;
+
+	// nearest interpolation for x and z directions in Fourier space
+	// find out nearest point for every wavenumber k_z
+	for (k=0; k<Nz; k++) {	k0[k] = 0;
+	for (int k1=1; k1<Nz0; k1++) {
+		if (	abs( pm->kz(k) - pm0->kz(k1)	)
+			<	abs( pm->kz(k) - pm0->kz(k0[k])	)	)	k0[k] = k1;
+	}}
+	// find out nearesr point for every wavenumber k_x
+	for (i=0; i<Nx; i++) {	i0[i] = 0;
+	for (int i1=1; i1<Nx0; i1++) {
+		if (	abs( pm->kx(i) - pm0->kx(i1)	)
+			<	abs( pm->kx(i) - pm0->kx(i0[i])	)	)	i0[i] = i1;
+	}}
+
+	for (int n=0; n<4; n++) {
+
+		pf0->bulkCopy(pf0->dp, pf0->UP()[n]);
+		pf0->fft();
+
+		// linear interpolations for y direction
+		for (j=0; j<=Ny; j++) {
+			// find out the range (j0-1 ~ j0) where j fall
+			for (j0=0; j0<=Ny0; j0++) { if (yc0[j0] > yc[j]) break; }
+			if (n == 1) { j0 = j==0 ? 0 : (j==1 ? 2 : j0); }
+
+			for (k=0; k<Nz; k++) {
+			for (i=0; i<Nxc; i++) {
+
+				idx = this->IDXF(i,j,k);
+				idx0 = pf0->IDXF(i0[i],j0,k0[k]);
+				jm0 = pf0->IDXF(i0[i],j0-1,k0[k]);
+
+				// values at both ends are extended for out-of-range points
+				if (j0 == 0) {
+					fdp[idx] = pf0->fdp[idx0];		// real part
+					fdp[idx+1] = pf0->fdp[idx0+1];	// imaginary part
+				}
+				else if (j0 == Ny0+1) {
+					fdp[idx] = pf0->fdp[jm0];
+					fdp[idx+1] = pf0->fdp[jm0+1];
+				}
+				// linear interpolation for in-range points
+				else {
+					fdp[idx] =
+						(yc0[j0] - yc[j]) / ( yc0[j0] - yc0[j0-1] ) * pf0->fdp[jm0]
+					+	(yc[j]-yc0[j0-1]) / ( yc0[j0] - yc0[j0-1] ) * pf0->fdp[idx0];
+
+					fdp[idx+1] =
+						(yc0[j0] - yc[j]) / ( yc0[j0] - yc0[j0-1] ) * pf0->fdp[jm0+1]
+					+	(yc[j]-yc0[j0-1]) / ( yc0[j0] - yc0[j0-1] ) * pf0->fdp[idx0+1];
+				}
+			}
+		}}
+		this->ifft();
+		this->bulkCopy( this->UP()[n], this->bulkMult(this->dp, 1.0/pm0->Nxz*this->Nxz) );
+	}
+
+	// 3 mean pressure gradients are initiated to 0, and will be compensated by dmpg next step
+	mpg[0] = mpg[1] = mpg[2] = 0.0;
+
+	// implement BC on boundaries
+	this->applyBC();
+
+	printf("\nFlow fields initiated from existing fields.\n");
+}
+
 void Field::initField(double energy, class Mesh *pmesh)
-/* initiate flow field */
+/* initiate flow field from laminar with random fluctions */
 {
 	int idx, i, j, k;
 	double *y = pmesh->y, Ly = pmesh->Ly;
 
-	// initiate velocities with random fluctuation
+	// initiate velocities with random fluctuations
 	srand(time(0));
 	for (j=1; j<Ny; j++) {
 	for (k=0; k<Nz; k++) {
@@ -110,16 +179,18 @@ void Field::initField(double energy, class Mesh *pmesh)
 		this->layerAdd(u, yh * (Ly-yh), j);
 	}
 
-	// modify flow rate
+	// modify flow rate // note: boundary will be modified through using bulk functions
 	this->bulkMult( u, 1.0 / pmesh->bulkMeanU(u) ); // rescale the mass flow rate to be equal to 2.0 (bulk mean U = 1.0 because of non-dimensionalization)
 	this->bulkAdd( w, - pmesh->bulkMeanU(w) );
+
+	// set initial pressure and its mean gradients in 3 directions
 	this->bulkSet( p, 0 );
 	mpg[0] = mpg[1] = mpg[2] = 0.0;
 
-	// initiate boundary conditions
-	this->bcond(0);
 	// implement BC on boundaries
 	this->applyBC();
+
+	printf("\nFlow fields initiated from laminar.\n");
 }
 
 void Field::bcond(int tstep)
@@ -191,23 +262,23 @@ double* Field::layersMult(double *dst, double *src, int j1, int j0)
 }
 
 double* Field::bulkCopy(double *dst, double *src)
-{
-	memcpy(& dst[Nxz], & src[Nxz], sizeof(double) * Nxz * (Ny-1));
+{	// note: bulk functions will change the boundary
+	memcpy(dst, src, sizeof(double) * Nxz * (Ny+1));
 	return dst;
 }
 double* Field::bulkSet(double *dst, double a)
-{
-	for (int j=1; j<Ny; j++)	this->layerSet(dst, a, j);
+{	// note: bulk functions will change the boundary
+	for (int j=0; j<=Ny; j++)	this->layerSet(dst, a, j);
 	return dst;
 }
 double* Field::bulkAdd(double *dst, double a)
-{
-	for (int j=1; j<Ny; j++)	this->layerAdd(dst, a, j);
+{	// note: bulk functions will change the boundary
+	for (int j=0; j<=Ny; j++)	this->layerAdd(dst, a, j);
 	return dst;
 }
 double* Field::bulkMult(double *dst, double a)
-{
-	for (int j=1; j<Ny; j++)	this->layerMult(dst, a, j);
+{	// note: bulk functions will change the boundary
+	for (int j=0; j<=Ny; j++)	this->layerMult(dst, a, j);
 	return dst;
 }
 
@@ -243,6 +314,7 @@ void Field::fieldIO(char *path, double *ptr, char *name, char mode)
 	sprintf(str, "%s%s.bin", path?path:"", name);
 
 	fp = fopen( str, (mode == 'w' ? "wb" : "rb") );
+
 
 		// write domain information at the beginning
 		if (mode == 'w') {

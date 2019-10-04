@@ -34,16 +34,17 @@ class Para
 		int nwrite;			// step interval for writing whole fields (0 for not outputing)
 		int nprint;			// step interval for printing and updating log of computation state (0 for not outputing)
 		int nprobe;			// step interval for writing time serials of probed layers (0 for not outputing)
+		int *jprbs;			// layer indexes of layers to be probed (jprbs[0] store the number of layers)
 
 		// input control
 		int nread;			// step number of whole field files to read for continuing computation (0 for not inputing)
-		int *jprbs;			// layer indexes of layers to be probed (jprbs[0] store the number of layers)
+		char inpara[1024];	// parameter setting file of the computation to be continued
 
 		void readPara(std::string filename);	// if no filename if provided, initiate with debug parameters
 		void showPara();
 
-		int*	dim() { static int dim[3] = {Nx, Ny, Nz}; return (int*) dim; };
-		double*	len() { static double len[3] = {Lx, Ly, Lz}; return (double*) len; };
+		int*	dim() { int		*dim = new int		[3]; dim[0] = Nx; dim[1] = Ny; dim[2] = Nz; return (int*)	dim; };
+		double*	len() { double	*len = new double	[3]; len[0] = Lx; len[1] = Ly; len[2] = Lz; return (double*)len; };
 
 	private:
 		int* parseJprbs(char *str);

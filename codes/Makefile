@@ -33,6 +33,13 @@ dir:
 	mkdir ../data/statdata
 	mkdir ../data/postdata
 
+dirclean:
+	rm -r ../data/fielddata
+	rm -r ../data/probedata
+	rm -r ../data/statdata
+	rm -r ../data/postdata
+	make dir
+
 .PHONY: clean
 
 clean:

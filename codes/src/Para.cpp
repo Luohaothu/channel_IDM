@@ -1,5 +1,6 @@
 # include <iostream>
 # include <stdio.h>
+# include <string.h>
 
 # include "Para.h"
 
@@ -10,45 +11,44 @@ using namespace std;
 
 Para::Para(string filename)
 {
+	/* if no filename is provided, initiate with default parameters */
+
+	// file paths
+	sprintf(fieldpath, "fielddata/");
+	sprintf(probepath, "probedata/");
+	sprintf(statpath, "statdata/");
+	sprintf(postpath, "postdata/");
+
+	// physical parameters
+	Re = 100.0;
+	init_ener = 0.5;
+
+	// grid settings
+	Nx = 4;	// peridoic without overlap
+	Ny = 5;	// from wall to wall
+	Nz = 4;	// peridoic without overlap
+	Lx = 6.2832;
+	Ly = 2.0;
+	Lz = 3.1416;
+	dy_min = 0.2;
+
+	// time evolution control
+	Nt = 1000000;
+	dt = 1e-3;
+
+	// output control
+	nwrite = 10000;
+	nprint = 1000;
+	nprobe = 0;
+	jprbs = new int;
+	jprbs[0] = 0;
+
+	// input control
+	nread = 0;
+	sprintf(inpara, "no input");
+
+	/* if filename provided, read the file */
 	if (filename != "")	this->readPara(filename);
-
-	// if no filename if provided, initiate with debug parameters
-	else {
-		// file paths
-		sprintf(fieldpath, "fielddata/");
-		sprintf(probepath, "probedata/");
-		sprintf(statpath, "statdata/");
-		sprintf(postpath, "postdata/");
-
-		// physical parameters
-		Re = 100.0;
-		init_ener = 0.5;
-
-		// grid settings
-		Nx = 4;	// peridoic without overlap
-		Ny = 5;	// from wall to wall
-		Nz = 4;	// peridoic without overlap
-		Lx = 6.2832;
-		Ly = 2.0;
-		Lz = 3.1416;
-		dy_min = 0.2;
-
-		// time evolution control
-		Nt = 1000000;
-		dt = 1e-3;
-
-		// output control
-		nwrite = 10000;
-		nprint = 1000;
-		nprobe = 0;
-
-		// input control
-		nread = 0;
-		jprbs = new int;
-		jprbs[0] = 0;
-
-		this->showPara();
-	}
 }
 
 void Para::readPara(string filename)
@@ -78,10 +78,10 @@ void Para::readPara(string filename)
 		if ( strstr(str, "nwrite") ){ s = strchr(str, '='); sscanf(++s, "%i", & nwrite); }
 		if ( strstr(str, "nprint") ){ s = strchr(str, '='); sscanf(++s, "%i", & nprint); }
 		if ( strstr(str, "nprobe") ){ s = strchr(str, '='); sscanf(++s, "%i", & nprobe); }
-		if ( strstr(str, "nread") )	{ s = strchr(str, '='); sscanf(++s, "%i", & nread); }
 		if ( strstr(str, "jprbs") )	{ jprbs = this->parseJprbs(str); }
+		if ( strstr(str, "nread") )	{ s = strchr(str, '='); sscanf(++s, "%i", & nread); }
+		if ( strstr(str, "inpara") ){ s = strchr(str, '='); s = strchr(++s, '\"'); sscanf(++s, "%[^\"]", inpara); }
 	}
-	this->showPara();
 }
 
 int* Para::parseJprbs(char *str)
@@ -124,13 +124,12 @@ void Para::showPara()
 	cout << "Nt = " << Nt << ", dt = " << dt << endl;
 	cout << "\nOutput control:" << endl;
 	cout << "nwrite = " << nwrite << ", nprint = " << nprint << ", nprobe = " << nprobe << endl;
+	cout << "jprbs = ";
+		for (int j=1; j<=jprbs[0]; j++)	cout << jprbs[j] << ", ";
+		cout << "total " << jprbs[0] << " layers to be probed." << endl;
 	cout << "\nInput control:" << endl;
 	cout << "nread = " << nread << endl;
-
-	cout << "jprbs = ";
-	for (int j=1; j<=jprbs[0]; j++)	cout << jprbs[j] << ", ";
-	cout << "total " << jprbs[0] << " layers to be probed." << endl;
-
+	cout << "inpara = " << inpara << endl;
 	cout << "----------------------------------------------------" << endl;
 }
 

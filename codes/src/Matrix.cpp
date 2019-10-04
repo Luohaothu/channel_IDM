@@ -85,6 +85,17 @@ void Matrix::ctdma(double *a, double *b, double *c, double *d)
 }
 
 
+// this function does not belong to the Matrix class
+double linearInterp(int n, double *x0, double *y0, double x)
+{
+	int i;
+	for (i=0; i<n; i++) { if (x0[i] > x) break; }
+	return	(i==0) ? y0[0]
+		:	(i==n) ? y0[n-1]
+		:	(	( x0[i] - x ) * y0[i-1]
+			+	( x - x0[i-1] ) * y0[i]	) / ( x0[i] - x0[i-1] );
+}
+
 
 
 // # define DEBUG	// g++ -lfftw3 -lm -I include src/Matrix.cpp

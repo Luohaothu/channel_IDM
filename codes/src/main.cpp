@@ -10,6 +10,7 @@ using namespace std;
 
 
 void output(int tstep, double time, class Para *ppara, class Mesh *pmesh, class Field *pfield, class Statis *pstat);
+void input(int *tstep, double *time, class Field *pfield, class Para *ppara, class Mesh *pmesh);
 
 
 int main()
@@ -20,15 +21,20 @@ int main()
 	class Statis*pstat	= new class Statis	(ppara->dim());
 	class IDM	*pIDM	= new class IDM		();
 
-	int tstep = 0;
-	double time = 0.0;
+	int tstep = 0;	double time = 0.0;
 	
-	// initialization
+	// mesh initialization
+	ppara->showPara();
 	pmesh->initMesh(ppara->len(), ppara->statpath, ppara->dy_min);
-	pfield->initField(ppara->init_ener, pmesh);
+	if (! pmesh->checkYmesh(ppara->statpath, pmesh->y)) exit(0);
 	pIDM->initIDM(ppara->Re, ppara->dt, pmesh);
-	output(tstep, time, ppara, pmesh, pfield, pstat);
+	// field initialization
+	pfield->bcond(0);
+	if (ppara->nread > 0)	input(& tstep, & time, pfield, ppara, pmesh);
+	else					pfield->initField(ppara->init_ener, pmesh);
+	if (tstep == 0)	output(0, 0.0, ppara, pmesh, pfield, pstat);
 
+	// main loop
 	while (tstep++ < ppara->Nt) {
 		time += ppara->dt;
 
@@ -48,20 +54,45 @@ int main()
 }
 
 
+
 void output(int tstep, double time, class Para *ppara, class Mesh *pmesh, class Field *pfield, class Statis *pstat)
 {
 	if (tstep % ppara->nwrite == 0)	{
 		pfield->writeField(ppara->fieldpath, tstep);
-		pfield->writeTecplot(ppara->fieldpath, tstep, time, pmesh);
+		// pfield->writeTecplot(ppara->fieldpath, tstep, time, pmesh);
 		// pfield->debug_Output(tstep);
+		cout << "Files successfully written for step " << tstep << endl;
 	}
 	if (tstep % ppara->nprint == 0) {
-		pstat->checkStat(pfield->UP(), pmesh, pfield, ppara->dt);
+		pstat->checkStat(pfield->UP(), pmesh, pfield, ppara->Re, ppara->dt);
 		pstat->writeProfile(ppara->statpath, -1, pmesh->yc);
 		pstat->writeLogfile(ppara->statpath, tstep, time);
 	}
 }
 
+
+void input(int *tstep, double *time, class Field *pfield, class Para *ppara, class Mesh *pmesh)
+{
+	class Para *ppara0 = new class Para (ppara->inpara);
+	class Mesh *pmesh0 = new class Mesh (ppara0->dim());
+	class Field *pfield0 = new class Field (ppara0->dim());
+	class Statis *pstat0 = new class Statis (ppara0->dim());
+
+	cout << "\nParameters for continue computing:" << endl;
+	ppara0->showPara();
+
+	pstat0->readLogfile(ppara0->statpath, ppara->nread, time);
+	*tstep = *time < 1e-10 ? 0 : ppara->nread; // continue last case or start a new case depending on whether a continue time is read
+
+	pmesh0->initMesh(ppara0->len(), ppara0->statpath, ppara0->dy_min);
+	pfield0->readField(ppara0->fieldpath, ppara->nread);
+	pfield->initField(pfield0, pmesh0, pmesh);
+
+	delete ppara0;
+	delete pmesh0;
+	delete pfield0;
+	delete pstat0;
+}
 
 
 

@@ -1,6 +1,7 @@
 # pragma once
 
 
+# define PI 3.1415926535898
 
 
 class Mesh
@@ -27,6 +28,10 @@ class Mesh
 		int *ipa, *ima;				// the forward and backward node indices in periodic X direction
 
 		void initMesh(double *len, char *path, double dy_min);
+		bool checkYmesh(char *path, double *ymesh);
+
+		double kx(int i) { return ( i - ( i > (int)(Nx/2) ? Nx : 0 ) ) * (2.0*PI/Lx); };
+		double kz(int k) { return ( k - ( k > (int)(Nz/2) ? Nz : 0 ) ) * (2.0*PI/Lz); };
 
 		// tool functions
 		double divergence(double *u, double *v, double *w, int i, int j, int k);
@@ -46,8 +51,10 @@ class Mesh
 
 	private:
 		int IDX(int i, int j, int k) {return Nxz * j + Nx * k + i;};
-		double getYmesh(char *path, double dy_min);
+		double* getYmesh(char *path);
+		double* getYmesh(double dy_min);
 		double distrib_Y(int j, double gamma);
+
 };
 
 

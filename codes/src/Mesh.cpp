@@ -1,5 +1,6 @@
 # include <iostream>
 # include <stdio.h>
+# include <stdlib.h>
 # include <math.h>
 
 
@@ -68,7 +69,8 @@ void Mesh::initMesh(double *len, char *path, double dy_min)
 	vol = Lx * Ly * Lz;
 	
 	// y grids
-	if ( abs( this->getYmesh(path, dy_min) - Ly ) > 1e-10 ) printf("Y grid error !!!");
+	if (dy_min > 0)	memcpy(this->y, this->getYmesh(dy_min), sizeof(double) * (Ny+1));
+	else			memcpy(this->y, this->getYmesh( path ), sizeof(double) * (Ny+1));
 
 	yc[0] = 0.0;
 	yc[Ny] = Ly;
@@ -110,9 +112,8 @@ void Mesh::initMesh(double *len, char *path, double dy_min)
 	}
 
 	// initiate wavenumbers
-	const double PI = 3.1415926535898;
-	for (i=0; i<Nx; i++) ak1[i] = 2.0/dx2 * ( 1.0 - cos( 2*PI/Nx * (i - (i>Nx/2?Nx:0)) ) );
-	for (k=0; k<Nz; k++) ak3[k] = 2.0/dz2 * ( 1.0 - cos( 2*PI/Nz * (k - (k>Nz/2?Nz:0)) ) );
+	for (i=0; i<Nx; i++) ak1[i] = 2.0/dx2 * ( 1.0 - cos(kx(i) * dx) );
+	for (k=0; k<Nz; k++) ak3[k] = 2.0/dz2 * ( 1.0 - cos(kz(k) * dz) );
 
 	// initiate indexes
 	for (k=0; k<Nz; k++) {
@@ -125,50 +126,78 @@ void Mesh::initMesh(double *len, char *path, double dy_min)
 	}
 }
 
-
-double Mesh::getYmesh(char *path, double dy_min)
+bool Mesh::checkYmesh(char *path, double *ymesh)
 {
 	FILE *fp;
 	char str[1024];
 	int j;
 
-	sprintf(str, "%sCHANNEL.GRD", path?path:"");
-
-	if (dy_min <= 0) {
-	/* read grid from file at specified path */
-		fp = fopen(str, "r");
-			for (j=0; j<=Ny; j++) {
-				fgets(str, 1024, fp);
-				sscanf(str, "%le", & y[j]);
-			}
-		fclose(fp);
+	/* check failed */
+	if ( abs(ymesh[Ny] - Ly) > 1e-10 ) {
+		printf("Mesh error: channel height does not match !");
+		return false;
 	}
-	else {
-	/* generate hyperbolic tangent grid (Newton iteration to determine parameter) */
-		double gamma = 1.0, dgamma = 0.1;
-		double F, F0 = this->distrib_Y(2, gamma-dgamma) - dy_min;
-		double grad;
 
-		for (j=0; j<100; j++) {
-			F = this->distrib_Y(2, gamma) - dy_min; // target equation: F(gamma) = distrib_Y(2,gamma) - dy_min = 0
-			grad = (F-F0) / dgamma;	if (! grad) {break;}
-			dgamma = - F / grad;	if (! dgamma) {break;}
-			gamma += dgamma;
-			F0 = F;
-		}
-
-		y[0] = 0.0;
-		for (j=1; j<=Ny; j++) y[j] = this->distrib_Y(j, gamma);
-
-		// write grid file to specified path
+	/* check passed */
+	// write grid file to specified path
+	if (path) {
+		sprintf(str, "%sCHANNEL.GRD", path);
 		fp = fopen(str, "w");
 			for (j=0; j<=Ny; j++) {
-				sprintf(str, "%.18e\n", y[j]);
+				sprintf(str, "%.18e\n", ymesh[j]);
 				fputs(str, fp);
 			}
 		fclose(fp);
 	}
-	return y[Ny];
+	// print grid information
+	printf("\ndy_min = %.6f, dy_max = %.6f\n", ymesh[2]-ymesh[1], ymesh[Ny/2+1]-ymesh[Ny/2]);
+
+	return true;
+}
+
+
+double* Mesh::getYmesh(char *path)
+/* read grid from file at specified path */
+{
+	FILE *fp;
+	char str[1024];
+	int j;
+	double *ymesh = new double [Ny+1];
+
+	sprintf(str, "%sCHANNEL.GRD", path?path:"");
+
+	fp = fopen(str, "r");
+		for (j=0; j<=Ny; j++) {
+			fgets(str, 1024, fp);
+			sscanf(str, "%le", & ymesh[j]);
+		}
+	fclose(fp);
+
+	return ymesh;
+}
+
+double* Mesh::getYmesh(double dy_min)
+/* generate hyperbolic tangent grid (Newton iteration to determine parameter) */
+{
+	int j;
+	double *ymesh = new double [Ny+1];
+
+	double gamma = 1.0, dgamma = 0.1;
+	double F, F0 = this->distrib_Y(2, gamma-dgamma) - dy_min;
+	double grad;
+
+	for (j=0; j<100; j++) {
+		F = this->distrib_Y(2, gamma) - dy_min; // target equation: F(gamma) = distrib_Y(2,gamma) - dy_min = 0
+		grad = (F-F0) / dgamma;	if (! grad) {break;}
+		dgamma = - F / grad;	if (! dgamma) {break;}
+		gamma += dgamma;		if (gamma <= 0) {printf("Mesh error: too large dy_min !"); exit(0);}
+		F0 = F;
+	}
+
+	ymesh[0] = 0.0;
+	for (j=1; j<=Ny; j++) ymesh[j] = this->distrib_Y(j, gamma);
+
+	return ymesh;
 }
 
 
