@@ -20,18 +20,18 @@ OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 $(ODIR)/%.o: $(SDIR)/%.cpp $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-channel_LES: $(OBJ)
+channel_WHN: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
-run: channel_LES
-	./channel_LES
+run: channel_WHN
+	./channel_WHN
 	make clean
 
 dir:
-	mkdir ../data/fielddata
-	mkdir ../data/probedata
-	mkdir ../data/statdata
-	mkdir ../data/postdata
+	mkdir -p ../data/fielddata
+	mkdir -p ../data/probedata
+	mkdir -p ../data/statdata
+	mkdir -p ../data/postdata
 
 dirclean:
 	rm -r ../data/fielddata

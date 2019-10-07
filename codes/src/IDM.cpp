@@ -637,6 +637,7 @@ void IDM::getfdp(double *fdp)
 			are explicitly set to 0. This is not needed here, since
 			zero imag FRDP lead directly to zero imag FDP	*/
 		if (k==0 && i==0) ccj[1] += 1e20; // this will set dP(kx=0,kz=0,j=1) to be 0, since it serves as the reference pressure
+											// a better way is to set dP(kx=0,kz=0,j=1) = -Nxz * P(kx=0,kz=0,j=1)
 		pmatyu->tdma( & cmj[1], & ccj[1], & cpj[1], & cfj1[1] );
 		pmatyu->tdma( & cmj[1], & ccj[1], & cpj[1], & cfj2[1] );
 

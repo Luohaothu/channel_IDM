@@ -1,4 +1,5 @@
 # include <iostream>
+# include <stdlib.h>
 
 # include "Para.h"
 # include "Mesh.h"
