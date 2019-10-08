@@ -29,13 +29,17 @@ void IDM::initIDM(double Re, double dt, class Mesh *pmesh)
 	pmatz = new class Matrix(Nz);
 }
 
-void IDM::uhcalc(double **UH, double **U, double **P, double **UBC)
+void IDM::ruhcalc(double **RUH, double **U, double **P, double **UBC)
 {
 	// calculate RUH (which shares memory with UH)
-	urhs1(UH[0], U[0], U[1], U[2], P[0], P[1][0]);
-	urhs2(UH[1], U[0], U[1], U[2], P[0]);
-	urhs3(UH[2], U[0], U[1], U[2], P[0], P[1][2]);
-	mbc(UH[0], UH[1], UH[2], U[0], U[1], U[2], UBC[0], UBC[1], UBC[2]);
+	urhs1(RUH[0], U[0], U[1], U[2], P[0], P[1][0]);
+	urhs2(RUH[1], U[0], U[1], U[2], P[0]);
+	urhs3(RUH[2], U[0], U[1], U[2], P[0], P[1][2]);
+	mbc(RUH[0], RUH[1], RUH[2], U[0], U[1], U[2], UBC[0], UBC[1], UBC[2]);
+}
+
+void IDM::uhcalc(double **UH, double **U)
+{
 	// solve UH
 	getuh1(UH[0],				U[0], U[1], U[2]);
 	getuh2(UH[0], UH[1],		U[0], U[1], U[2]);

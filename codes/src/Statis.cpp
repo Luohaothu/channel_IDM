@@ -1,5 +1,6 @@
 # include <iostream>
 # include <stdlib.h>
+# include <cmath>
 
 # include "Statis.h"
 
@@ -41,7 +42,7 @@ double Statis::checkDiv(double **U, class Mesh *pmesh)
 	for (j=1; j<Ny; j++) {
 	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {
-		div = abs( pmesh->divergence(u, v, w, i, j, k) );
+		div = fabs( pmesh->divergence(u, v, w, i, j, k) );
 		if ( div > divmax || divmax < 0 ) {
 			divmax = div;
 			divpos[0] = i;

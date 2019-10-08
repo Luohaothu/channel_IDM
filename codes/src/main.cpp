@@ -1,5 +1,6 @@
 # include <iostream>
 # include <stdlib.h>
+# include <string.h>
 
 # include "Para.h"
 # include "Mesh.h"
@@ -43,9 +44,14 @@ int main()
 		pfield->bcond(tstep);
 
 		// time evolution
-		pIDM->uhcalc(pfield->UH(), pfield->U(), pfield->P(), pfield->UBC());
+		pIDM->ruhcalc(pfield->UH(), pfield->U(), pfield->P(), pfield->UBC());
+
+		pfield->bodyForce(ppara->bftype);
+
+		pIDM->uhcalc(pfield->UH(), pfield->U());
 		pIDM->dpcalc(pfield->DP(), pfield->UH(), pfield->UBC(), pfield);
 		pIDM->upcalc(pfield->U(), pfield->P(), pfield->UH(), pfield->DP(), pmesh, pfield);
+		
 		pfield->applyBC();
 
 		// output
@@ -74,19 +80,24 @@ void output(int tstep, double time, class Para *ppara, class Mesh *pmesh, class 
 
 void input(int *tstep, double *time, class Field *pfield, class Para *ppara, class Mesh *pmesh)
 {
-	class Para *ppara0 = new class Para (ppara->inpara);
+	char fn1[1024], fn2[1024], fn3[1024];
+	sprintf(fn1, "%s%s", ppara->inpath, "XINDAT");
+
+	class Para *ppara0 = new class Para (fn1);
 	class Mesh *pmesh0 = new class Mesh (ppara0->dim());
 	class Field *pfield0 = new class Field (ppara0->dim());
 	class Statis *pstat0 = new class Statis (ppara0->dim());
+	sprintf(fn2, "%s%s", ppara->inpath, ppara0->statpath);
+	sprintf(fn3, "%s%s", ppara->inpath, ppara0->fieldpath);
 
 	cout << "\nParameters for continue computing:" << endl;
 	ppara0->showPara();
 
-	pstat0->readLogfile(ppara0->statpath, ppara->nread, time);
+	if (! strcmp(ppara->inpath, "")) pstat0->readLogfile(fn2, ppara->nread, time);
 	*tstep = *time < 1e-10 ? 0 : ppara->nread; // continue last case or start a new case depending on whether a continue time is read
 
-	pmesh0->initMesh(ppara0->len(), ppara0->statpath, ppara0->dy_min);
-	pfield0->readField(ppara0->fieldpath, ppara->nread);
+	pmesh0->initMesh(ppara0->len(), fn2, ppara0->dy_min);
+	pfield0->readField(fn3, ppara->nread);
 	pfield->initField(pfield0, pmesh0, pmesh);
 
 	delete ppara0;

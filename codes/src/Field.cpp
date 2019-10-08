@@ -3,6 +3,7 @@
 # include <stdlib.h>
 # include <string.h>
 # include <time.h>
+# include <cmath>
 
 # include "Field.h"
 
@@ -74,14 +75,14 @@ void Field::initField(class Field *pf0, class Mesh *pm0, class Mesh *pm)
 	// find out nearest point for every wavenumber k_z
 	for (k=0; k<Nz; k++) {	k0[k] = 0;
 	for (int k1=1; k1<Nz0; k1++) {
-		if (	abs( pm->kz(k) - pm0->kz(k1)	)
-			<	abs( pm->kz(k) - pm0->kz(k0[k])	)	)	k0[k] = k1;
+		if (	fabs( pm->kz(k) - pm0->kz(k1)	)
+			<	fabs( pm->kz(k) - pm0->kz(k0[k])	)	)	k0[k] = k1;
 	}}
 	// find out nearesr point for every wavenumber k_x
 	for (i=0; i<Nx; i++) {	i0[i] = 0;
 	for (int i1=1; i1<Nx0; i1++) {
-		if (	abs( pm->kx(i) - pm0->kx(i1)	)
-			<	abs( pm->kx(i) - pm0->kx(i0[i])	)	)	i0[i] = i1;
+		if (	fabs( pm->kx(i) - pm0->kx(i1)	)
+			<	fabs( pm->kx(i) - pm0->kx(i0[i])	)	)	i0[i] = i1;
 	}}
 
 	for (int n=0; n<4; n++) {
@@ -216,6 +217,40 @@ void Field::applyBC()
 	this->layerCopy(w, wbc, Ny, 1);
 }
 
+
+void Field::bodyForce(int bftype)
+{
+	int i, j, k, idx;
+
+	switch (bftype) {
+		case 1:
+			bulkCopy(dp, uh);
+			fft();
+			for (j=1; j<Ny; j++) {
+			for (i=1; i<Nxc; i++) {
+				idx = IDXF(i,j,0);
+				fdp[idx] = 0;
+				fdp[idx+1] = 0;
+			}}
+			ifft();
+			bulkCopy(uh, dp);
+
+			bulkCopy(dp, vh);
+			fft();
+			for (j=2; j<Ny; j++) {
+			for (i=1; i<Nxc; i++) {
+				idx = IDXF(i,j,0);
+				fdp[idx] = 0;
+				fdp[idx+1] = 0;
+			}}
+			ifft();
+			bulkCopy(vh, dp);
+		break;
+
+		case 2:
+		break;
+	}
+}
 
 
 /***** convinent operations for whole arrays *****/

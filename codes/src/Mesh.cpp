@@ -2,7 +2,7 @@
 # include <stdio.h>
 # include <stdlib.h>
 # include <string.h>
-# include <math.h>
+# include <cmath>
 
 
 # include "Mesh.h"
@@ -134,7 +134,7 @@ bool Mesh::checkYmesh(char *path, double *ymesh)
 	int j;
 
 	/* check failed */
-	if ( abs(ymesh[Ny] - Ly) > 1e-10 ) {
+	if ( fabs(ymesh[Ny] - Ly) > 1e-10 ) {
 		printf("Mesh error: channel height does not match !");
 		return false;
 	}

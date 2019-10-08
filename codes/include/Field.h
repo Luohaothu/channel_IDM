@@ -19,6 +19,9 @@ class Field
 		void bcond(int tstep);
 		void applyBC();
 
+		void bodyForce(int bftype);
+		
+
 		void fft()	{ for (int j=0; j<=Ny; j++) fftw_execute(frcs[j]); };
 		void ifft()	{ for (int j=0; j<=Ny; j++) fftw_execute(fcrs[j]);	this->bulkMult(dp, 1.0/Nxz); };
 

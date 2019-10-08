@@ -1,12 +1,13 @@
 // file paths
-fieldpath = "../data/fielddata/"
-probepath = "../data/probedata/"
-statpath = "../data/statdata/"
-postpath = "../data/postdata/"
+fieldpath = "fielddata/"
+probepath = "probedata/"
+statpath = "statdata/"
+postpath = "postdata/"
 
 // physical parameters
 Re = 24000.0	// Reynolds number
 init_ener = 0.5	// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
+bftype = 1		// type of body force (0: DNS, 1: MFU, 2: LES)
 
 // grid settings
 Nx = 192		// grid number of streamwise direction
@@ -15,18 +16,18 @@ Nz = 36			// grid number of spanwise direction
 Lx = 3.1416		// domain length of streamwise direction
 Ly = 2.0		// channel height. Not adjustable (must be 2.0 if the non-dimensional equation is solved)
 Lz = 0.31416	// domain length of spanwise direction
-dy_min = 5e-4	// y coordinate at first grid off wall
+dy_min = 0.0005	// y coordinate at first grid off wall
 
 // time evolution control
 Nt = 1000000	// total time steps to evolve
 dt = 5e-3		// time step length
 
 // output control
-nwrite = 1000	// step interval for writing whole fields (0 for not outputing)
+nwrite = 2000	// step interval for writing whole fields (0 for not outputing)
 nprint = 100	// step interval for printing and updating log of computation state (0 for not outputing)
 nprobe = 0		// step interval for writing time serials of probed layers (0 for not outputing)
 jprbs = 0		// layer indexes of layers to be probed (jprbs[0] store the number of layers)
 
 // input control
-nread = 0		// step number of whole field files to read for continuing computation (0 for not inputing)
-inpara = "no input"	// parameter setting file of the computation to be continued
+nread = 60000	// step number of whole field files to read for continuing computation (0 for not inputing)
+inpath = "continue1/"	// path of the continue computation files

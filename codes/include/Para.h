@@ -16,6 +16,7 @@ class Para
 		// physical parameters
 		double Re;			// Reynolds number
 		double init_ener;	// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
+		int bftype;			// type of body force (0: DNS, 1: MFU, 2: LES)
 		
 		// grid settings
 		int Nx;				// grid number of streamwise direction
@@ -38,7 +39,7 @@ class Para
 
 		// input control
 		int nread;			// step number of whole field files to read for continuing computation (0 for not inputing)
-		char inpara[1024];	// parameter setting file of the computation to be continued
+		char inpath[1024];	// path of the continue computation files
 
 		void readPara(std::string filename);	// if no filename if provided, initiate with debug parameters
 		void showPara();

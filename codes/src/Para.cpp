@@ -22,6 +22,7 @@ Para::Para(string filename)
 	// physical parameters
 	Re = 100.0;
 	init_ener = 0.5;
+	bftype = 0;
 
 	// grid settings
 	Nx = 4;	// peridoic without overlap
@@ -45,7 +46,7 @@ Para::Para(string filename)
 
 	// input control
 	nread = 0;
-	sprintf(inpara, "no input");
+	sprintf(inpath, "");
 
 	/* if filename provided, read the file */
 	if (filename != "")	this->readPara(filename);
@@ -66,6 +67,7 @@ void Para::readPara(string filename)
 
 		if ( strstr(str, "Re") )	{ s = strchr(str, '='); sscanf(++s, "%lf", & Re); }
 		if ( strstr(str, "init_ener") )	{ s = strchr(str, '='); sscanf(++s, "%lf", & init_ener); }
+		if ( strstr(str, "bftype") ){ s = strchr(str, '='); sscanf(++s, "%i", & bftype); }
 		if ( strstr(str, "Nx") )	{ s = strchr(str, '='); sscanf(++s, "%i", & Nx); }
 		if ( strstr(str, "Ny") )	{ s = strchr(str, '='); sscanf(++s, "%i", & Ny); }
 		if ( strstr(str, "Nz") )	{ s = strchr(str, '='); sscanf(++s, "%i", & Nz); }
@@ -80,7 +82,7 @@ void Para::readPara(string filename)
 		if ( strstr(str, "nprobe") ){ s = strchr(str, '='); sscanf(++s, "%i", & nprobe); }
 		if ( strstr(str, "jprbs") )	{ jprbs = this->parseJprbs(str); }
 		if ( strstr(str, "nread") )	{ s = strchr(str, '='); sscanf(++s, "%i", & nread); }
-		if ( strstr(str, "inpara") ){ s = strchr(str, '='); s = strchr(++s, '\"'); sscanf(++s, "%[^\"]", inpara); }
+		if ( strstr(str, "inpath") ){ s = strchr(str, '='); s = strchr(++s, '\"'); sscanf(++s, "%[^\"]", inpath); }
 	}
 }
 
@@ -110,12 +112,13 @@ void Para::showPara()
 {
 	cout << "\n-------------------- PARAMETERS --------------------" << endl;
 	cout << "File paths:" << endl;
-	cout << "fieldpath = " << fieldpath << endl;
-	cout << "probepath = " << probepath << endl;
-	cout << "statpath = " << statpath << endl;
-	cout << "postpath = " << postpath << endl;
+	cout << "fieldpath = \"" << fieldpath << '\"' << endl;
+	cout << "probepath = \"" << probepath << '\"' << endl;
+	cout << "statpath = \"" << statpath << '\"' << endl;
+	cout << "postpath = \"" << postpath << '\"' << endl;
 	cout << "\nPhysical Parameters:" << endl;
 	cout << "Re = " << Re << ", init_ener = " << init_ener << endl;
+	cout << "body force type = " << (bftype==1 ? "MFU" : bftype==2 ? "LES" : "DNS") << endl;
 	cout << "\nGrid Settings:" << endl;
 	cout << "Nx = " << Nx << ", Ny = " << Ny << ", Nz = " << Nz << endl;
 	cout << "Lx = " << Lx << ", Ly = " << Ly << ", Lz = " << Lz << endl;
@@ -129,7 +132,7 @@ void Para::showPara()
 		cout << "total " << jprbs[0] << " layers to be probed." << endl;
 	cout << "\nInput control:" << endl;
 	cout << "nread = " << nread << endl;
-	cout << "inpara = " << inpara << endl;
+	cout << "inpath = \"" << inpath << '\"' << endl;
 	cout << "----------------------------------------------------" << endl;
 }
 
