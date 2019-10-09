@@ -7,10 +7,10 @@
 class Mesh
 {
 	public:
-		Mesh(int *dim);
+		Mesh(int dim[3]);
 		~Mesh();
 
-		int Nx, Ny, Nz, Nxz;
+		const int Nx, Ny, Nz, Nxz;
 		double Lx, Ly, Lz;			// domain lengths
 
 		double *y, *yc;				// y coordinates in wall-normal direction (y for V, yc for U,W,P)
@@ -27,27 +27,32 @@ class Mesh
 		int *kpa, *kma;				// the forward and backward node indices in periodic Z direction
 		int *ipa, *ima;				// the forward and backward node indices in periodic X direction
 
-		void initMesh(double *len, char *path, double dy_min);
+		void initMesh(double len[3], char *path, double dy_min);
 		bool checkYmesh(char *path, double *ymesh);
 
 		double kx(int i) { return ( i - ( i > (int)(Nx/2) ? Nx : 0 ) ) * (2.0*PI/Lx); };
 		double kz(int k) { return ( k - ( k > (int)(Nz/2) ? Nz : 0 ) ) * (2.0*PI/Lz); };
 
 		// tool functions
+		// vector & tensor operators
 		double divergence(double *u, double *v, double *w, int i, int j, int k);
 		double convection(double *u, double *v, double *w, int i, int j, int k);
 		double* gradient(double *p, int i, int j, int k);
-
+		double* strainrate(double *u, double *v, double *w, int i, int j, int k);
+		// integration
 		double yMeanU(double *src, int i, int k);
 		double yMeanV(double *src, int i, int k);
-
 		double layerMean(double *src, int j = 0);
-		double* layerCenterU(double *dst, double *src, int j1 = 0, int j0 = 0);	// interpolate j0 layer of src from U grid to cell center, result stored in j1 layer of dst
-		double* layerCenterV(double *dst, double *src, int j1, int j0);			// interpolate src from V grid to the j0 layer of P grid, result stored in J1 layer of dst
-		double* layerCenterW(double *dst, double *src, int j1 = 0, int j0 = 0);	// interpolate j0 layer of src from W grid to cell center, result stored in j1 layer of dst
-
 		double bulkMeanU(double *src);
 		double bulkMeanV(double *src);
+		// interpolation
+		double* layerUG2CC(double *dst, double *src, int j1=0, int j0=0);
+		double* layerVG2CC(double *dst, double *src, int j1, int j0);
+		double* layerWG2CC(double *dst, double *src, int j1=0, int j0=0);
+		double* layerCC2UG(double *dst, double *src, int j1=0, int j0=0);
+		double* layerCC2VG(double *dst, double *src, int j1, int j0);
+		double* layerCC2WG(double *dst, double *src, int j1=0, int j0=0);
+
 
 	private:
 		int IDX(int i, int j, int k) {return Nxz * j + Nx * k + i;};

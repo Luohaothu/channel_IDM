@@ -44,8 +44,13 @@ class Para
 		void readPara(std::string filename);	// if no filename if provided, initiate with debug parameters
 		void showPara();
 
-		int*	dim() { int		*dim = new int		[3]; dim[0] = Nx; dim[1] = Ny; dim[2] = Nz; return (int*)	dim; };
-		double*	len() { double	*len = new double	[3]; len[0] = Lx; len[1] = Ly; len[2] = Lz; return (double*)len; };
+		// convinient way to get dimensions and domain lengths
+		// CAUTION: static variable will be overwritten in every call even from different objects of this class
+		int*	dim() { static int dim [3];		dim[0] = Nx; dim[1] = Ny; dim[2] = Nz; return dim; };
+		double*	len() { static double len [3];	len[0] = Lx; len[1] = Ly; len[2] = Lz; return len; };
+
+		// int*	dim() { int		*dim = new int		[3]; dim[0] = Nx; dim[1] = Ny; dim[2] = Nz; return (int*)	dim; };
+		// double*	len() { double	*len = new double	[3]; len[0] = Lx; len[1] = Ly; len[2] = Lz; return (double*)len; };
 
 	private:
 		int* parseJprbs(char *str);

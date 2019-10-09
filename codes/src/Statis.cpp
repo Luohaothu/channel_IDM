@@ -7,7 +7,7 @@
 using namespace std;
 
 
-Statis::Statis(int *dim):
+Statis::Statis(int dim[3]):
 Nx(dim[0]), Ny(dim[1]), Nz(dim[2]), Nxz(dim[0]*dim[2])
 {
 	Um = new double [Ny+1];
@@ -34,10 +34,10 @@ Statis::~Statis()
 	delete [] Rpu;delete [] Rpv;delete [] Rpw;delete [] Rpp;
 }
 
-double Statis::checkDiv(double **U, class Mesh *pmesh)
+double Statis::checkDiv(double *u, double *v, double *w, class Mesh *pmesh)
 {
 	int i, j, k;
-	double divmax = -1.0, *u = U[0], *v = U[1], *w = U[2];
+	double divmax = -1.0;
 
 	for (j=1; j<Ny; j++) {
 	for (k=0; k<Nz; k++) {
@@ -53,10 +53,10 @@ double Statis::checkDiv(double **U, class Mesh *pmesh)
 	return ( div = divmax );
 }
 
-double Statis::checkCFL(double **U, class Mesh *pmesh, double dt)
+double Statis::checkCFL(double *u, double *v, double *w, class Mesh *pmesh, double dt)
 {
 	int i, j, k;
-	double cflmax = -1.0, *u = U[0], *v = U[1], *w = U[2];
+	double cflmax = -1.0;
 
 	for (j=1; j<Ny; j++) {
 	for (k=0; k<Nz; k++) {
@@ -72,10 +72,10 @@ double Statis::checkCFL(double **U, class Mesh *pmesh, double dt)
 	return ( cfl = cflmax );
 }
 
-double Statis::checkMean(double **UP, class Mesh *pmesh)
+double Statis::checkMean(double *u, double *v, double *w, double *p, class Mesh *pmesh)
 /* calculate mean values at cell centers */
 {
-	double vm1, vm2, *u = UP[0], *v = UP[1], *w = UP[2], *p = UP[3];
+	double vm1, vm2;
 
 	for (int j=0; j<=Ny; j++) {
 		vm1 = j==0 ? pmesh->layerMean(v, 1) : vm2;
@@ -107,11 +107,10 @@ double Statis::checkTauw(class Mesh *pmesh, double Re)
 }
 
 // note: must call checkMean() before this function
-double Statis::checkEner(double **UP, class Mesh *pmesh, class Field *pfield)
+double Statis::checkEner(double *u, double *v, double *w, double *p, class Mesh *pmesh, class Field *pfield)
 /* calculate Reynolds stresses, pressure-velocity correlations, and the total fluctuation energy */
 {
 	int i, j, k, idx, ip, kp;
-	double *u = UP[0], *v = UP[1], *w = UP[2], *p = UP[3];
 	double *ul = new double [Nxz];
 	double *vl = new double [Nxz];
 	double *wl = new double [Nxz];
@@ -127,8 +126,8 @@ double Statis::checkEner(double **UP, class Mesh *pmesh, class Field *pfield)
 		vl2 = j==Ny ? pfield->layerCopy(vl,vl1) : pfield->layerCopy(vl,v,0,j+1);
 		vl = pfield->layerMult( pfield->layersAdd(vl1,vl2), 0.5 );
 		pfield->layerAdd( vl, -Vm[j] );
-		pfield->layerAdd( pmesh->layerCenterU(ul,u,0,j), -Um[j] );
-		pfield->layerAdd( pmesh->layerCenterW(wl,w,0,j), -Wm[j] );
+		pfield->layerAdd( pmesh->layerUG2CC(ul,u,0,j), -Um[j] );
+		pfield->layerAdd( pmesh->layerWG2CC(wl,w,0,j), -Wm[j] );
 		pfield->layerAdd( pfield->layerCopy(pl,p,0,j), -Pm[j] );
 
 		// calculate Reynolds stress and cross correlations at cell centers
@@ -146,6 +145,10 @@ double Statis::checkEner(double **UP, class Mesh *pmesh, class Field *pfield)
 
 		ener += 0.5 * ( R11[j] + R22[j] + R33[j] ) * ( pmesh->dy[j] / pmesh->Ly );
 	}
+
+	delete [] ul; delete [] vl; delete [] wl; delete [] pl;
+	delete [] vl2; delete [] ql;
+
 	return ener;
 }
 

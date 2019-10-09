@@ -11,8 +11,12 @@ typedef fftw_complex fcmplx;
 class Field
 {
 	public:
-		Field(int *dim);	// allocate memory for pointers
+		Field(int dim[3]);	// allocate memory for pointers
 		~Field();
+
+		double *U[3], *P[2], *UP[4];
+		double *UH[3], *DP[2];
+		double *UBC[3];
 
 		void initField(double energy, class Mesh *pmesh);	// initiate flow fields from laminar with random fluctuations
 		void initField(class Field *pf0, class Mesh *pm0, class Mesh *pm);	// initiate flow fields from existing fields
@@ -20,7 +24,7 @@ class Field
 		void applyBC();
 
 		void bodyForce(int bftype);
-		
+
 
 		void fft()	{ for (int j=0; j<=Ny; j++) fftw_execute(frcs[j]); };
 		void ifft()	{ for (int j=0; j<=Ny; j++) fftw_execute(fcrs[j]);	this->bulkMult(dp, 1.0/Nxz); };
@@ -28,12 +32,14 @@ class Field
 		// memory access functions
 		int IDX(int i, int j, int k) {return Nxz * j + Nx * k + i;};
 		int IDXF(int i, int j, int k) {return Nxzr * j + Nxr * k + 2*i;};
-		double** U	() { double **U	= new double* [3]; U [0] = u; U [1] = v; U [2] = w;				return (double**) U;	};
-		double** UP	() { double **UP= new double* [4]; UP[0] = u; UP[1] = v; UP[2] = w; UP[3] = p;	return (double**) UP;	};
-		double** UH	() { double **UH= new double* [3]; UH[0] = uh;UH[1] = vh;UH[2] = wh;			return (double**) UH;	};
-		double** UBC() { double **UBC=new double* [3]; UBC[0]=ubc;UBC[1]=vbc;UBC[2]=wbc;			return (double**) UBC;	};
-		double** P	() { double **P	= new double* [2]; P [0] = p; P [1] = mpg;						return (double**) P;	};
-		double** DP	() { double **DP= new double* [2]; DP[0] = dp;DP[1] = fdp;						return (double**) DP;	};
+
+
+		// double** U	() { double **U	= new double* [3]; U [0] = u; U [1] = v; U [2] = w;				return (double**) U;	};
+		// double** UP	() { double **UP= new double* [4]; UP[0] = u; UP[1] = v; UP[2] = w; UP[3] = p;	return (double**) UP;	};
+		// double** UH	() { double **UH= new double* [3]; UH[0] = uh;UH[1] = vh;UH[2] = wh;			return (double**) UH;	};
+		// double** UBC() { double **UBC=new double* [3]; UBC[0]=ubc;UBC[1]=vbc;UBC[2]=wbc;			return (double**) UBC;	};
+		// double** P	() { double **P	= new double* [2]; P [0] = p; P [1] = mpg;						return (double**) P;	};
+		// double** DP	() { double **DP= new double* [2]; DP[0] = dp;DP[1] = fdp;						return (double**) DP;	};
 
 		// tool functions
 		double* layerCopy	(double *dst, double *src, int j1 = 0, int j0 = 0);	// copy layer j0 of src to layer j1 of dst
@@ -60,8 +66,8 @@ class Field
 		void debug_Output(int tstep);
 
 	private:
-		int Nx, Ny, Nz, Nxz;
-		int Nxc, Nxr, Nxzc, Nxzr;
+		const int Nx, Ny, Nz, Nxz;
+		const int Nxc, Nxr, Nxzc, Nxzr;
 		fftw_plan *frcs;	// list of fft plans: 2D FFT from real data to complex data, FORWARD (exponent -1) and no normalization
 		fftw_plan *fcrs;	// list of ifft plans: 2D FFT from complex data to real data, BACKWARD (exponent 1) and no normalization
 

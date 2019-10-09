@@ -17,7 +17,7 @@ void input(int *tstep, double *time, class Field *pfield, class Para *ppara, cla
 
 int main()
 {
-	class Para	*ppara	= new class Para	("XINDAT");
+	class Para	*ppara	= new class Para	("XINDAT");	ppara->showPara();
 	class Mesh	*pmesh	= new class Mesh	(ppara->dim());
 	class Field	*pfield	= new class Field	(ppara->dim());
 	class Statis*pstat	= new class Statis	(ppara->dim());
@@ -25,15 +25,16 @@ int main()
 
 	int tstep = 0;	double time = 0.0;
 	
-	// mesh initialization
-	ppara->showPara();
+	// initialization
 	pmesh->initMesh(ppara->len(), ppara->statpath, ppara->dy_min);
 	if (! pmesh->checkYmesh(ppara->statpath, pmesh->y)) exit(0);
+
 	pIDM->initIDM(ppara->Re, ppara->dt, pmesh);
-	// field initialization
+
 	pfield->bcond(0);
-	if (ppara->nread > 0)	input(& tstep, & time, pfield, ppara, pmesh);
-	else					pfield->initField(ppara->init_ener, pmesh);
+	if (ppara->nread > 0) input(& tstep, & time, pfield, ppara, pmesh);
+	else pfield->initField(ppara->init_ener, pmesh);
+
 	if (tstep == 0)	output(0, 0.0, ppara, pmesh, pfield, pstat);
 
 	// main loop
@@ -44,13 +45,13 @@ int main()
 		pfield->bcond(tstep);
 
 		// time evolution
-		pIDM->ruhcalc(pfield->UH(), pfield->U(), pfield->P(), pfield->UBC());
+		pIDM->ruhcalc(pfield->UH, pfield->U, pfield->P, pfield->UBC);
 
 		pfield->bodyForce(ppara->bftype);
 
-		pIDM->uhcalc(pfield->UH(), pfield->U());
-		pIDM->dpcalc(pfield->DP(), pfield->UH(), pfield->UBC(), pfield);
-		pIDM->upcalc(pfield->U(), pfield->P(), pfield->UH(), pfield->DP(), pmesh, pfield);
+		pIDM->uhcalc(pfield->UH, pfield->U);
+		pIDM->dpcalc(pfield->DP, pfield->UH, pfield->UBC, pfield);
+		pIDM->upcalc(pfield->U, pfield->P, pfield->UH, pfield->DP, pmesh, pfield);
 		
 		pfield->applyBC();
 
@@ -71,7 +72,7 @@ void output(int tstep, double time, class Para *ppara, class Mesh *pmesh, class 
 		cout << "Files successfully written for step " << tstep << endl;
 	}
 	if (tstep % ppara->nprint == 0) {
-		pstat->checkStat(pfield->UP(), pmesh, pfield, ppara->Re, ppara->dt);
+		pstat->checkStat(pfield->UP, pmesh, pfield, ppara->Re, ppara->dt);
 		pstat->writeProfile(ppara->statpath, -1, pmesh->yc);
 		pstat->writeLogfile(ppara->statpath, tstep, time);
 	}

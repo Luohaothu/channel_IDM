@@ -11,13 +11,14 @@ using namespace std;
 
 
 
-Field::Field(int *dim):
-Nx(dim[0]), Ny(dim[1]), Nz(dim[2]), Nxz(dim[0]*dim[2])
+Field::Field(int dim[3]):
+Nx(dim[0]), Ny(dim[1]), Nz(dim[2]), Nxz(dim[0]*dim[2]),
+Nxc(Nx/2+1), Nxr(2*Nxc), Nxzc(Nz*Nxc), Nxzr(Nz*Nxr)
 {
-	Nxc = (int) (Nx/2+1);
-	Nxr = 2 * Nxc;
-	Nxzc = Nz * Nxc;
-	Nxzr = Nz * Nxr;
+	// Nxc = (int) (Nx/2+1);
+	// Nxr = 2 * Nxc;
+	// Nxzc = Nz * Nxc;
+	// Nxzr = Nz * Nxr;
 
 	// allocate memory for pointers
 	u = new double [Nxz * (Ny+1)];	// Ny-1 boxes + 2 walls
@@ -35,6 +36,11 @@ Nx(dim[0]), Ny(dim[1]), Nz(dim[2]), Nxz(dim[0]*dim[2])
 	wbc = new double [Nxz * 2];		// 0 -> lower wall, 1 -> upper wall
 
 	fdp = new double [Nxzr * (Ny+1)];	// the complex party of fft should be a bit larger
+
+	U[0] = u; UP[0] = u; UH[0] = uh; UBC[0] = ubc;
+	U[1] = v; UP[1] = v; UH[1] = vh; UBC[1] = vbc;
+	U[2] = w; UP[2] = w; UH[2] = wh; UBC[2] = wbc;
+	UP[3] = p; P[0] = p; P[1] = mpg; DP[0] = dp; DP[1] = fdp;
 
 	frcs = new fftw_plan [Ny+1];
 	fcrs = new fftw_plan [Ny+1];
@@ -87,7 +93,7 @@ void Field::initField(class Field *pf0, class Mesh *pm0, class Mesh *pm)
 
 	for (int n=0; n<4; n++) {
 
-		pf0->bulkCopy(pf0->dp, pf0->UP()[n]);
+		pf0->bulkCopy(pf0->dp, pf0->UP[n]);
 		pf0->fft();
 
 		// linear interpolations for y direction
@@ -125,7 +131,7 @@ void Field::initField(class Field *pf0, class Mesh *pm0, class Mesh *pm)
 			}
 		}}
 		this->ifft();
-		this->bulkCopy( this->UP()[n], this->bulkMult(this->dp, 1.0/pm0->Nxz*this->Nxz) );
+		this->bulkCopy( this->UP[n], this->bulkMult(this->dp, 1.0/pm0->Nxz*this->Nxz) );
 	}
 
 	// 3 mean pressure gradients are initiated to 0, and will be compensated by dmpg next step
@@ -135,6 +141,8 @@ void Field::initField(class Field *pf0, class Mesh *pm0, class Mesh *pm)
 	this->applyBC();
 
 	printf("\nFlow fields initiated from existing fields.\n");
+
+	delete [] i0; delete [] k0;
 }
 
 void Field::initField(double energy, class Mesh *pmesh)
@@ -370,13 +378,13 @@ void Field::writeTecplot(char *path, int tstep, double time, class Mesh *pmesh)
 /* write velocity and pressure fields to ascii files readable by tecplot */
 {
 	FILE *fp;
-	char str[1024];
+	char str[1024], fn[1024];
 	int i, j, k, idx, ip, jp, kp;
 	double v1, v2;
 
-	sprintf(str, "%sFIELD%08i.plt", path?path:"", tstep);
+	sprintf(fn, "%sFIELD%08i.dat", path?path:"", tstep);
 
-	fp = fopen(str, "w");
+	fp = fopen(fn, "w");
 
 		fputs("Title = \"3D instantaneous field\"\n", fp);
 		fputs("variables = \"x\", \"z\", \"y\", \"u\", \"v\", \"w\", \"p\"\n", fp);
@@ -406,6 +414,9 @@ void Field::writeTecplot(char *path, int tstep, double time, class Mesh *pmesh)
 		}}}
 
 	fclose(fp);
+
+	sprintf(str, "preplot %s", fn);	system(str);
+	sprintf(str, "rm %s", fn);		system(str);
 }
 
 

@@ -8,10 +8,10 @@ class IDM
 {
 	public:
 		void initIDM(double Re, double dt, class Mesh *pmesh);
-		void ruhcalc(double **RUH, double **U, double **P, double **UBC);
-		void uhcalc(double **UH, double **U);
-		void dpcalc(double **DP, double **UH, double **UBC, class Field *pfield);
-		void upcalc(double **U, double **P, double **UH, double **DP, class Mesh *pmesh, class Field *pfield);
+		void ruhcalc(double *RUH[3], double *U[3], double *P[2], double *UBC[3]);
+		void uhcalc(double *UH[3], double *U[3]);
+		void dpcalc(double *DP[2], double *UH[3], double *UBC[3], class Field *pfield);
+		void upcalc(double *U[3], double *P[2], double *UH[3], double *DP[2], class Mesh *pmesh, class Field *pfield);
 
 	private:
 		int Nx, Ny, Nz, Nxz;

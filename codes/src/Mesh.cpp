@@ -11,7 +11,7 @@ using namespace std;
 
 
 
-Mesh::Mesh(int *dim):
+Mesh::Mesh(int dim[3]):
 /* allocate memory for pointers */
 Nx(dim[0]), Ny(dim[1]), Nz(dim[2]), Nxz(dim[0]*dim[2])
 {
@@ -56,7 +56,7 @@ Mesh::~Mesh()
 }
 
 
-void Mesh::initMesh(double *len, char *path, double dy_min)
+void Mesh::initMesh(double len[3], char *path, double dy_min)
 {
 	int i, j, k;
 
@@ -70,8 +70,9 @@ void Mesh::initMesh(double *len, char *path, double dy_min)
 	vol = Lx * Ly * Lz;
 	
 	// y grids
-	if (dy_min > 0)	memcpy(this->y, this->getYmesh(dy_min), sizeof(double) * (Ny+1));
-	else			memcpy(this->y, this->getYmesh( path ), sizeof(double) * (Ny+1));
+	double *ymesh = ( dy_min > 0 ? this->getYmesh(dy_min) : this->getYmesh(path) );
+	memcpy(this->y, ymesh, sizeof(double) * (Ny+1));
+	delete [] ymesh;
 
 	yc[0] = 0.0;
 	yc[Ny] = Ly;
@@ -174,7 +175,7 @@ double* Mesh::getYmesh(char *path)
 		}
 	fclose(fp);
 
-	return ymesh;
+	return ymesh; // need to delete after use
 }
 
 double* Mesh::getYmesh(double dy_min)
@@ -198,7 +199,7 @@ double* Mesh::getYmesh(double dy_min)
 	ymesh[0] = 0.0;
 	for (j=1; j<=Ny; j++) ymesh[j] = this->distrib_Y(j, gamma);
 
-	return ymesh;
+	return ymesh; // need to delete after use
 }
 
 
@@ -215,27 +216,66 @@ double Mesh::distrib_Y(int j, double gamma)
 
 /********** tool functions **********/
 
-double* Mesh::layerCenterU(double *dst, double *src, int j1, int j0)
+double* Mesh::layerUG2CC(double *dst, double *src, int j1, int j0)
+/* interpolate j0 layer of src from U grid to cell center, result stored in j1 layer of dst */
+// CAUTION: pointer dst must NOT be the same as pointer src
 {
 	int i, k;
-	for (k=0; k<Nz; k++) {	// note: pointer dst must NOT be the same as pointer src
+	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {	dst[IDX(i,j1,k)] = 0.5 * ( src[IDX(i,j0,k)] + src[IDX(ipa[i],j0,k)] );	}}
 	return dst;
 }
-double* Mesh::layerCenterV(double *dst, double *src, int j1, int j0)
+double* Mesh::layerVG2CC(double *dst, double *src, int j1, int j0)
+/* interpolate j0,j0+1 layers of src from V grid to cell center, result stored in j1 layer of dst */
+// CAUTION: pointer dst must NOT be the same as pointer src
 {
 	int i, k, jd = (j0==0 ? 1 : j0), ju = (j0==Ny ? Ny : j0+1);
-	for (k=0; k<Nz; k++) {	// note: pointer dst must NOT be the same as pointer src
+	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {	dst[IDX(i,j1,k)] = 0.5 * ( src[IDX(i,jd,k)] + src[IDX(i,ju,k)] );	}}
 	return dst;
 }
-double* Mesh::layerCenterW(double *dst, double *src, int j1, int j0)
+double* Mesh::layerWG2CC(double *dst, double *src, int j1, int j0)
+/* interpolate j0 layer of src from W grid to cell center, result stored in j1 layer of dst */
+// note: pointer dst must NOT be the same as pointer src
 {
 	int i, k;
-	for (k=0; k<Nz; k++) {	// note: pointer dst must NOT be the same as pointer src
+	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {	dst[IDX(i,j1,k)] = 0.5 * ( src[IDX(i,j0,k)] + src[IDX(i,j0,kpa[k])] );	}}
 	return dst;
 }
+
+
+
+double* Mesh::layerCC2UG(double *dst, double *src, int j1, int j0)
+/* interpolate j0 layer of src from cell center to U grid, result stored in j1 layer of dst */
+// note: pointer dst must NOT be the same as pointer src
+{
+	int i, k;
+	for (k=0; k<Nz; k++) {
+	for (i=0; i<Nx; i++) {	dst[IDX(i,j1,k)] = 0.5 * ( src[IDX(i,j0,k)] + src[IDX(ima[i],j0,k)] );	}}
+	return dst;
+}
+double* Mesh::layerCC2VG(double *dst, double *src, int j1, int j0)
+/* interpolate j0,j0-1 layers of src from cell center to V grid, result stored in j1 layer of dst */
+// CAUTION: pointer dst must NOT be the same as pointer src
+{
+	int i, k, jd = j0-1, ju = j0; // 1 <= j0 <= Ny
+	for (k=0; k<Nz; k++) {
+	for (i=0; i<Nx; i++) {
+		dst[IDX(i,j1,k)] = ( src[IDX(i,jd,k)] * dy[ju] + src[IDX(i,ju,k)] * dy[jd] ) / (2.0*h[ju]);
+	}}
+	return dst;
+}
+double* Mesh::layerCC2WG(double *dst, double *src, int j1, int j0)
+/* interpolate j0 layer of src from cell center to W grid, result stored in j1 layer of dst */
+// note: pointer dst must NOT be the same as pointer src
+{
+	int i, k;
+	for (k=0; k<Nz; k++) {
+	for (i=0; i<Nx; i++) {	dst[IDX(i,j1,k)] = 0.5 * ( src[IDX(i,j0,k)] + src[IDX(i,j0,kma[k])] );	}}
+	return dst;
+}
+
 
 
 double Mesh::layerMean(double *src, int j)
@@ -274,6 +314,7 @@ double Mesh::yMeanV(double *src, int i, int k)
 }
 
 
+
 double Mesh::divergence(double *u, double *v, double *w, int i, int j, int k)
 /* compute divergence of a vector field at the center of cell (i,j,k) */
 {
@@ -300,20 +341,56 @@ double Mesh::convection(double *u, double *v, double *w, int i, int j, int k)
 
 double* Mesh::gradient(double *p, int i, int j, int k)
 /* compute gradient of a scalar field at grid points corresponding to U,V,W */
+// CAUTION: avoid continuous calling to this function, because the static return variable will be overwritten every time
 {
 	int idx= IDX(i,j,k);
 	int im = IDX(ima[i],j,k);
 	int jm = IDX(i,j-1,k);
 	int km = IDX(i,j,kma[k]);
-	double *grad = new double [3];
+	static double grad[3];	// will be overwritten even called from different objects of this class
 	grad[0] = ( p[idx] - p[im] ) / dx;	// 1 <= j <= Ny-1
 	grad[1] = ( p[idx] - p[jm] ) / h[j];// 2 <= j <= Ny-1 (j==1 may not be valid)
 	grad[2] = ( p[idx] - p[km] ) / dz;	// 1 <= j <= Ny-1
 	return grad;
 }
 
+double* Mesh::strainrate(double *u, double *v, double *w, int i, int j, int k)
+/* compute the strain rate tensor of a vector field at the center of cell (i,j,k) */
+// CAUTION: avoid continuous calling to this function, because the static return variable will be overwritten every time
+{
+	int idx= IDX(i,j,k);	// 1 <= j <= Ny-1
+	int ip = IDX(ipa[i],j,k), jp = IDX(i,j+1,k), kp = IDX(i,j,kpa[k]);
+	int im = IDX(ima[i],j,k), jm = IDX(i,j-1,k), km = IDX(i,j,kma[k]);
+	int ipjp = IDX(ipa[i],j+1,k), jpkp = IDX(i,j+1,kpa[k]), ipkp = IDX(ipa[i],j,kpa[k]);
+	int ipjm = IDX(ipa[i],j-1,k), jpkm = IDX(i,j+1,kma[k]), imkp = IDX(ima[i],j,kpa[k]);
+	int imjp = IDX(ima[i],j+1,k), jmkp = IDX(i,j-1,kpa[k]), ipkm = IDX(ipa[i],j,kma[k]);
+	double u1, u2, v1, v2, w1, w2;
+	static double sr[6];	// will be overwritten even called from different objects of this class
+	// S_ii
+	sr[0] = ( u[ip] - u[idx] ) / dx;
+	sr[1] = ( v[jp] - v[idx] ) / dy[j];
+	sr[2] = ( w[kp] - w[idx] ) / dz;
+	// S_12
+	v2 = 0.25 * ( v[idx] + v[ip] + v[jp] + v[ipjp] );
+	v1 = 0.25 * ( v[idx] + v[im] + v[jp] + v[imjp] );
+	u2 = ( (u[idx]+u[ip]) * dy[j+1] + (u[jp]+u[ipjp]) * dy[j] ) / (4.0*h[j+1]);
+	u1 = ( (u[idx]+u[ip]) * dy[j-1] + (u[jm]+u[ipjm]) * dy[j] ) / (4.0*h[j]);
+	sr[3] = 0.5 * ( (v2-v1) / dx + (u2-u1) / dy[j] );
+	// S_23
+	w2 = ( (w[idx]+w[kp]) * dy[j+1] + (w[jp]+w[jpkp]) * dy[j] ) / (4.0*h[j+1]);
+	w1 = ( (w[idx]+w[kp]) * dy[j-1] + (w[jm]+w[jmkp]) * dy[j] ) / (4.0*h[j]);
+	v2 = 0.25 * ( v[idx] + v[jp] + v[kp] + v[jpkp] );
+	v1 = 0.25 * ( v[idx] + v[jp] + v[km] + v[jpkm] );
+	sr[4] = 0.5 * ( (w2-w1) / dy[j] + (v2-v1) / dz );
+	// S_13
+	w2 = 0.25 * ( w[idx] + w[ip] + w[kp] + w[ipkp] );
+	w1 = 0.25 * ( w[idx] + w[im] + w[kp] + w[imkp] );
+	u2 = 0.25 * ( u[idx] + u[ip] + u[kp] + u[ipkp] );
+	u1 = 0.25 * ( u[idx] + u[ip] + u[km] + u[ipkm] );
+	sr[5] = 0.5 * ( (w2-w1) / dx + (u2-u1) / dz );
 
-
+	return sr;
+}
 
 
 

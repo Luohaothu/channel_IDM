@@ -29,7 +29,7 @@ void IDM::initIDM(double Re, double dt, class Mesh *pmesh)
 	pmatz = new class Matrix(Nz);
 }
 
-void IDM::ruhcalc(double **RUH, double **U, double **P, double **UBC)
+void IDM::ruhcalc(double *RUH[3], double *U[3], double *P[2], double *UBC[3])
 {
 	// calculate RUH (which shares memory with UH)
 	urhs1(RUH[0], U[0], U[1], U[2], P[0], P[1][0]);
@@ -38,7 +38,7 @@ void IDM::ruhcalc(double **RUH, double **U, double **P, double **UBC)
 	mbc(RUH[0], RUH[1], RUH[2], U[0], U[1], U[2], UBC[0], UBC[1], UBC[2]);
 }
 
-void IDM::uhcalc(double **UH, double **U)
+void IDM::uhcalc(double *UH[3], double *U[3])
 {
 	// solve UH
 	getuh1(UH[0],				U[0], U[1], U[2]);
@@ -46,7 +46,7 @@ void IDM::uhcalc(double **UH, double **U)
 	getuh3(UH[0], UH[1], UH[2],	U[0], U[1], U[2]);
 }
 
-void IDM::dpcalc(double **DP, double **UH, double **UBC, class Field *pfield)
+void IDM::dpcalc(double *DP[2], double *UH[3], double *UBC[3], class Field *pfield)
 {
 	rhsdp(DP[0], UH[0], UH[1], UH[2], UBC[1]);	// rdp (which shares memory with dp)
 	pfield->fft();	// rdp->frdp
@@ -54,7 +54,7 @@ void IDM::dpcalc(double **DP, double **UH, double **UBC, class Field *pfield)
 	pfield->ifft();	// fdp->dp
 }
 
-void IDM::upcalc(double **U, double **P, double **UH, double **DP, class Mesh *pmesh, class Field *pfield)
+void IDM::upcalc(double *U[3], double *P[2], double *UH[3], double *DP[2], class Mesh *pmesh, class Field *pfield)
 {
 	update(U[0], U[1], U[2], P[0], UH[0], UH[1], UH[2], DP[0]);
 	meanpg(P[1], U[0], U[2], pmesh, pfield);
