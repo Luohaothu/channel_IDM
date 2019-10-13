@@ -31,9 +31,9 @@ int main()
 
 	pIDM->initIDM(ppara->Re, ppara->dt, pmesh);
 
-	pfield->bcond(0);
-	if (ppara->nread > 0) input(& tstep, & time, pfield, ppara, pmesh);
-	else pfield->initField(ppara->init_ener, pmesh);
+	// pfield->bcond(0);
+	if (! ppara->nread) pfield->initField(ppara->init_ener, pmesh);
+	else input(& tstep, & time, pfield, ppara, pmesh);
 
 	if (tstep == 0)	output(0, 0.0, ppara, pmesh, pfield, pstat);
 
@@ -46,14 +46,15 @@ int main()
 
 		// time evolution
 		pIDM->ruhcalc(pfield->UH, pfield->U, pfield->P, pfield->UBC);
+		pIDM->uhcalc(pfield->UH, pfield->U);
+		pIDM->dpcalc(pfield->DP, pfield->UH, pfield->UBC, pfield);
+		pIDM->upcalc(pfield->U, pfield->P, pfield->UPH, pmesh);
+		
+		// pfield->applyBC();
+		pfield->applyBC(ppara->dt);
 
 		pfield->bodyForce(ppara->bftype);
 
-		pIDM->uhcalc(pfield->UH, pfield->U);
-		pIDM->dpcalc(pfield->DP, pfield->UH, pfield->UBC, pfield);
-		pIDM->upcalc(pfield->U, pfield->P, pfield->UH, pfield->DP, pmesh, pfield);
-		
-		pfield->applyBC();
 
 		// output
 		output(tstep, time, ppara, pmesh, pfield, pstat);
@@ -67,6 +68,7 @@ void output(int tstep, double time, class Para *ppara, class Mesh *pmesh, class 
 {
 	if (tstep % ppara->nwrite == 0)	{
 		pfield->writeField(ppara->fieldpath, tstep);
+		pfield->writeFieldDt(ppara->fieldpath, tstep); // incorrect at tstep 0
 		// pfield->writeTecplot(ppara->fieldpath, tstep, time, pmesh);
 		// pfield->debug_Output(tstep);
 		cout << "Files successfully written for step " << tstep << endl;

@@ -54,10 +54,10 @@ void IDM::dpcalc(double *DP[2], double *UH[3], double *UBC[3], class Field *pfie
 	pfield->ifft();	// fdp->dp
 }
 
-void IDM::upcalc(double *U[3], double *P[2], double *UH[3], double *DP[2], class Mesh *pmesh, class Field *pfield)
+void IDM::upcalc(double *U[3], double *P[2], double *UPH[4], class Mesh *pmesh)
 {
-	update(U[0], U[1], U[2], P[0], UH[0], UH[1], UH[2], DP[0]);
-	meanpg(P[1], U[0], U[2], pmesh, pfield);
+	update(U[0], U[1], U[2], P[0], UPH[0], UPH[1], UPH[2], UPH[3]);
+	meanpg(P[1], U[0], U[2], pmesh);
 }
 
 
@@ -657,45 +657,78 @@ void IDM::getfdp(double *fdp)
 
 
 
+
 void IDM::update(
 	double *u,	double *v,	double *w,	double *p,
 	double *uh,	double *vh,	double *wh,	double *dp)
 /* project from U^* to U^n+1 using DP */
 {
 	int i, j, k, idx, im, jm, km;
-	// update U
-	for (j=1; j<Ny; j++) {
-	for (k=0; k<Nz; k++) {
-	for (i=0; i<Nx; i++) {
-		idx = IDX(i,j,k);	im = IDX(ima[i],j,k);
-		u[idx] = uh[idx] - dt * ( dp[idx] - dp[im] ) / dx;
-	}}}
-	// update V
-	for (j=2; j<Ny; j++) {
-	for (k=0; k<Nz; k++) {
-	for (i=0; i<Nx; i++) {
-		idx = IDX(i,j,k);	jm = IDX(i,j-1,k);
-		v[idx] = vh[idx] - dt * ( dp[idx] - dp[jm] ) / h[j];
-	}}}
-	// update W
-	for (j=1; j<Ny; j++) {
-	for (k=0; k<Nz; k++) {
-	for (i=0; i<Nx; i++) {
-		idx = IDX(i,j,k);	km = IDX(i,j,kma[k]);
-		w[idx] = wh[idx] - dt * ( dp[idx] - dp[km] ) / dz;
-	}}}
-	// update P
 	for (j=1; j<Ny; j++) {
 	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {
 		idx = IDX(i,j,k);
+		im = IDX(ima[i],j,k);
+		jm = IDX(i,j-1,k);
+		km = IDX(i,j,kma[k]);
+		// store time derivative in intermediate variables
+		uh[idx] = (uh[idx] - u[idx]) / dt - (dp[idx] - dp[im]) / dx;
+		if (j>1) vh[idx] = (vh[idx] - v[idx]) / dt - (dp[idx] - dp[jm]) / h[j];
+		wh[idx] = (wh[idx] - w[idx]) / dt - (dp[idx] - dp[km]) / dz;
+		// update fields
+		u[idx] += uh[idx] * dt;
+		if (j>1) v[idx] += vh[idx] * dt;
+		w[idx] += wh[idx] * dt;
 		p[idx] += dp[idx];
 	}}}
+
+	for (j=1; j<Ny; j++) {
+	for (k=0; k<Nz; k++) {
+	for (i=0; i<Nx; i++) { dp[IDX(i,j,k)] /= dt; }}}
+	// TODO: if want time derivative, the boundaries should also be modified
 }
 
-void IDM::meanpg(double *mpg, double *u, double *w, class Mesh *pmesh, class Field *pfield)
+
+// void IDM::update(
+// 	double *u,	double *v,	double *w,	double *p,
+// 	double *uh,	double *vh,	double *wh,	double *dp)
+// /* project from U^* to U^n+1 using DP */
+// {
+// 	int i, j, k, idx, im, jm, km;
+// 	// update U
+// 	for (j=1; j<Ny; j++) {
+// 	for (k=0; k<Nz; k++) {
+// 	for (i=0; i<Nx; i++) {
+// 		idx = IDX(i,j,k);	im = IDX(ima[i],j,k);
+// 		u[idx] = uh[idx] - dt * ( dp[idx] - dp[im] ) / dx;
+// 	}}}
+// 	// update V
+// 	for (j=2; j<Ny; j++) {
+// 	for (k=0; k<Nz; k++) {
+// 	for (i=0; i<Nx; i++) {
+// 		idx = IDX(i,j,k);	jm = IDX(i,j-1,k);
+// 		v[idx] = vh[idx] - dt * ( dp[idx] - dp[jm] ) / h[j];
+// 	}}}
+// 	// update W
+// 	for (j=1; j<Ny; j++) {
+// 	for (k=0; k<Nz; k++) {
+// 	for (i=0; i<Nx; i++) {
+// 		idx = IDX(i,j,k);	km = IDX(i,j,kma[k]);
+// 		w[idx] = wh[idx] - dt * ( dp[idx] - dp[km] ) / dz;
+// 	}}}
+// 	// update P
+// 	for (j=1; j<Ny; j++) {
+// 	for (k=0; k<Nz; k++) {
+// 	for (i=0; i<Nx; i++) {
+// 		idx = IDX(i,j,k);
+// 		p[idx] += dp[idx];
+// 	}}}
+// }
+
+void IDM::meanpg(double *mpg, double *u, double *w, class Mesh *pmesh)
 /* solve the increment of mean pressure gradient at n+1/2 step, given mass flow rate at n+1 step */
 {
+	int i, j, k, idx;
 	// mean pressure gradient increment is solved by fixing streamwise flow rate 2.0 and spanwise flow rate 0
 	double dmpg1 = ( pmesh->bulkMeanU(u) - 1.0 ) / dt;
 	double dmpg3 = pmesh->bulkMeanU(w) / dt;
@@ -703,8 +736,15 @@ void IDM::meanpg(double *mpg, double *u, double *w, class Mesh *pmesh, class Fie
 	mpg[0] += dmpg1;
 	mpg[2] += dmpg3;
 	// complement the mean pressure gradient increment that was not included in the velocity update step
-	pfield->bulkAdd( u, - dt * dmpg1 );
-	pfield->bulkAdd( w, - dt * dmpg3 );
+	// pfield->bulkAdd( u, - dt * dmpg1 );
+	// pfield->bulkAdd( w, - dt * dmpg3 );
+	for (j=1; j<Ny; j++) {
+	for (k=0; k<Nz; k++) {
+	for (i=0; i<Nx; i++) {
+		idx = IDX(i,j,k);
+		u[idx] -= dt * dmpg1;
+		w[idx] -= dt * dmpg3;
+	}}}
 }
 
 

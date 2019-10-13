@@ -37,10 +37,11 @@ Nxc(Nx/2+1), Nxr(2*Nxc), Nxzc(Nz*Nxc), Nxzr(Nz*Nxr)
 
 	fdp = new double [Nxzr * (Ny+1)];	// the complex party of fft should be a bit larger
 
-	U[0] = u; UP[0] = u; UH[0] = uh; UBC[0] = ubc;
-	U[1] = v; UP[1] = v; UH[1] = vh; UBC[1] = vbc;
-	U[2] = w; UP[2] = w; UH[2] = wh; UBC[2] = wbc;
-	UP[3] = p; P[0] = p; P[1] = mpg; DP[0] = dp; DP[1] = fdp;
+	U[0] = UP[0] = u; UH[0] = UPH[0] = uh; UBC[0] = ubc;
+	U[1] = UP[1] = v; UH[1] = UPH[1] = vh; UBC[1] = vbc;
+	U[2] = UP[2] = w; UH[2] = UPH[2] = wh; UBC[2] = wbc;
+	P[0] = UP[3] = p; DP[0] = UPH[3] = dp;
+	P[1] = mpg; DP[1] = fdp;
 
 	frcs = new fftw_plan [Ny+1];
 	fcrs = new fftw_plan [Ny+1];
@@ -137,8 +138,8 @@ void Field::initField(class Field *pf0, class Mesh *pm0, class Mesh *pm)
 	// 3 mean pressure gradients are initiated to 0, and will be compensated by dmpg next step
 	mpg[0] = mpg[1] = mpg[2] = 0.0;
 
-	// implement BC on boundaries
-	this->applyBC();
+	// // implement BC on boundaries
+	// this->applyBC();
 
 	printf("\nFlow fields initiated from existing fields.\n");
 
@@ -149,7 +150,7 @@ void Field::initField(double energy, class Mesh *pmesh)
 /* initiate flow field from laminar with random fluctions */
 {
 	int idx, i, j, k;
-	double *y = pmesh->y, Ly = pmesh->Ly;
+	double *y = pmesh->y, *yc = pmesh->yc, Ly = pmesh->Ly;
 
 	// initiate velocities with random fluctuations
 	srand(time(0));
@@ -158,7 +159,7 @@ void Field::initField(double energy, class Mesh *pmesh)
 	for (i=0; i<Nx; i++) {
 		idx = IDX(i,j,k);
 		u[idx] = energy * (rand()-rand()) / (double)(RAND_MAX); // probability distribution: p(x) = ( x<0 ? x+1 : 1-x )
-		v[idx] = energy * (rand()-rand()) / (double)(RAND_MAX); // 2nd order moment is 2/3, <U^2+V^2+W^2>/2 = energy
+		if (j>1) v[idx] = energy * (rand()-rand()) / (double)(RAND_MAX); // 2nd order moment is 2/3, <U^2+V^2+W^2>/2 = energy
 		w[idx] = energy * (rand()-rand()) / (double)(RAND_MAX); // sample space expands on the whole physical domain
 	}}}
 
@@ -184,10 +185,7 @@ void Field::initField(double energy, class Mesh *pmesh)
 	}
 
 	// impose parabolic profile from laminar flow
-	for (j=1; j<Ny; j++) {
-		double yh = 0.5 * (y[j] + y[j+1]);
-		this->layerAdd(u, yh * (Ly-yh), j);
-	}
+	for (j=1; j<Ny; j++)	this->layerAdd(u, yc[j] * (Ly-yc[j]), j);
 
 	// modify flow rate // note: boundary will be modified through using bulk functions
 	this->bulkMult( u, 1.0 / pmesh->bulkMeanU(u) ); // rescale the mass flow rate to be equal to 2.0 (bulk mean U = 1.0 because of non-dimensionalization)
@@ -198,6 +196,7 @@ void Field::initField(double energy, class Mesh *pmesh)
 	mpg[0] = mpg[1] = mpg[2] = 0.0;
 
 	// implement BC on boundaries
+	this->bcond(0);
 	this->applyBC();
 
 	printf("\nFlow fields initiated from laminar.\n");
@@ -225,6 +224,43 @@ void Field::applyBC()
 	this->layerCopy(w, wbc, Ny, 1);
 }
 
+void Field::applyBC(double dt)
+/* apply Dirichlet BC on velocities */
+{
+	double *ul = new double [Nxz];
+	double *vl = new double [Nxz];
+	double *wl = new double [Nxz];
+	
+	this->layerMult( layerCopy(ul,u,0,0), -1 );
+	this->layerMult( layerCopy(vl,v,0,1), -1 );
+	this->layerMult( layerCopy(wl,w,0,0), -1 );
+	this->layerMult( layersAdd(ul,ubc,0,0), 1.0 / dt );
+	this->layerMult( layersAdd(vl,vbc,0,0), 1.0 / dt );
+	this->layerMult( layersAdd(wl,wbc,0,0), 1.0 / dt );
+	this->layerCopy(uh, ul, 0, 0);
+	this->layerCopy(vh, vl, 1, 0);
+	this->layerCopy(wh, wl, 0, 0);
+	
+	this->layerMult( layerCopy(ul,u,0,Ny), -1 );
+	this->layerMult( layerCopy(vl,v,0,Ny), -1 );
+	this->layerMult( layerCopy(wl,w,0,Ny), -1 );
+	this->layerMult( layersAdd(ul,ubc,0,1), 1.0 / dt );
+	this->layerMult( layersAdd(vl,vbc,0,1), 1.0 / dt );
+	this->layerMult( layersAdd(wl,wbc,0,1), 1.0 / dt );
+	this->layerCopy(uh, ul, Ny, 0);
+	this->layerCopy(vh, vl, Ny, 0);
+	this->layerCopy(wh, wl, Ny, 0);
+
+	this->layerCopy(u, ubc, 0, 0);
+	this->layerCopy(v, vbc, 1, 0);
+	this->layerCopy(w, wbc, 0, 0);
+	this->layerCopy(u, ubc, Ny, 1);
+	this->layerCopy(v, vbc, Ny, 1);
+	this->layerCopy(w, wbc, Ny, 1);
+
+	delete [] ul; delete [] vl; delete [] wl;
+}
+
 
 void Field::bodyForce(int bftype)
 {
@@ -232,27 +268,86 @@ void Field::bodyForce(int bftype)
 
 	switch (bftype) {
 		case 1:
-			bulkCopy(dp, uh);
-			fft();
-			for (j=1; j<Ny; j++) {
-			for (i=1; i<Nxc; i++) {
-				idx = IDXF(i,j,0);
-				fdp[idx] = 0;
-				fdp[idx+1] = 0;
-			}}
-			ifft();
-			bulkCopy(uh, dp);
+			double um, *usm = new double [Nx];
+			double vm, *vsm = new double [Nx];
+			double uhm, *uhsm = new double [Nx];
+			double vhm, *vhsm = new double [Nx];
 
-			bulkCopy(dp, vh);
-			fft();
-			for (j=2; j<Ny; j++) {
-			for (i=1; i<Nxc; i++) {
-				idx = IDXF(i,j,0);
-				fdp[idx] = 0;
-				fdp[idx+1] = 0;
-			}}
-			ifft();
-			bulkCopy(vh, dp);
+			for (j=1; j<Ny; j++) {
+
+				for (i=0; i<Nx; i++) {
+					usm[i] = vsm[i] = 0.0;
+					uhsm[i] = vhsm[i] = 0.0;
+					for (k=0; k<Nz; k++) {
+						idx = IDX(i,j,k);
+						usm[i] += u[idx] / Nz;
+						vsm[i] += v[idx] / Nz;
+						uhsm[i] += uh[idx] / Nz;
+						vhsm[i] += vh[idx] / Nz;
+				}}
+
+				um = vm = 0.0;
+				uhm = vhm = 0.0;
+				for (i=0; i<Nx; i++) {
+					um += usm[i] / Nx;
+					vm += vsm[i] / Nx;
+					uhm += uhsm[i] / Nx;
+					vhm += vhsm[i] / Nx;
+				}
+
+				for (k=0; k<Nz; k++) {
+				for (i=0; i<Nx; i++) {
+					idx = IDX(i,j,k);
+					u[idx] -= usm[i] - um;
+					if (j>1) v[idx] -= vsm[i] - vm;
+					uh[idx] -= uhsm[i] - uhm;
+					if (j>1) vh[idx] -= vhsm[i] - vhm;
+				}}
+			}
+
+			// bulkCopy(dp, uh);
+			// fft();
+			// for (j=1; j<Ny; j++) {
+			// for (i=1; i<Nxc; i++) {
+			// 	idx = IDXF(i,j,0);
+			// 	fdp[idx] = 0;
+			// 	fdp[idx+1] = 0;
+			// }}
+			// ifft();
+			// bulkCopy(uh, dp);
+
+			// bulkCopy(dp, vh);
+			// fft();
+			// for (j=2; j<Ny; j++) {
+			// for (i=1; i<Nxc; i++) {
+			// 	idx = IDXF(i,j,0);
+			// 	fdp[idx] = 0;
+			// 	fdp[idx+1] = 0;
+			// }}
+			// ifft();
+			// bulkCopy(vh, dp);
+
+			// bulkCopy(dp, u);
+			// fft();
+			// for (j=1; j<Ny; j++) {
+			// for (i=1; i<Nxc; i++) {
+			// 	idx = IDXF(i,j,0);
+			// 	fdp[idx] = 0;
+			// 	fdp[idx+1] = 0;
+			// }}
+			// ifft();
+			// bulkCopy(u, dp);
+
+			// bulkCopy(dp, v);
+			// fft();
+			// for (j=2; j<Ny; j++) {
+			// for (i=1; i<Nxc; i++) {
+			// 	idx = IDXF(i,j,0);
+			// 	fdp[idx] = 0;
+			// 	fdp[idx+1] = 0;
+			// }}
+			// ifft();
+			// bulkCopy(v, dp);
 		break;
 
 		case 2:
@@ -333,6 +428,16 @@ void Field::writeField(char *path, int tstep)
 {
 	double *ptrs[4] = {u, v, w, p};
 	char names[4][32] = {"U", "V", "W", "P"};
+	for (int n=0; n<4; n++) {
+		sprintf(names[n], "%s%08i", names[n], tstep);
+		this->fieldIO(path, ptrs[n], names[n], 'w');
+	}
+}
+
+void Field::writeFieldDt(char *path, int tstep)
+{
+	double *ptrs[4] = {uh, vh, wh, dp};
+	char names[4][32] = {"UT", "VT", "WT", "PT"};
 	for (int n=0; n<4; n++) {
 		sprintf(names[n], "%s%08i", names[n], tstep);
 		this->fieldIO(path, ptrs[n], names[n], 'w');

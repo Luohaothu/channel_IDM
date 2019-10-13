@@ -11,7 +11,7 @@ class IDM
 		void ruhcalc(double *RUH[3], double *U[3], double *P[2], double *UBC[3]);
 		void uhcalc(double *UH[3], double *U[3]);
 		void dpcalc(double *DP[2], double *UH[3], double *UBC[3], class Field *pfield);
-		void upcalc(double *U[3], double *P[2], double *UH[3], double *DP[2], class Mesh *pmesh, class Field *pfield);
+		void upcalc(double *U[3], double *P[2], double *UPH[4], class Mesh *pmesh);
 
 	private:
 		int Nx, Ny, Nz, Nxz;
@@ -57,7 +57,7 @@ class IDM
 		void update(
 			double *u,	double *v,	double *w,	double *p,
 			double *uh,	double *vh,	double *wh,	double *dp);
-		void meanpg(double *mpg, double *u, double *w, class Mesh *pmesh, class Field *pfield);
+		void meanpg(double *mpg, double *u, double *w, class Mesh *pmesh);
 };
 
 
