@@ -1,41 +1,47 @@
-import numpy as np
-from struct import pack, unpack
-from numpy.fft import fft2 as phys
-from numpy.fft import ifft2 as spec
-from matplotlib import pyplot as plt
+#!/root/Software/anaconda3/bin/python3
+from basic import *
 
-# data = np.loadtxt("PROF.dat")
-# data[:, 1:] += data[::-1, 1:]
-# data[:, 1:] /= 2.0
+para = DataSetInfo("/run/media/student/DATA/whn/channel_IDM/SR_VEL/")
+feld = Field(para)
+stas = Statis(para, feld)
 
-# np.savetxt("PROF.dat", data)
+stas.calc_profs()
+stas.inner_scale()
 
-Nx, Ny, Nz = 192, 193, 36
-Lx, Ly, Lz = 3.1416, 2.0, 0.31416
-Nxz = Nx * Nz
-Nxc = int (Nx/2+1)
-Nzc = int (Nz/2+1)
+casename = para.datapath.split('/')[-2]
+jrange = range(1, int(para.Ny/2)+1)
 
 
-kx = np.hstack( (np.arange(Nxc), np.arange(Nxc-Nx, 0)) ) * (2*np.pi/Lx)
-kz = np.hstack( (np.arange(Nzc), np.arange(Nzc-Nz, 0)) ) * (2*np.pi/Lz)
+header = \
+	'Title = "profiles of basic statistics"\n' + \
+	'variables = "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"\n' \
+	% (	"y<sup>+</sup>",
+		"U<sup>+</sup>", "V<sup>+</sup>", "W<sup>+</sup>", "P<sup>+</sup>", \
+		"<u'u'><sup>+</sup>", "<v'v'><sup>+</sup>", "<w'w'><sup>+</sup>", \
+		"<u'v'><sup>+</sup>", "<v'w'><sup>+</sup>", "<u'w'><sup>+</sup>", \
+		"<u'p'><sup>+</sup>", "<v'p'><sup>+</sup>", "<w'p'><sup>+</sup>", \
+		"<p'p'><sup>+</sup>"	) + \
+	'zone t = "%s", i = %i' \
+	%(	casename, len(jrange)	)
 
-def read_channel(file_path_name):
-	recl = (Ny+1) * Nxz * 8;
-	with open(file_path_name, 'rb') as fp:
-		fp.seek(Nxz*8) # skipping info section
-		q = np.reshape( unpack(recl/8*'d', fp.read(recl)), [Ny+1, Nz, Nx] )
-	return q - np.reshape( np.mean(q, axis=(-1,-2)), [Ny+1, 1, 1] )
+data = np.vstack([ para.yc/stas.dnu,
+	stas.Um,	stas.Vm,	stas.Wm,	stas.Pm/stas.tauw,
+	stas.R11,	stas.R22,	stas.R33,	stas.R12,	stas.R23,	stas.R13,
+	stas.Rpu,	stas.Rpv,	stas.Rpw,	stas.Rpp/stas.tauw**2	])
+data[1:4] /= stas.utau
+data[5:11] /= stas.utau**2
+data[11:14] /= stas.utau * stas.tauw
+data = data.T[jrange]
 
-q = read_channel("V00004000.bin")
-Evv = abs(spec(q))**2
-Evv = np.sum(Evv+Evv[::-1], axis=-1) / 2
-plt.plot(np.sort(kz), Evv[15, np.argsort(kz)], '.-')
+np.savetxt(para.postpath+"profiles.dat", data, header=header, comments='')
 
-	
-q = read_channel("V00063000.bin")
-Evv = abs(spec(q))**2
-Evv = np.sum(Evv+Evv[::-1], axis=-1) / 2
-plt.plot(np.sort(kz), Evv[15, np.argsort(kz)], '.-')
 
-plt.show()
+
+
+
+
+# r"$y^+$",
+# r"$U^+$", r"$V^+$", r"$W^+$", r"$P^+$",
+# r"$<u'u'>^+$", r"$<v'v'>^+$", r"$<w'w'>^+$",
+# r"$<u'v'>^+$", r"$<v'w'>^+$", r"$<u'w'>^+$",
+# r"$<u'p'>^+$", r"$<v'p'>^+$", r"$<w'p'>^+$", r"$<p'p'>^+$"

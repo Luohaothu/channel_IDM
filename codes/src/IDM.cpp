@@ -1,4 +1,6 @@
 # include <iostream>
+# include <math.h>
+# include <omp.h>
 
 # include "IDM.h"
 
@@ -27,6 +29,14 @@ void IDM::initIDM(double Re, double dt, class Mesh *pmesh)
 	pmatyu= new class Matrix(Ny-1);
 	pmatyv= new class Matrix(Ny-2);
 	pmatz = new class Matrix(Nz);
+	
+	// decide number of OpenMP threads based on grid number
+	int nprocs = omp_get_num_procs();
+	int ngrids = log2(Nx*Ny*Nz) - 17;
+	nprocs = ( nprocs > 32 ? 32 : nprocs );
+	ngrids = ( ngrids < 1 ? 1 : ngrids );
+	nthrds = ( ngrids > nprocs ? nprocs : ngrids );
+	cout << "\nnumber of OpenMP threads for uhcalc: " << nthrds << endl;
 }
 
 void IDM::ruhcalc(double *RUH[3], double *U[3], double *P[2], double *UBC[3])
@@ -41,9 +51,13 @@ void IDM::ruhcalc(double *RUH[3], double *U[3], double *P[2], double *UBC[3])
 void IDM::uhcalc(double *UH[3], double *U[3])
 {
 	// solve UH
-	getuh1(UH[0],				U[0], U[1], U[2]);
-	getuh2(UH[0], UH[1],		U[0], U[1], U[2]);
-	getuh3(UH[0], UH[1], UH[2],	U[0], U[1], U[2]);
+	omp_set_num_threads(nthrds);
+	# pragma omp parallel
+	{
+		getuh1(UH[0],				U[0], U[1], U[2]);
+		getuh2(UH[0], UH[1],		U[0], U[1], U[2]);
+		getuh3(UH[0], UH[1], UH[2],	U[0], U[1], U[2]);
+	}
 }
 
 void IDM::dpcalc(double *DP[2], double *UH[3], double *UBC[3], class Field *pfield)
@@ -311,11 +325,14 @@ void IDM::getuh1(double *uh, double *u, double *v, double *w)
 {
 	int i, j, k, idx, ip, im, jp, jm, kp, km, imjp, imkp;
 	double u1, u2, v1, v2, w1, w2;
-	double *api = new double [Nx], *aci = new double [Nx], *ami = new double [Nx];
-	double *apj = new double [Ny], *acj = new double [Ny], *amj = new double [Ny];
-	double *apk = new double [Nz], *ack = new double [Nz], *amk = new double [Nz];
-	double * R1 = new double [Nx], * R2 = new double [Ny], * R3 = new double [Nz];
+	double *api = new double [Nx], *aci = new double [Nx], *ami = new double [Nx], *R1 = new double [Nx];
+	double *apj = new double [Ny], *acj = new double [Ny], *amj = new double [Ny], *R2 = new double [Ny];
+	double *apk = new double [Nz], *ack = new double [Nz], *amk = new double [Nz], *R3 = new double [Nz];
+	class Matrix *pmatx1 = new class Matrix(Nx);
+	class Matrix *pmaty1 = new class Matrix(Ny-1);
+	class Matrix *pmatz1 = new class Matrix(Nz);
 
+	# pragma omp for
 	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {
 		for (j=1; j<Ny; j++) {
@@ -331,10 +348,11 @@ void IDM::getuh1(double *uh, double *u, double *v, double *w)
 			amj[j] = dt * ( -0.25/h[j]*v1 - 0.5*hm[j]/Re );	// this term at j=1 is redundant in tdma
 			R2 [j] = dt * uh[idx];
 		}
-		pmatyu->tdma( & amj[1], & acj[1], & apj[1], & R2[1] );
+		pmaty1->tdma( & amj[1], & acj[1], & apj[1], & R2[1] );
 		for (j=1; j<Ny; j++) uh[IDX(i,j,k)] = R2[j];
 	}}
 
+	# pragma omp for
 	for (j=1; j<Ny; j++) {
 	for (k=0; k<Nz; k++) {
 		for (i=0; i<Nx; i++) {
@@ -350,10 +368,11 @@ void IDM::getuh1(double *uh, double *u, double *v, double *w)
 			ami[i] = dt * (-0.5/dx) * ( u1 + 1.0/Re/dx );
 			R1 [i] = uh[idx];
 		}
-		pmatx->ctdma( ami, aci, api, R1 );
+		pmatx1->ctdma( ami, aci, api, R1 );
 		for (i=0; i<Nx; i++) uh[IDX(i,j,k)] = R1[i];
 	}}
 
+	# pragma omp for
 	for (j=1; j<Ny; j++) {
 	for (i=0; i<Nx; i++) {
 		for (k=0; k<Nz; k++) {
@@ -369,10 +388,14 @@ void IDM::getuh1(double *uh, double *u, double *v, double *w)
 			amk[k] = dt * (-0.25/dz) * ( w1 + 2.0/Re/dz );
 			R3 [k] = uh[idx];
 		}
-		pmatz->ctdma( amk, ack, apk, R3 );
+		pmatz1->ctdma( amk, ack, apk, R3 );
 		for (k=0; k<Nz; k++) uh[IDX(i,j,k)] = R3[k];
 	}}
-	
+
+	delete [] api; delete [] aci; delete [] ami; delete [] R1;
+	delete [] apj; delete [] acj; delete [] amj; delete [] R2;
+	delete [] apk; delete [] ack; delete [] amk; delete [] R3;
+	delete pmatx1; delete pmaty1; delete pmatz1;
 }
 
 
@@ -381,11 +404,14 @@ void IDM::getuh2(double *uh, double *vh, double *u, double *v, double *w)
 {
 	int i, j, k, idx, ip, im, jp, jm, kp, km, ipjm, jmkp;
 	double u1, u2, v1, v2, w1, w2, m21uh;
-	double *api = new double [Nx], *aci = new double [Nx], *ami = new double [Nx];
-	double *apj = new double [Ny], *acj = new double [Ny], *amj = new double [Ny];
-	double *apk = new double [Nz], *ack = new double [Nz], *amk = new double [Nz];
-	double * R1 = new double [Nx], * R2 = new double [Ny], * R3 = new double [Nz];
+	double *api = new double [Nx], *aci = new double [Nx], *ami = new double [Nx], *R1 = new double [Nx];
+	double *apj = new double [Ny], *acj = new double [Ny], *amj = new double [Ny], *R2 = new double [Ny];
+	double *apk = new double [Nz], *ack = new double [Nz], *amk = new double [Nz], *R3 = new double [Nz];
+	class Matrix *pmatx2 = new class Matrix(Nx);
+	class Matrix *pmaty2 = new class Matrix(Ny-2);
+	class Matrix *pmatz2 = new class Matrix(Nz);
 
+	# pragma omp for
 	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {
 		for (j=2; j<Ny; j++) {
@@ -409,10 +435,11 @@ void IDM::getuh2(double *uh, double *vh, double *u, double *v, double *w)
 
 			R2 [j] = dt * ( vh[idx] - m21uh );
 		}
-		pmatyv->tdma( & amj[2], & acj[2], & apj[2], & R2[2] );
+		pmaty2->tdma( & amj[2], & acj[2], & apj[2], & R2[2] );
 		for (j=2; j<Ny; j++) vh[IDX(i,j,k)] = R2[j];
 	}}
 
+	# pragma omp for
 	for (j=2; j<Ny; j++) {
 	for (k=0; k<Nz; k++) {
 		for (i=0; i<Nx; i++) {
@@ -428,10 +455,11 @@ void IDM::getuh2(double *uh, double *vh, double *u, double *v, double *w)
 			ami[i] = dt * (-0.25/dx) * ( u1 + 2.0/Re/dx );
 			R1 [i] = vh[idx];
 		}
-		pmatx->ctdma( ami, aci, api, R1 );
+		pmatx2->ctdma( ami, aci, api, R1 );
 		for (i=0; i<Nx; i++) vh[IDX(i,j,k)] = R1[i];
 	}}
 
+	# pragma omp for
 	for (j=2; j<Ny; j++) {
 	for (i=0; i<Nx; i++) {
 		for (k=0; k<Nz; k++) {
@@ -447,10 +475,14 @@ void IDM::getuh2(double *uh, double *vh, double *u, double *v, double *w)
 			amk[k] = dt * (-0.25/dz) * ( w1 + 2.0/Re/dz );
 			R3 [k] = vh[idx];
 		}
-		pmatz->ctdma( amk, ack, apk, R3 );
+		pmatz2->ctdma( amk, ack, apk, R3 );
 		for (k=0; k<Nz; k++) vh[IDX(i,j,k)] = R3[k];
 	}}
 	
+	delete [] api; delete [] aci; delete [] ami; delete [] R1;
+	delete [] apj; delete [] acj; delete [] amj; delete [] R2;
+	delete [] apk; delete [] ack; delete [] amk; delete [] R3;
+	delete pmatx2; delete pmaty2; delete pmatz2;
 }
 
 
@@ -459,12 +491,15 @@ void IDM::getuh3(double *uh, double *vh, double *wh, double *u, double *v, doubl
 {
 	int i, j, k, idx, ip, im, jp, jm, kp, km, ipkm, jpkm, imjp, imkp, jmkp, jup, jum;
 	double u1, u2, v1, v2, w1, w2, m31uh, m32vh, m23wh, m12vh, m13wh;
-	double *api = new double [Nx], *aci = new double [Nx], *ami = new double [Nx];
-	double *apj = new double [Ny], *acj = new double [Ny], *amj = new double [Ny];
-	double *apk = new double [Nz], *ack = new double [Nz], *amk = new double [Nz];
-	double * R1 = new double [Nx], * R2 = new double [Ny], * R3 = new double [Nz];
+	double *api = new double [Nx], *aci = new double [Nx], *ami = new double [Nx], *R1 = new double [Nx];
+	double *apj = new double [Ny], *acj = new double [Ny], *amj = new double [Ny], *R2 = new double [Ny];
+	double *apk = new double [Nz], *ack = new double [Nz], *amk = new double [Nz], *R3 = new double [Nz];
+	class Matrix *pmatx3 = new class Matrix(Nx);
+	class Matrix *pmaty3 = new class Matrix(Ny-1);
+	class Matrix *pmatz3 = new class Matrix(Nz);
 
 	// ( I + dt M_33^2 )
+	# pragma omp for
 	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {
 		for (j=1; j<Ny; j++) {	jup = j==Ny-1 ? 0 : 1;	jum = j==1 ? 0 : 1;
@@ -496,10 +531,11 @@ void IDM::getuh3(double *uh, double *vh, double *wh, double *u, double *v, doubl
 
 			R2 [j] = dt * ( wh[idx] - m31uh - m32vh );
 		}
-		pmatyu->tdma( & amj[1], & acj[1], & apj[1], & R2[1] );
+		pmaty3->tdma( & amj[1], & acj[1], & apj[1], & R2[1] );
 		for (j=1; j<Ny; j++) wh[IDX(i,j,k)] = R2[j];
 	}}
 	// ( I + dt M_33^1 )
+	# pragma omp for
 	for (j=1; j<Ny; j++) {
 	for (k=0; k<Nz; k++) {
 		for (i=0; i<Nx; i++) {
@@ -515,10 +551,11 @@ void IDM::getuh3(double *uh, double *vh, double *wh, double *u, double *v, doubl
 			ami[i] = dt * (-0.25/dx) * ( u1 + 2.0/Re/dx );
 			R1 [i] = wh[idx];
 		}
-		pmatx->ctdma( ami, aci, api, R1 );
+		pmatx3->ctdma( ami, aci, api, R1 );
 		for (i=0; i<Nx; i++) wh[IDX(i,j,k)] = R1[i];
 	}}
 	// ( I + dt M_33^3 )
+	# pragma omp for
 	for (j=1; j<Ny; j++) {
 	for (i=0; i<Nx; i++) {
 		for (k=0; k<Nz; k++) {
@@ -534,11 +571,12 @@ void IDM::getuh3(double *uh, double *vh, double *wh, double *u, double *v, doubl
 			amk[k] = dt * (-0.5/dz) * ( w1 + 1.0/Re/dz );
 			R3 [k] = wh[idx];
 		}
-		pmatz->ctdma( amk, ack, apk, R3 );
+		pmatz3->ctdma( amk, ack, apk, R3 );
 		for (k=0; k<Nz; k++) wh[IDX(i,j,k)] = R3[k];
 	}}
 
 	// update dvh
+	# pragma omp for
 	for (j=2; j<Ny; j++) {
 	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {
@@ -556,6 +594,7 @@ void IDM::getuh3(double *uh, double *vh, double *wh, double *u, double *v, doubl
 	}}}
 	
 	// update duh
+	# pragma omp for
 	for (j=1; j<Ny; j++) {	jup = j==Ny-1 ? 0 : 1;	jum = j==1 ? 0 : 1;
 	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {
@@ -582,6 +621,7 @@ void IDM::getuh3(double *uh, double *vh, double *wh, double *u, double *v, doubl
 	}}}
 
 	// update intermediate velocity field
+	# pragma omp for
 	for (j=1; j<Ny; j++) {	jum = j==1 ? 0 : 1;
 	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {
@@ -590,6 +630,11 @@ void IDM::getuh3(double *uh, double *vh, double *wh, double *u, double *v, doubl
 		vh[idx] += v[idx] * jum; // j=1 is redundant
 		wh[idx] += w[idx];
 	}}}
+
+	delete [] api; delete [] aci; delete [] ami; delete [] R1;
+	delete [] apj; delete [] acj; delete [] amj; delete [] R2;
+	delete [] apk; delete [] ack; delete [] amk; delete [] R3;
+	delete pmatx3; delete pmaty3; delete pmatz3;
 }
 
 

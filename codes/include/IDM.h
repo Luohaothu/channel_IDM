@@ -39,6 +39,9 @@ class IDM
 		class Matrix *pmatyv;
 		class Matrix *pmatz;
 
+		// openmp threads number
+		int nthrds;
+
 
 		void urhs1(double *ruh, double *u, double *v, double *w, double *p, double mpg1);
 		void urhs2(double *rvh, double *u, double *v, double *w, double *p);
