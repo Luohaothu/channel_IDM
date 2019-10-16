@@ -77,7 +77,7 @@ void IDM::upcalc(double *U[3], double *P[2], double *UPH[4], class Mesh *pmesh)
 
 
 
-void IDM::urhs1(double *ruh, double *u, double *v, double *w, double *p, double mpg1)
+void IDM::urhs1(double *ruh, double *u, double *v, double *w, double *p, double mpg1, double *nu)
 /* compute right hand side R_1 for intermediate velocity at all non-wall grid points */
 {
 	int i, j, k, idx, ip, im, jp, jm, kp, km, imjp, imkp, jup, jum;
@@ -92,29 +92,37 @@ void IDM::urhs1(double *ruh, double *u, double *v, double *w, double *p, double 
 		ip = IDX(ipa[i],j,k);	jp = IDX(i,j+1,k);	kp = IDX(i,j,kpa[k]);
 		im = IDX(ima[i],j,k);	jm = IDX(i,j-1,k);	km = IDX(i,j,kma[k]);
 
-		// viscuous term (2nd order derivative)
-		viscos = 0.5/Re * (
-			( u[ip] - 2.0*u[idx] + u[im] ) / dx2
-		+	( u[kp] - 2.0*u[idx] + u[km] ) / dz2
-		+	( hp[j]*u[jp] - hc[j]*u[idx] + hm[j]*u[jm] )	);
+		// viscuous term coefficients
+		vis1 = nu[im];
+		vis2 = nu[idx];
+		vis3 = 0.5 * ( (nu[idx]+nu[im]) * dy[j-1] + (nu[jm]+nu[imjm]) * dy[j] ) / (2.0*h[j]);
+		vis4 = 0.5 * ( (nu[idx]+nu[im]) * dy[j+1] + (nu[jp]+nu[imjp]) * dy[j] ) / (2.0*h[j+1]);
+		vis5 = 0.25 * ( nu[idx] + nu[im] + nu[km] + nu[imkm] );
+		vis6 = 0.25 * ( nu[idx] + nu[im] + nu[kp] + nu[imkp] );
+
+		l11un =	( vis2 * u[ip] - (vis2+vis1) * u[idx] + vis1 * u[im] ) / dx2
+			+	( vis4/h[j+1] * u[jp] - (vis4/h[j+1]+vis3/h[j]) * u[idx] + vis3/h[j] * u[jm] ) / (2.0*dy[j])
+			+	( vis6 * u[kp] - (vis6+vis5) * u[idx] + vis5 * u[km] ) / (2.0*dz2);
+		l12vn = ( vis4 * (v[jp]-v[imjp]) - vis3 * (v[idx]-v[im]) ) / (2.0*dx*h[j]);
+		l13wn = ( vis6 * (w[kp]-w[imkp]) - vis5 * (w[idx]-w[im]) ) / (2.0*dx*dz);
 
 		// non-linear term coefficients
-		u2 = 0.5 * ( u[idx] + u[ip] );
-		u1 = 0.5 * ( u[idx] + u[im] );
-		v2 = 0.5 * ( v[jp] + v[imjp] );
-		v1 = 0.5 * ( v[idx] + v[im] );
-		w2 = 0.5 * ( w[kp] + w[imkp] );
-		w1 = 0.5 * ( w[idx] + w[im] );
+		u2 = 0.5 * (u[idx] + u[ip]);
+		u1 = 0.5 * (u[idx] + u[im]);
+		v2 = 0.5 * (v[jp] + v[imjp]);
+		v1 = 0.5 * (v[idx] + v[im]);
+		w2 = 0.5 * (w[kp] + w[imkp]);
+		w1 = 0.5 * (w[idx] + w[im]);
 
-		api = 0.5/dx * ( u2 - 1.0/Re/dx );
-		aci = 0.5/dx * ( u2 - u1 + 2.0/Re/dx );
-		ami = -0.5/dx * ( u1 + 1.0/Re/dx );
-		apj = 0.25/h[j+1]*v2 - 0.5*hp[j]/Re;
-		acj = 0.25/dy[j] * ( v2*dy[j+1]/h[j+1] - v1*dy[j-1]/h[j] ) + 0.5*hc[j]/Re;
-		amj = -0.25/h[j]*v1 - 0.5*hm[j]/Re;
-		apk = 0.25/dz * ( w2 - 2.0/Re/dz );
-		ack = 0.25/dz * ( w2 - w1 + 4.0/Re/dz );
-		amk = -0.25/dz * ( w1 + 2.0/Re/dz );
+		api = 0.5/dx * (u2 - vis2/dx);
+		aci = 0.5/dx * (u2 - u1 + (vis2+vis1)/dx);
+		ami =-0.5/dx * (u1 + vis1/dx);
+		apj = 0.25/h[j+1] * (v2 - vis4/dy[j]);
+		acj = 0.25/dy[j] * (v2*dy[j+1]/h[j+1] - v1*dy[j-1]/h[j] + (vis4/h[j+1]+vis3/h[j]));
+		amj =-0.25/h[j] * (v1 + vis3/dy[j]);
+		apk = 0.25/dz * (w2 - vis6/dz);
+		ack = 0.25/dz * (w2 - w1 + (vis6+vis5)/dz);
+		amk =-0.25/dz * (w1 + vis5/dz);
 
 		// m11un
 		apj *= jup;
@@ -127,17 +135,17 @@ void IDM::urhs1(double *ruh, double *u, double *v, double *w, double *p, double 
 		u1 = ( u[idx]*dy[j-1] + u[jm]*dy[j] ) / (2.0*h[j]);
 		u2 *= jup;
 		u1 *= jum;
-		m12vn = (u2*v2 - u1*v1) / (2.0*dy[j]);
+		m12vn = (u2*v2 - u1*v1) / (2.0*dy[j]) - //0.5*l12vn;
 		// m13wn
 		u2 = 0.5 * ( u[idx] + u[kp] );
 		u1 = 0.5 * ( u[idx] + u[km] );
-		m13wn = (u2*w2 - u1*w1) / (2.0*dz);
+		m13wn = (u2*w2 - u1*w1) / (2.0*dz) - //0.5*l13wn;
 
 		// pressure gradient term
 		pressg = ( p[idx] - p[im] ) / dx + mpg1;
 
 		// R_1 without boundary condition
-		ruh[idx] = viscos - ( m11un + m12vn + m13wn ) - pressg;
+		ruh[idx] = 0.5 * (l11un + l12vn + l13wn) - (m11un + m12vn + m13wn) - pressg;
 	}}}
 }
 
