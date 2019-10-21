@@ -19,10 +19,10 @@ CFLAGS = -I $(IDIR) $(LIBS)
 
 ##### file lists #####
 
-_DEPS = Para.h Mesh.h Field.h Matrix.h IDM.h Statis.h
+_DEPS = Para.h Mesh.h Field.h Matrix.h IDM.h Statis.h SGS.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJS = main.o Para.o Mesh.o Field.o Matrix.o IDM.o Statis.o
+_OBJS = main.o Para.o Mesh.o Field.o Matrix.o IDM.o Statis.o SGS.o
 OBJS = $(patsubst %,$(ODIR)/%,$(_OBJS))
 
 
@@ -52,6 +52,7 @@ dirclean:
 remake:
 	make clean
 	make
+	mv $(OUTPUT) $(DATADIR)/
 
 .PHONY: clean
 clean:

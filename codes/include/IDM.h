@@ -8,8 +8,8 @@ class IDM
 {
 	public:
 		void initIDM(double Re, double dt, class Mesh *pmesh);
-		void ruhcalc(double *RUH[3], double *U[3], double *P[2], double *UBC[3]);
-		void uhcalc(double *UH[3], double *U[3]);
+		void ruhcalc(double *RUH[3], double *U[3], double *P[2], double *UBC[3], double *nu);
+		void uhcalc(double *UH[3], double *U[3], double *nu);
 		void dpcalc(double *DP[2], double *UH[3], double *UBC[3], class Field *pfield);
 		void upcalc(double *U[3], double *P[2], double *UPH[4], class Mesh *pmesh);
 
@@ -18,7 +18,8 @@ class IDM
 		int IDX(int i, int j, int k) {return Nxz * j + Nx * k + i;};
 
 		// Equation parameters
-		double Re, dt;
+		double dt;
+		// double Re, dt;
 
 		// Mesh parameters
 		double *dy, *h;				// y interval of the V grid and of the U,W,P grid
@@ -43,16 +44,16 @@ class IDM
 		int nthrds;
 
 
-		void urhs1(double *ruh, double *u, double *v, double *w, double *p, double mpg1);
-		void urhs2(double *rvh, double *u, double *v, double *w, double *p);
-		void urhs3(double *rwh, double *u, double *v, double *w, double *p, double mpg3);
+		void urhs1(double *ruh, double *u, double *v, double *w, double *p, double mpg1, double *nu);
+		void urhs2(double *rvh, double *u, double *v, double *w, double *p, double *nu);
+		void urhs3(double *rwh, double *u, double *v, double *w, double *p, double mpg3, double *nu);
 		void mbc(
 			double *ruh,double *rvh,double *rwh,
 			double *u,	double *v,	double *w,
-			double *ubc,double *vbc,double *wbc	);
-		void getuh1(double *uh,							double *u, double *v, double *w);
-		void getuh2(double *uh, double *vh,				double *u, double *v, double *w);
-		void getuh3(double *uh, double *vh, double *wh,	double *u, double *v, double *w);
+			double *ubc,double *vbc,double *wbc, double *nu	);
+		void getuh1(double *uh,							double *u, double *v, double *w, double *nu);
+		void getuh2(double *uh, double *vh,				double *u, double *v, double *w, double *nu);
+		void getuh3(double *uh, double *vh, double *wh,	double *u, double *v, double *w, double *nu);
 
 		void rhsdp(double *rdp, double *uh, double *vh, double *wh, double *vbc);
 		void getfdp(double *fdp);

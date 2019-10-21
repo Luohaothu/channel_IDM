@@ -7,12 +7,14 @@
 # include "Field.h"
 # include "Statis.h"
 # include "IDM.h"
+# include "SGS.h"
 
 using namespace std;
 
 
 void output(int tstep, double time, class Para *ppara, class Mesh *pmesh, class Field *pfield, class Statis *pstat);
 void input(int *tstep, double *time, class Field *pfield, class Para *ppara, class Mesh *pmesh);
+void bodyForce(class Para *ppara, class Field *pfield, class Mesh *pmesh, class SGS * psgs);
 
 
 int main()
@@ -21,7 +23,8 @@ int main()
 	class Mesh	*pmesh	= new class Mesh	(ppara->dim());
 	class Field	*pfield	= new class Field	(ppara->dim());
 	class Statis*pstat	= new class Statis	(ppara->dim());
-	class IDM	*pIDM	= new class IDM		();
+	class IDM	*pidm	= new class IDM		();
+	class SGS	*psgs	= new class SGS		(ppara->dim());
 
 	int tstep = 0;	double time = 0.0;
 	
@@ -29,9 +32,8 @@ int main()
 	pmesh->initMesh(ppara->len(), ppara->statpath, ppara->dy_min);
 	if (! pmesh->checkYmesh(ppara->statpath, pmesh->y)) exit(0);
 
-	pIDM->initIDM(ppara->Re, ppara->dt, pmesh);
+	pidm->initIDM(ppara->Re, ppara->dt, pmesh);
 
-	// pfield->bcond(0);
 	if (! ppara->nread) pfield->initField(ppara->init_ener, pmesh);
 	else input(& tstep, & time, pfield, ppara, pmesh);
 
@@ -44,17 +46,23 @@ int main()
 		// set boundary conditions
 		pfield->bcond(tstep);
 
+		psgs->viscalc(pfield->nu, pfield->U, ppara->Re, pmesh);
+
 		// time evolution
-		pIDM->ruhcalc(pfield->UH, pfield->U, pfield->P, pfield->UBC);
-		pIDM->uhcalc(pfield->UH, pfield->U);
-		pIDM->dpcalc(pfield->DP, pfield->UH, pfield->UBC, pfield);
-		pIDM->upcalc(pfield->U, pfield->P, pfield->UPH, pmesh);
-		
-		// pfield->applyBC();
-		pfield->applyBC(ppara->dt);
+		pidm->ruhcalc(pfield->UH, pfield->U, pfield->P, pfield->UBC, pfield->nu);
+		pidm->uhcalc(pfield->UH, pfield->U, pfield->nu);
 
-		pfield->bodyForce(ppara->bftype);
+		// cout << pmesh->bulkMeanU(pfield->UH[0]) << endl;
+		// cout << pmesh->bulkMeanV(pfield->UH[1]) << endl;
+		// cout << pmesh->bulkMeanU(pfield->UH[2]) << endl;
+		// exit(0);
 
+		pidm->dpcalc(pfield->DP, pfield->UH, pfield->UBC, pfield);
+		pidm->upcalc(pfield->U, pfield->P, pfield->UPH, pmesh);
+		pfield->applyBC(ppara->dt);	// pfield->applyBC();
+
+		// data manipulation
+		bodyForce(ppara, pfield, pmesh, psgs);
 
 		// output
 		output(tstep, time, ppara, pmesh, pfield, pstat);
@@ -110,6 +118,23 @@ void input(int *tstep, double *time, class Field *pfield, class Para *ppara, cla
 }
 
 
+void bodyForce(class Para *ppara, class Field *pfield, class Mesh *pmesh, class SGS * psgs)
+{
+	int j;
+	switch (ppara->bftype) {
+		case 1:
+			for (j=1; j<ppara->Ny; j++) {
+				pfield->removeSpanMean(pfield->U [0], j);
+				pfield->removeSpanMean(pfield->UH[0], j);	}
+			for (j=2; j<ppara->Ny; j++) {
+				pfield->removeSpanMean(pfield->U [1], j);
+				pfield->removeSpanMean(pfield->UH[1], j);	}
+		break;
+
+		case 2:
+		break;
+	}
+}
 
 
 

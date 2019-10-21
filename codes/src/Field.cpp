@@ -30,6 +30,7 @@ Nxc(Nx/2+1), Nxr(2*Nxc), Nxzc(Nz*Nxc), Nxzr(Nz*Nxr)
 	vh = new double [Nxz * (Ny+1)];	// grid same as V
 	wh = new double [Nxz * (Ny+1)];	// grid same as W
 	dp = new double [Nxz * (Ny+1)];	// grid same as P
+	nu = new double [Nxz * (Ny+1)];	// grid same as P
 
 	ubc = new double [Nxz * 2];		// 0 -> lower wall, 1 -> upper wall
 	vbc = new double [Nxz * 2];		// 0 -> lower wall, 1 -> upper wall
@@ -60,7 +61,7 @@ Field::~Field()
 	delete [] u; delete [] v; delete [] w; delete [] p;
 	delete [] uh; delete [] vh; delete [] wh; delete [] dp;
 	delete [] ubc; delete [] vbc; delete [] wbc;
-	delete [] fdp;
+	delete [] fdp; delete [] nu;
 	for (int j=0; j<=Ny; j++) {
 		fftw_destroy_plan(frcs[j]);
 		fftw_destroy_plan(fcrs[j]);
@@ -262,98 +263,56 @@ void Field::applyBC(double dt)
 }
 
 
-void Field::bodyForce(int bftype)
-{
-	int i, j, k, idx;
 
-	switch (bftype) {
-		case 1:
-			double um, *usm = new double [Nx];
-			double vm, *vsm = new double [Nx];
-			double uhm, *uhsm = new double [Nx];
-			double vhm, *vhsm = new double [Nx];
 
-			for (j=1; j<Ny; j++) {
+// void Field::bodyForce(int bftype)
+// {
+// 	int i, j, k, idx;
 
-				for (i=0; i<Nx; i++) {
-					usm[i] = vsm[i] = 0.0;
-					uhsm[i] = vhsm[i] = 0.0;
-					for (k=0; k<Nz; k++) {
-						idx = IDX(i,j,k);
-						usm[i] += u[idx] / Nz;
-						vsm[i] += v[idx] / Nz;
-						uhsm[i] += uh[idx] / Nz;
-						vhsm[i] += vh[idx] / Nz;
-				}}
+// 	switch (bftype) {
+// 		case 1:
+// 			double um, *usm = new double [Nx];
+// 			double vm, *vsm = new double [Nx];
+// 			double uhm, *uhsm = new double [Nx];
+// 			double vhm, *vhsm = new double [Nx];
 
-				um = vm = 0.0;
-				uhm = vhm = 0.0;
-				for (i=0; i<Nx; i++) {
-					um += usm[i] / Nx;
-					vm += vsm[i] / Nx;
-					uhm += uhsm[i] / Nx;
-					vhm += vhsm[i] / Nx;
-				}
+// 			for (j=1; j<Ny; j++) {
 
-				for (k=0; k<Nz; k++) {
-				for (i=0; i<Nx; i++) {
-					idx = IDX(i,j,k);
-					u[idx] -= usm[i] - um;
-					if (j>1) v[idx] -= vsm[i] - vm;
-					uh[idx] -= uhsm[i] - uhm;
-					if (j>1) vh[idx] -= vhsm[i] - vhm;
-				}}
-			}
+// 				for (i=0; i<Nx; i++) {
+// 					usm[i] = vsm[i] = 0.0;
+// 					uhsm[i] = vhsm[i] = 0.0;
+// 					for (k=0; k<Nz; k++) {
+// 						idx = IDX(i,j,k);
+// 						usm[i] += u[idx] / Nz;
+// 						vsm[i] += v[idx] / Nz;
+// 						uhsm[i] += uh[idx] / Nz;
+// 						vhsm[i] += vh[idx] / Nz;
+// 				}}
 
-			// bulkCopy(dp, uh);
-			// fft();
-			// for (j=1; j<Ny; j++) {
-			// for (i=1; i<Nxc; i++) {
-			// 	idx = IDXF(i,j,0);
-			// 	fdp[idx] = 0;
-			// 	fdp[idx+1] = 0;
-			// }}
-			// ifft();
-			// bulkCopy(uh, dp);
+// 				um = vm = 0.0;
+// 				uhm = vhm = 0.0;
+// 				for (i=0; i<Nx; i++) {
+// 					um += usm[i] / Nx;
+// 					vm += vsm[i] / Nx;
+// 					uhm += uhsm[i] / Nx;
+// 					vhm += vhsm[i] / Nx;
+// 				}
 
-			// bulkCopy(dp, vh);
-			// fft();
-			// for (j=2; j<Ny; j++) {
-			// for (i=1; i<Nxc; i++) {
-			// 	idx = IDXF(i,j,0);
-			// 	fdp[idx] = 0;
-			// 	fdp[idx+1] = 0;
-			// }}
-			// ifft();
-			// bulkCopy(vh, dp);
+// 				for (k=0; k<Nz; k++) {
+// 				for (i=0; i<Nx; i++) {
+// 					idx = IDX(i,j,k);
+// 					u[idx] -= usm[i] - um;
+// 					if (j>1) v[idx] -= vsm[i] - vm;
+// 					uh[idx] -= uhsm[i] - uhm;
+// 					if (j>1) vh[idx] -= vhsm[i] - vhm;
+// 				}}
+// 			}
+// 		break;
 
-			// bulkCopy(dp, u);
-			// fft();
-			// for (j=1; j<Ny; j++) {
-			// for (i=1; i<Nxc; i++) {
-			// 	idx = IDXF(i,j,0);
-			// 	fdp[idx] = 0;
-			// 	fdp[idx+1] = 0;
-			// }}
-			// ifft();
-			// bulkCopy(u, dp);
-
-			// bulkCopy(dp, v);
-			// fft();
-			// for (j=2; j<Ny; j++) {
-			// for (i=1; i<Nxc; i++) {
-			// 	idx = IDXF(i,j,0);
-			// 	fdp[idx] = 0;
-			// 	fdp[idx+1] = 0;
-			// }}
-			// ifft();
-			// bulkCopy(v, dp);
-		break;
-
-		case 2:
-		break;
-	}
-}
+// 		case 2:
+// 		break;
+// 	}
+// }
 
 
 /***** convinent operations for whole arrays *****/
@@ -420,6 +379,23 @@ double* Field::bulkMult(double *dst, double a)
 	for (int j=0; j<=Ny; j++)	this->layerMult(dst, a, j);
 	return dst;
 }
+
+double* Field::removeSpanMean(double *dst, int j)
+{
+	int i, k;
+	double qm = 0.0, *qsm = new double [Nx];
+
+	for (i=0; i<Nx; i++) {	qsm[i] = 0.0;
+	for (k=0; k<Nz; k++) {	qsm[i] += dst[IDX(i,j,k)] / Nz;	}}
+
+	for (i=0; i<Nx; i++)	qm += qsm[i] / Nx;
+
+	for (k=0; k<Nz; k++) {
+	for (i=0; i<Nx; i++) {	dst[IDX(i,j,k)] -= qsm[i] - qm;	}}
+
+	return dst;
+}
+
 
 
 /***** file input & output operations *****/

@@ -23,7 +23,7 @@ int main()
 	class Mesh	*pmesh	= new class Mesh	(ppara->dim());
 	class Field	*pfield	= new class Field	(ppara->dim());
 	class Statis*pstat	= new class Statis	(ppara->dim());
-	class IDM	*pIDM	= new class IDM		();
+	class IDM	*pidm	= new class IDM		();
 
 	int tstep = 0;	double time = 0.0;
 
@@ -36,7 +36,7 @@ int main()
 	pmesh->initMesh(ppara->len(), ppara->statpath, ppara->dy_min);
 	if (! pmesh->checkYmesh(ppara->statpath, pmesh->y)) exit(0);
 
-	pIDM->initIDM(ppara->Re, ppara->dt, pmesh);
+	pidm->initIDM(ppara->Re, ppara->dt, pmesh);
 
 	// pfield->bcond(0);
 	if (! ppara->nread) pfield->initField(ppara->init_ener, pmesh);
@@ -57,22 +57,22 @@ gettimeofday(time0, NULL);
 		// time evolution
 
 gettimeofday(time1, NULL);
-		pIDM->ruhcalc(pfield->UH, pfield->U, pfield->P, pfield->UBC);
+		pidm->ruhcalc(pfield->UH, pfield->U, pfield->P, pfield->UBC);
 gettimeofday(time2, NULL);
 t1 += 1000000 * (time2->tv_sec - time1->tv_sec) + time2->tv_usec - time1->tv_usec;
 
 gettimeofday(time1, NULL);
-		pIDM->uhcalc(pfield->UH, pfield->U);
+		pidm->uhcalc(pfield->UH, pfield->U);
 gettimeofday(time2, NULL);
 t2 += 1000000 * (time2->tv_sec - time1->tv_sec) + time2->tv_usec - time1->tv_usec;
 
 gettimeofday(time1, NULL);
-		pIDM->dpcalc(pfield->DP, pfield->UH, pfield->UBC, pfield);
+		pidm->dpcalc(pfield->DP, pfield->UH, pfield->UBC, pfield);
 gettimeofday(time2, NULL);
 t3 += 1000000 * (time2->tv_sec - time1->tv_sec) + time2->tv_usec - time1->tv_usec;
 
 gettimeofday(time1, NULL);
-		pIDM->upcalc(pfield->U, pfield->P, pfield->UPH, pmesh);
+		pidm->upcalc(pfield->U, pfield->P, pfield->UPH, pmesh);
 gettimeofday(time2, NULL);
 t4 += 1000000 * (time2->tv_sec - time1->tv_sec) + time2->tv_usec - time1->tv_usec;
 		
