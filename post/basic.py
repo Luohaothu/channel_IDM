@@ -46,7 +46,7 @@ class DataSetInfo:
 
 	def get_tsteps(self, path):
 		tsteps = []
-		for name in os.listdir(path):
+		for name in [s for s in os.listdir(path) if ".bin" in s]:
 			tstep = int( "".join([c for c in name if c.isdigit()]) )
 			if tstep not in tsteps: tsteps.append(tstep)
 		return np.sort(tsteps)

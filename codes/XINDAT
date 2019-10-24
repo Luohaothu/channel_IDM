@@ -1,13 +1,30 @@
+// allow update during computation
+
 // file paths
 fieldpath = "fielddata/"
 probepath = "probedata/"
 statpath = "statdata/"
 postpath = "postdata/"
 
+// computation control
+bftype = 0		// type of body force (0: DNS, 1: MFU, 2: LES)
+nthrds = 0		// number of threads for openmp (0 for automatically choose)
+
 // physical parameters
 Re = 24000.0	// Reynolds number
-init_ener = 0.5	// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
-bftype = 1		// type of body force (0: DNS, 1: MFU, 2: LES)
+dt = 5e-3		// time step length
+
+// time step control
+Nt = 1000000	// total time steps to evolve
+nwrite = 2000	// step interval for writing whole fields (0 for not outputing)
+nprint = 100	// step interval for printing and updating log of computation state (0 for not outputing)
+nprobe = 0		// step interval for writing time serials of probed layers (0 for not outputing)
+
+// probe control
+jprbs = 0		// layer indexes of layers to be probed (jprbs[0] store the number of layers)
+
+
+// can NOT be update during computation
 
 // grid settings
 Nx = 192		// grid number of streamwise direction
@@ -18,15 +35,8 @@ Ly = 2.0		// channel height. Not adjustable (must be 2.0 if the non-dimensional 
 Lz = 0.31416	// domain length of spanwise direction
 dy_min = 0.0005	// y coordinate at first grid off wall
 
-// time evolution control
-Nt = 1000000	// total time steps to evolve
-dt = 5e-3		// time step length
-
-// output control
-nwrite = 2000	// step interval for writing whole fields (0 for not outputing)
-nprint = 100	// step interval for printing and updating log of computation state (0 for not outputing)
-nprobe = 0		// step interval for writing time serials of probed layers (0 for not outputing)
-jprbs = 0		// layer indexes of layers to be probed (jprbs[0] store the number of layers)
+// field settings
+init_ener = 0.5	// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
 
 // input control
 nread = 60000	// step number of whole field files to read for continuing computation (0 for not inputing)

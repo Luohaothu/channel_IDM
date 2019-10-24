@@ -1,140 +1,125 @@
 # include <iostream>
+# include <stdio.h>
 # include <stdlib.h>
 # include <string.h>
+# include <ctime>
+# include <sys/stat.h>
 
 # include "Para.h"
-# include "Mesh.h"
 # include "Field.h"
 # include "Statis.h"
-# include "IDM.h"
-# include "SGS.h"
 
 using namespace std;
 
 
-void output(int tstep, double time, class Para *ppara, class Mesh *pmesh, class Field *pfield, class Statis *pstat);
-void input(int *tstep, double *time, class Field *pfield, class Para *ppara, class Mesh *pmesh);
-void bodyForce(class Para *ppara, class Field *pfield, class Mesh *pmesh, class SGS * psgs);
+double initiate(Field &field, Para &para);
+void output(int tstep, double time, Para &para, Field &field, Statis &stas);
+void input (int tstep, Para &para);
 
 
 int main()
 {
-	class Para	*ppara	= new class Para	("XINDAT");	ppara->showPara();
-	class Mesh	*pmesh	= new class Mesh	(ppara->dim());
-	class Field	*pfield	= new class Field	(ppara->dim());
-	class Statis*pstat	= new class Statis	(ppara->dim());
-	class IDM	*pidm	= new class IDM		();
-	class SGS	*psgs	= new class SGS		(ppara->dim());
+	Para para("XINDAT");
+	para.showPara();
 
-	int tstep = 0;	double time = 0.0;
+	Mesh mesh(para.Nx, para.Ny, para.Nz);
+	mesh.initMesh  (para.Lx, para.Ly, para.Lz, mesh.getYmesh(para.dy_min, para.Ly));
+	mesh.checkYmesh(mesh.y,  para.statpath);
+
+	Field  field(mesh);
+	Statis stas (mesh);
+	double time = initiate(field, para);
+	int tstep = (time < 1e-10 ? 0 : para.nread); // continue last case or start a new case depending on whether a continue time is read
 	
-	// initialization
-	pmesh->initMesh(ppara->len(), ppara->statpath, ppara->dy_min);
-	if (! pmesh->checkYmesh(ppara->statpath, pmesh->y)) exit(0);
-
-	pidm->initIDM(ppara->Re, ppara->dt, pmesh);
-
-	if (! ppara->nread) pfield->initField(ppara->init_ener, pmesh);
-	else input(& tstep, & time, pfield, ppara, pmesh);
-
-	if (tstep == 0)	output(0, 0.0, ppara, pmesh, pfield, pstat);
+	if (tstep == 0)	output(tstep, time, para, field, stas);
 
 	// main loop
-	while (tstep++ < ppara->Nt) {
-		time += ppara->dt;
+	while (tstep++ < para.Nt) {
 
-		// set boundary conditions
-		pfield->bcond(tstep);
+		field.bcond(tstep);								// set boundary conditions
+		field.getnu(para.Re, para.bftype==2 ? 0.01 : 0);// get the viscosity field
+		field.getup(para.dt, para.nthrds);				// time evolution
 
-		psgs->viscalc(pfield->nu, pfield->U, ppara->Re, pmesh);
-
-		// time evolution
-		pidm->ruhcalc(pfield->UH, pfield->U, pfield->P, pfield->UBC, pfield->nu);
-		pidm->uhcalc(pfield->UH, pfield->U, pfield->nu);
-
-		// cout << pmesh->bulkMeanU(pfield->UH[0]) << endl;
-		// cout << pmesh->bulkMeanV(pfield->UH[1]) << endl;
-		// cout << pmesh->bulkMeanU(pfield->UH[2]) << endl;
-		// exit(0);
-
-		pidm->dpcalc(pfield->DP, pfield->UH, pfield->UBC, pfield);
-		pidm->upcalc(pfield->U, pfield->P, pfield->UPH, pmesh);
-		pfield->applyBC(ppara->dt);	// pfield->applyBC();
-
-		// data manipulation
-		bodyForce(ppara, pfield, pmesh, psgs);
-
-		// output
-		output(tstep, time, ppara, pmesh, pfield, pstat);
+		if (para.bftype == 1) field.removeSpanMean();	// for MFU
+		
+		output(tstep, (time = time + para.dt), para, field, stas);
+		input (tstep, para);
 	}
 
 }
 
 
 
-void output(int tstep, double time, class Para *ppara, class Mesh *pmesh, class Field *pfield, class Statis *pstat)
+
+double initiate(Field &field, Para &para)
 {
-	if (tstep % ppara->nwrite == 0)	{
-		pfield->writeField(ppara->fieldpath, tstep);
-		pfield->writeFieldDt(ppara->fieldpath, tstep); // incorrect at tstep 0
-		// pfield->writeTecplot(ppara->fieldpath, tstep, time, pmesh);
-		// pfield->debug_Output(tstep);
+	if (para.nread == 0) {
+		field.initField(para.init_ener);
+		cout << endl << "Flow fields initiated from laminar." << endl;
+		return 0;
+	}
+
+	char str[1024];
+
+	sprintf(str, "%s%s", para.inpath, "XINDAT");
+	Para para0(str);
+	cout << endl << "Parameters for continue computing:" << endl;
+	para0.showPara();
+
+	sprintf(str, "%s%s", para.inpath, para0.statpath);
+	Mesh mesh0(para0.Nx, para0.Ny, para0.Nz);
+	mesh0.initMesh(para0.Lx, para0.Ly, para0.Lz, mesh0.getYmesh(str));
+
+	sprintf(str, "%s%s", para.inpath, para0.fieldpath);
+	Field field0(mesh0);
+	field0.readField(str, para.nread);
+	field.initField(field0);
+	cout << endl << "Flow fields initiated from existing fields." << endl;
+
+	sprintf(str, "%s%s", para.inpath, para0.statpath);
+	Statis stas0(mesh0);
+	if (! strcmp(para.inpath, "")) // only read continue time for inplace (inpath="") continue computation
+		return stas0.getLogtime(str, para.nread);
+	else return 0;
+}
+
+void output(int tstep, double time, Para &para, Field &field, Statis &stas)
+{
+	if (tstep % para.nwrite == 0) {
+		field.writeField(para.fieldpath, tstep);
 		cout << "Files successfully written for step " << tstep << endl;
 	}
-	if (tstep % ppara->nprint == 0) {
-		pstat->checkStat(pfield->UP, pmesh, pfield, ppara->Re, ppara->dt);
-		pstat->writeProfile(ppara->statpath, -1, pmesh->yc);
-		pstat->writeLogfile(ppara->statpath, tstep, time);
+	if (tstep % para.nprint == 0) {
+		stas.check(field.U, field.P, para.Re, para.dt);
+		stas.writeProfile(para.statpath);
+		stas.writeLogfile(para.statpath, tstep, time);
+	}
+}
+
+void input(int tstep, Para &para)
+{
+	static time_t last_time = 0;
+	char filename[] = "XINDAT";
+
+	if (tstep % para.nprint == 0) {
+		struct stat buf;
+		stat(filename, &buf);
+
+		if ((int)last_time == 0) last_time = buf.st_mtime;
+
+		if (buf.st_mtime > last_time) {
+			last_time = buf.st_mtime;
+
+			para.readPara(filename);
+			cout << endl << "Parameters updated at step " << tstep << " as:" << endl;
+			para.showPara();
+		}
 	}
 }
 
 
-void input(int *tstep, double *time, class Field *pfield, class Para *ppara, class Mesh *pmesh)
-{
-	char fn1[1024], fn2[1024], fn3[1024];
-	sprintf(fn1, "%s%s", ppara->inpath, "XINDAT");
-
-	class Para *ppara0 = new class Para (fn1);
-	class Mesh *pmesh0 = new class Mesh (ppara0->dim());
-	class Field *pfield0 = new class Field (ppara0->dim());
-	class Statis *pstat0 = new class Statis (ppara0->dim());
-	sprintf(fn2, "%s%s", ppara->inpath, ppara0->statpath);
-	sprintf(fn3, "%s%s", ppara->inpath, ppara0->fieldpath);
-
-	cout << "\nParameters for continue computing:" << endl;
-	ppara0->showPara();
-
-	if (! strcmp(ppara->inpath, "")) pstat0->readLogfile(fn2, ppara->nread, time);
-	*tstep = *time < 1e-10 ? 0 : ppara->nread; // continue last case or start a new case depending on whether a continue time is read
-
-	pmesh0->initMesh(ppara0->len(), fn2, ppara0->dy_min);
-	pfield0->readField(fn3, ppara->nread);
-	pfield->initField(pfield0, pmesh0, pmesh);
-
-	delete ppara0;
-	delete pmesh0;
-	delete pfield0;
-	delete pstat0;
-}
 
 
-void bodyForce(class Para *ppara, class Field *pfield, class Mesh *pmesh, class SGS * psgs)
-{
-	int j;
-	switch (ppara->bftype) {
-		case 1:
-			for (j=1; j<ppara->Ny; j++) {
-				pfield->removeSpanMean(pfield->U [0], j);
-				pfield->removeSpanMean(pfield->UH[0], j);	}
-			for (j=2; j<ppara->Ny; j++) {
-				pfield->removeSpanMean(pfield->U [1], j);
-				pfield->removeSpanMean(pfield->UH[1], j);	}
-		break;
-
-		case 2:
-		break;
-	}
-}
 
 
 

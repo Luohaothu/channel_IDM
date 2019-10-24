@@ -1,22 +1,30 @@
 #!/root/Software/anaconda3/bin/python3
 from basic import *
 
-para = DataSetInfo("/run/media/student/DATA/whn/channel_IDM/SR_VEL/")
+para = DataSetInfo("/run/media/student/DATA/whn/channel_LES/data/")
 feld = Field(para)
 stas = Statis(para, feld)
 
 stas.calc_profs()
 stas.inner_scale()
 
+
+with open(para.postpath+"innerscale.txt", 'w') as fp:
+	fp.write("Re_tau = %.18e\n"%stas.Ret)
+	fp.write("u_tau = %.18e\n"%stas.utau)
+	fp.write("tau_w = %.18e\n"%stas.tauw)
+	fp.write("delta_nu = %.18e\n"%stas.dnu)
+	fp.write("t_nu = %.18e\n"%stas.tnu)
+
+
 casename = para.datapath.split('/')[-2]
 jrange = range(1, int(para.Ny/2)+1)
-
 
 header = \
 	'Title = "profiles of basic statistics"\n' + \
 	'variables = "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"\n' \
 	% (	"y<sup>+</sup>",
-		"U<sup>+</sup>", "V<sup>+</sup>", "W<sup>+</sup>", "P<sup>+</sup>", \
+		"<u><sup>+</sup>", "<v><sup>+</sup>", "<w><sup>+</sup>", "<p><sup>+</sup>", \
 		"<u'u'><sup>+</sup>", "<v'v'><sup>+</sup>", "<w'w'><sup>+</sup>", \
 		"<u'v'><sup>+</sup>", "<v'w'><sup>+</sup>", "<u'w'><sup>+</sup>", \
 		"<u'p'><sup>+</sup>", "<v'p'><sup>+</sup>", "<w'p'><sup>+</sup>", \

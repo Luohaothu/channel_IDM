@@ -1,52 +1,26 @@
 # pragma once
 
-# include "Matrix.h"
-# include "Mesh.h"
-# include "Field.h"
+# include "Basic.h"
 
-class IDM
+class IDM: private Mesh
 {
 	public:
-		void initIDM(double Re, double dt, class Mesh *pmesh);
-		void ruhcalc(double *RUH[3], double *U[3], double *P[2], double *UBC[3], double *nu);
-		void uhcalc(double *UH[3], double *U[3], double *nu);
-		void dpcalc(double *DP[2], double *UH[3], double *UBC[3], class Field *pfield);
-		void upcalc(double *U[3], double *P[2], double *UPH[4], class Mesh *pmesh);
+		IDM(const Mesh &mesh): Mesh(mesh) {};
 
-	private:
-		int Nx, Ny, Nz, Nxz;
-		int IDX(int i, int j, int k) {return Nxz * j + Nx * k + i;};
+		// configuration
+		double dtset(double dt) { return (this->dt = dt); };
+		int ompset(int n);
 
-		// Equation parameters
-		double dt;
-		// double Re, dt;
+		// computation interfaces
+		void uhcalc(Vctr &UH, Vctr &U , Scla &P, Vctr &UBC, Scla &NU, double mpg[3]);
+		void dpcalc(Scla &DP, Vctr &UH, Scla &P, Vctr &UBC);
+		void upcalc(Vctr &U , Scla &P , Vctr &UH, Scla &DP, double *mpg);
 
-		// Mesh parameters
-		double *dy, *h;				// y interval of the V grid and of the U,W,P grid
-		double *hm, *hc, *hp;		// coefficients for wall-normal 2nd-order derivative of U,W
-		double *dym, *dyc, *dyp;	// coefficients for wall-normal 2nd-order derivative of V
-		double *pmj, *pcj, *ppj;	// coefficients for wall-normal 2nd-order derivative of P in Poisson equation
-		double dx, dz;				// grid interval of X and Z
-		double dx2, dz2;			// square of grid interval of X and Z
-
-		double *ak1, *ak3;			// coefficients of the Fourier transformed Laplacian operator (related to wavenumbers)
-
-		int *kpa, *kma;				// the forward and backward node indices in periodic Z direction
-		int *ipa, *ima;				// the forward and backward node indices in periodic X direction
-
-		// matrix operations initiation
-		class Matrix *pmatx;
-		class Matrix *pmatyu;
-		class Matrix *pmatyv;
-		class Matrix *pmatz;
-
-		// openmp threads number
-		int nthrds;
-
-
-		void urhs1(double *ruh, double *u, double *v, double *w, double *p, double mpg1, double *nu);
-		void urhs2(double *rvh, double *u, double *v, double *w, double *p, double *nu);
-		void urhs3(double *rwh, double *u, double *v, double *w, double *p, double mpg3, double *nu);
+		// computations functions
+		// step 1
+		void urhs1(double *ruh, double *u, double *v, double *w, double *p, double *nu, double mpg1);
+		void urhs2(double *rvh, double *u, double *v, double *w, double *p, double *nu             );
+		void urhs3(double *rwh, double *u, double *v, double *w, double *p, double *nu, double mpg3);
 		void mbc(
 			double *ruh,double *rvh,double *rwh,
 			double *u,	double *v,	double *w,
@@ -54,14 +28,18 @@ class IDM
 		void getuh1(double *uh,							double *u, double *v, double *w, double *nu);
 		void getuh2(double *uh, double *vh,				double *u, double *v, double *w, double *nu);
 		void getuh3(double *uh, double *vh, double *wh,	double *u, double *v, double *w, double *nu);
-
+		// step 2
 		void rhsdp(double *rdp, double *uh, double *vh, double *wh, double *vbc);
-		void getfdp(double *fdp);
-
+		void getfdp(double *fdp, double refp);
+		// step 3
 		void update(
 			double *u,	double *v,	double *w,	double *p,
 			double *uh,	double *vh,	double *wh,	double *dp);
-		void meanpg(double *mpg, double *u, double *w, class Mesh *pmesh);
+		void meanpg(double *mpg, Vctr &U);
+
+	private:
+		double dt;
+		int nthrds;	// number of threads for openmp
 };
 
 
