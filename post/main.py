@@ -15,6 +15,8 @@ with open(para.postpath+"innerscale.txt", 'w') as fp:
 	fp.write("tau_w = %.18e\n"%stas.tauw)
 	fp.write("delta_nu = %.18e\n"%stas.dnu)
 	fp.write("t_nu = %.18e\n"%stas.tnu)
+	fp.write("dy_min_plus = %.18e\n"%((para.y[2]-para.y[1])/stas.dnu))
+	fp.write("dy_max_plus = %.18e\n"%((para.y[int(para.Ny/2+1)]-para.y[int(para.Ny/2)])/stas.dnu))
 
 
 casename = para.datapath.split('/')[-2]

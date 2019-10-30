@@ -8,17 +8,17 @@ class Statis: private Mesh
 		Statis(const Mesh &mesh);
 		~Statis();
 
-		void check(Vctr &U, Scla &P, double Re, double dt)
+		void check(Vctr &U, Scla &P, Scla &NU, double Re, double dt)
 		{
 			this->checkDiv(U);
 			this->checkCFL(U, dt);
-			this->checkMean(U, P);
+			this->checkMean(U, P, NU);
 			this->checkTauw(Re);
 			this->checkEner(U, P);
 		};
 		double checkDiv(Vctr &U);
 		double checkCFL(Vctr &U, double dt);
-		double checkMean(Vctr &U, Scla &P);
+		double checkMean(Vctr &U, Scla &P, Scla &NU);
 		double checkTauw(double Re);
 		double checkEner(Vctr &U, Scla &P);
 		
@@ -38,4 +38,5 @@ class Statis: private Mesh
 		double *Um,  *Vm,  *Wm,  *Pm;
 		double *R11, *R22, *R33, *R12, *R23, *R13;
 		double *Rpu, *Rpv, *Rpw, *Rpp;
+		double *Num;
 };

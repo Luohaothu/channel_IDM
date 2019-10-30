@@ -26,7 +26,7 @@ Para::Para(char filename[1024])
 
 	// physical parameters
 	Re = 100.0;
-	init_ener = 0.5;
+	inener = 0.5;
 
 	// grid settings
 	Nx = 4;	// peridoic without overlap
@@ -79,7 +79,7 @@ void Para::readPara(char filename[1024])
 		if (strstr(str, "bftype")   ) { s = strchr(str, '='); sscanf(++s, "%i",  & bftype); }
 		if (strstr(str, "nthrds")   ) { s = strchr(str, '='); sscanf(++s, "%i",  & nthrds); }
 		if (strstr(str, "Re")       ) { s = strchr(str, '='); sscanf(++s, "%lf", & Re); }
-		if (strstr(str, "init_ener")) { s = strchr(str, '='); sscanf(++s, "%lf", & init_ener); }
+		if (strstr(str, "inener")   ) { s = strchr(str, '='); sscanf(++s, "%lf", & inener); }
 		if (strstr(str, "Nx")       ) { s = strchr(str, '='); sscanf(++s, "%i",  & Nx); }
 		if (strstr(str, "Ny")       ) { s = strchr(str, '='); sscanf(++s, "%i",  & Ny); }
 		if (strstr(str, "Nz")       ) { s = strchr(str, '='); sscanf(++s, "%i",  & Nz); }
@@ -115,7 +115,7 @@ void Para::showPara()
 	cout << "number of threads = " << nthrds << endl;
 	cout << endl;
 	cout << "Physical Parameters:" << endl;
-	cout << "Re = " << Re << ", init_ener = " << init_ener << endl;
+	cout << "Re = " << Re << ", inener = " << inener << endl;
 	cout << endl;
 	cout << "Grid Settings:" << endl;
 	cout << "Nx = " << Nx << ", Ny = " << Ny << ", Nz = " << Nz << endl;

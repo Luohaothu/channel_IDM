@@ -79,7 +79,6 @@ Scla& Scla::interpolate(Scla &src)
 /* initiate flow field from given fields, interpolated to the current grid */
 {
 	int i, j, k, idx, j0, *i0 = new int [Nx], *k0 = new int [Nz];
-	// Mesh &mesh0 = src.meshGet();
 	int Nx0 = src.Nx, Ny0 = src.Ny, Nz0 = src.Nz, Nxz0 = src.Nxz;
 	double *y0 = src.y, *yc0 = src.yc;
 
@@ -89,6 +88,7 @@ Scla& Scla::interpolate(Scla &src)
 	for (int k1=1; k1<Nz0; k1++) {
 		if (  fabs(kz(k) - src.kz(k1)   )
 			< fabs(kz(k) - src.kz(k0[k]))	)	k0[k] = k1;
+
 	}}
 	// find out nearesr point for every wavenumber k_x
 	for (i=0; i<Nx; i++) {	i0[i] = 0;
@@ -126,10 +126,10 @@ Scla& Scla::interpolate(Scla &src)
 					(yc0[j0] - yc[j]) / ( yc0[j0] - yc0[j0-1] ) * src.idf(2*i0[i]+1,j0-1,k0[k])
 				+	(yc[j]-yc0[j0-1]) / ( yc0[j0] - yc0[j0-1] ) * src.idf(2*i0[i]+1,j0,  k0[k]);
 			}
-		}
-	}}
+		}}
+	}
 	this->ifft();
-	this->bulkMlt(Nxz / Nxz0);
+	this->bulkMlt(1.0 * Nxz / Nxz0);
 
 	delete [] i0; delete [] k0;
 	return *this;

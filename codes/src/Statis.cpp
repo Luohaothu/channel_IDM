@@ -23,6 +23,7 @@ Statis::Statis(const Mesh &mesh): Mesh(mesh)
 	Rpv= new double [Ny+1];
 	Rpw= new double [Ny+1];
 	Rpp= new double [Ny+1];
+	Num= new double [Ny+1];
 }
 
 Statis::~Statis()
@@ -31,6 +32,7 @@ Statis::~Statis()
 	delete [] R11;delete [] R22;delete [] R33;
 	delete [] R12;delete [] R23;delete [] R13;
 	delete [] Rpu;delete [] Rpv;delete [] Rpw;delete [] Rpp;
+	delete [] Num;
 }
 
 double Statis::checkDiv(Vctr &U)
@@ -71,7 +73,7 @@ double Statis::checkCFL(Vctr &U, double dt)
 	return ( cfl = cflmax );
 }
 
-double Statis::checkMean(Vctr &U, Scla &P)
+double Statis::checkMean(Vctr &U, Scla &P, Scla &NU)
 /* calculate mean values at cell centers */
 {
 	double vm1, vm2;
@@ -83,7 +85,8 @@ double Statis::checkMean(Vctr &U, Scla &P)
 		Vm[j] = 0.5 * (vm1 + vm2);
 		Um[j] = U1.layerMean(j);	// layer mean of U at U grid points is equivalent to that at cell centers
 		Wm[j] = U3.layerMean(j);	// layer mean of W at W grid points is equivalent to that at cell centers
-		Pm[j] =  P.layerMean(j);
+		Pm[j] =  P.layerMean(j);	// P stored in cell centers
+		Num[j]= NU.layerMean(j);	// NU stored in cell centers
 	}
 	velm[0] = U1.bulkMeanU();
 	velm[1] = U2.bulkMeanV();
@@ -154,16 +157,17 @@ void Statis::writeProfile(char *path, int tstep)
 	fp = fopen(str, "w");
 
 		fputs("Title = \"Instantaneous profile\"\n", fp);
-		fputs("variables = \"y\", \"U\", \"V\", \"W\", \"P\", \"R11\", \"R22\", \"R33\", \"R12\", \"R23\", \"R13\", \"Rpu\", \"Rpv\", \"Rpw\", \"Rpp\"\n", fp);
+		fputs("variables = \"y\", \"U\", \"V\", \"W\", \"P\", \"R11\", \"R22\", \"R33\", \"R12\", \"R23\", \"R13\", \"Rpu\", \"Rpv\", \"Rpw\", \"Rpp\", \"NU\"\n", fp);
 		sprintf(str, "zone t = \"%i\", i = %i\n", tstep, Ny+1);
 		fputs(str, fp);
 
 		for (int j=0; j<=Ny; j++) {
-			sprintf(str, "%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\n",
+			sprintf(str, "%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\n",
 				yc[j],
 				Um[j], Vm[j], Wm[j], Pm[j],
 				R11[j], R22[j], R33[j], R12[j], R23[j], R13[j],
-				Rpu[j], Rpv[j], Rpw[j], Rpp[j]	);
+				Rpu[j], Rpv[j], Rpw[j], Rpp[j],
+				Num[j]	);
 			fputs(str, fp);
 		}
 

@@ -19,7 +19,7 @@ class Para
 
 		// physical parameters
 		double Re;			// Reynolds number
-		double init_ener;	// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
+		double inener;		// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
 		
 		// grid settings
 		int Nx;				// grid number of streamwise direction

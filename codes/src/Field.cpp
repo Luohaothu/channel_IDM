@@ -117,7 +117,7 @@ void Field::getup(double dt, int nthrds)
 
 void Field::getnu(double Re, double Cs)
 {
-	if (Cs) {
+	if (Cs > 0) {
 		this->sgs.evcalc(NU, U, Re, Cs);
 		NU.bulkAdd(1.0 / Re);
 	}

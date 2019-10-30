@@ -11,5 +11,5 @@ class SGS: private Mesh
 		
 	private:
 		double Cs; // smargorinsky constant
-		void smargorinsky(Scla &NU, Vctr &U, double Re);
+		void smargorinsky(Scla &EV, Vctr &U, double Re);
 };

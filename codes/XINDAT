@@ -1,43 +1,51 @@
-// allow update during computation
 
-// file paths
+// *********************************
+// update allowed during computation
+// *********************************
+
+// file paths (must be relative paths)
 fieldpath = "fielddata/"
 probepath = "probedata/"
 statpath = "statdata/"
 postpath = "postdata/"
 
 // computation control
-bftype = 0		// type of body force (0: DNS, 1: MFU, 2: LES)
-nthrds = 0		// number of threads for openmp (0 for automatically choose)
+bftype = 2		// type of body force (0: DNS, 1: MFU, 2: LES)
+nthrds = 8		// number of threads for openmp (0 for automatically choose)
 
 // physical parameters
-Re = 24000.0	// Reynolds number
+Re = 20000.0	// Reynolds number
 dt = 5e-3		// time step length
 
 // time step control
 Nt = 1000000	// total time steps to evolve
 nwrite = 2000	// step interval for writing whole fields (0 for not outputing)
-nprint = 100	// step interval for printing and updating log of computation state (0 for not outputing)
+nprint = 50		// step interval for printing and updating log of computation state (0 for not outputing)
 nprobe = 0		// step interval for writing time serials of probed layers (0 for not outputing)
 
 // probe control
 jprbs = 0		// layer indexes of layers to be probed (jprbs[0] store the number of layers)
 
 
-// can NOT be update during computation
+// *************************************
+// update NOT allowed during computation
+// *************************************
+
+// initial settings
+nread = 2000	// step number of fields to read for continuing computation (0 for not inputing)
+inpath = ""		// path of the continue computation files, can be relative or absolute
+inener = 0.5	// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
+
+
+// ***********************************************************
+// update NOT allowed during or inplace-continuing computation
+// ***********************************************************
 
 // grid settings
 Nx = 192		// grid number of streamwise direction
 Ny = 193		// grid number of wall normal direction
-Nz = 36			// grid number of spanwise direction
-Lx = 3.1416		// domain length of streamwise direction
+Nz = 96			// grid number of spanwise direction
+Lx = 6.2832		// domain length of streamwise direction
 Ly = 2.0		// channel height. Not adjustable (must be 2.0 if the non-dimensional equation is solved)
-Lz = 0.31416	// domain length of spanwise direction
+Lz = 3.1416		// domain length of spanwise direction
 dy_min = 0.0005	// y coordinate at first grid off wall
-
-// field settings
-init_ener = 0.5	// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
-
-// input control
-nread = 60000	// step number of whole field files to read for continuing computation (0 for not inputing)
-inpath = "continue1/"	// path of the continue computation files

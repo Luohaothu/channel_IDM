@@ -37,7 +37,7 @@ int main()
 	while (tstep++ < para.Nt) {
 
 		field.bcond(tstep);								// set boundary conditions
-		field.getnu(para.Re, para.bftype==2 ? 0.01 : 0);// get the viscosity field
+		field.getnu(para.Re, para.bftype==2 ? 0.18 : 0);// get the viscosity field
 		field.getup(para.dt, para.nthrds);				// time evolution
 
 		if (para.bftype == 1) field.removeSpanMean();	// for MFU
@@ -54,7 +54,7 @@ int main()
 double initiate(Field &field, Para &para)
 {
 	if (para.nread == 0) {
-		field.initField(para.init_ener);
+		field.initField(para.inener);
 		cout << endl << "Flow fields initiated from laminar." << endl;
 		return 0;
 	}
@@ -90,7 +90,7 @@ void output(int tstep, double time, Para &para, Field &field, Statis &stas)
 		cout << "Files successfully written for step " << tstep << endl;
 	}
 	if (tstep % para.nprint == 0) {
-		stas.check(field.U, field.P, para.Re, para.dt);
+		stas.check(field.U, field.P, field.NU, para.Re, para.dt);
 		stas.writeProfile(para.statpath);
 		stas.writeLogfile(para.statpath, tstep, time);
 	}
