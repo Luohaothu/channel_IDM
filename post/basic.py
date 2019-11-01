@@ -52,36 +52,45 @@ class DataSetInfo:
 		return np.sort(tsteps)
 
 
+
+def write_channel(pame, q):
+	ny, nz, nx = q.shape
+	info = np.array([nx, ny, nz]+[0]*(2*nx*nz-3), dtype=np.int32).tobytes() # 2* for 4bit -> 8bit
+	np.hstack([ unpack(nx*nz*'d', info), np.ravel(q) ]).tofile(pame)
+
+def read_channel(pame):
+	with open(pame, 'rb') as fp: nx, ny, nz = unpack('3i', fp.read(12))
+	return np.fromfile(pame, np.float64, offset=(nx*nz)*8).reshape([ny, nz, nx])
+
+
 class Field:
 	def __init__(self, para):
-		self.para = para
+		self.Nx, self.Ny, self.Nz, self.Nxz = para.Nx, para.Ny, para.Nz, para.Nxz
+		self.fieldpath = para.fieldpath
 
-	def read_mean(self, name, stagtyp=4):
-		q = np.mean(self.read_channel(self.para.fieldpath + name), axis=(-1,-2))
-		return q if stagtyp != 2 else \
-			0.5 * ( q[[1] + list(range(1,Ny+1))] + q[list(range(1,Ny+1)) + [Ny]] )
+		# N = (Ny+1) * Nxz;
+		# with open(pame, 'rb') as fp:
+		# 	fp.seek(Nxz*8) # skipping info section
+		# 	q = np.reshape( unpack(N*'d', fp.read(N*8)), [Ny+1, Nz, Nx] )
+		# return q
 
 	def read_fluc_mean(self, name, stagtyp=4):
 		q = self.__to_cellcenter(
-			self.read_channel(self.para.fieldpath + name),
+			read_channel(self.fieldpath + name),
 			stagtyp if stagtyp in (0,1,2,3) else self.__infer_stagtyp(name)	)
 		qm = np.mean(q, axis=(-1,-2))
-		return q - qm.reshape([self.para.Ny+1, 1, 1]), qm
+		return q - qm.reshape([self.Ny+1, 1, 1]), qm
+
+	def read_mean(self, name, stagtyp=4):
+		q = np.mean(read_channel(self.fieldpath + name), axis=(-1,-2))
+		return q if stagtyp != 2 else \
+			0.5 * ( q[[1] + list(range(1,Ny+1))] + q[list(range(1,Ny+1)) + [Ny]] )
 
 	def read_fluc(self, name, stagtyp=4):
 		return self.read_fluc_mean(name, stagtyp)[0]
 
-	def read_channel(self, pame):
-		Nx, Ny, Nz, Nxz = self.para.Nx, self.para.Ny, self.para.Nz, self.para.Nxz
-
-		N = (Ny+1) * Nxz;
-		with open(pame, 'rb') as fp:
-			fp.seek(Nxz*8) # skipping info section
-			q = np.reshape( unpack(N*'d', fp.read(N*8)), [Ny+1, Nz, Nx] )
-		return q
-
 	def __to_cellcenter(self, q, stagtyp):
-		Nx, Ny, Nz = self.para.Nx, self.para.Ny, self.para.Nz
+		Nx, Ny, Nz = self.Nx, self.Ny, self.Nz
 		if stagtyp == 1: q[:] = 0.5 * ( q + q[:,:,(np.arange(Nx)+1) % Nx] )
 		if stagtyp == 3: q[:] = 0.5 * ( q + q[:,(np.arange(Nz)+1) % Nz] )
 		if stagtyp == 2: q[:] = 0.5 * ( q[[1] + list(range(1,Ny+1))] + q[list(range(1,Ny+1)) + [Ny]] )
@@ -105,11 +114,10 @@ class Statis:
 		for tstep in self.para.tsteps:
 			print("Reading umean: tstep", tstep)
 			u = self.feld.read_mean("U%08i.bin"%tstep, stagtyp=1)
-			self.Um += u
-		self.Um[:] = 0.5 * ( self.Um + self.Um[::-1] ) / len(self.para.tsteps)
+			self.Um += u / len(self.para.tsteps)
 
 	def inner_scale(self):
-		dU = self.Um[1] - self.Um[0]
+		dU = 0.5 * (self.Um[1] - self.Um[0] + self.Um[-2] - self.Um[-1])
 		dy = self.para.yc[1] - self.para.yc[0]
 
 		self.tauw = dU / dy / self.para.Re
@@ -118,52 +126,83 @@ class Statis:
 		self.tnu  = self.dnu / self.utau
 		self.Ret = 0.5 * self.para.Ly / self.dnu
 
-	def calc_profs(self):
-		Ny = self.para.Ny
-		self.R11, self.R22, self.R33 = [np.zeros(Ny+1) for n in range(3)]
-		self.R12, self.R23, self.R13 = [np.zeros(Ny+1) for n in range(3)]
-		self.Rpu, self.Rpv, self.Rpw, self.Rpp= [np.zeros(Ny+1) for n in range(4)]
-		self.Um , self.Vm , self.Wm , self.Pm = [np.zeros(Ny+1) for n in range(4)]
+	def calc_statis(self):
+		nx, ny, nz = self.para.Nx, self.para.Ny + 1, self.para.Nz
+		nxc, nzc = int(nx/2+1), int(nz/2+1)
+
+		self.R11, self.R22, self.R33 = [np.zeros(ny) for n in range(3)]
+		self.R12, self.R23, self.R13 = [np.zeros(ny) for n in range(3)]
+		self.Rpu, self.Rpv, self.Rpw, self.Rpp= [np.zeros(ny) for n in range(4)]
+		self.Um , self.Vm , self.Wm , self.Pm = [np.zeros(ny) for n in range(4)]
+		self.Euu, self.Evv, self.Eww, self.Epp= [np.zeros([ny, nzc, nxc]) for n in range(4)]
+		self.Euv, self.Evw, self.Euw = [np.zeros([ny, nzc, nxc]) for n in range(3)]
 
 		for tstep in self.para.tsteps:
-			print("Reading profs: tstep", tstep)
+			print("Reading statis: tstep", tstep)
 			u, um = self.feld.read_fluc_mean("U%08i.bin"%tstep)
 			v, vm = self.feld.read_fluc_mean("V%08i.bin"%tstep)
 			w, wm = self.feld.read_fluc_mean("W%08i.bin"%tstep)
 			p, pm = self.feld.read_fluc_mean("P%08i.bin"%tstep)
 
-			self.Um += um
-			self.Vm += um
-			self.Wm += um
-			self.Pm += um
+			self.Um += um / len(self.para.tsteps)
+			self.Vm += vm / len(self.para.tsteps)
+			self.Wm += wm / len(self.para.tsteps)
+			self.Pm += pm / len(self.para.tsteps)
 
-			self.R11 += np.mean(u**2, axis=(-1,-2))
-			self.R22 += np.mean(v**2, axis=(-1,-2))
-			self.R33 += np.mean(w**2, axis=(-1,-2))
-			self.R12 += np.mean(u*v, axis=(-1,-2))
-			self.R23 += np.mean(v*w, axis=(-1,-2))
-			self.R13 += np.mean(u*w, axis=(-1,-2))
+			self.R11 += np.mean(u**2,axis=(-1,-2)) / len(self.para.tsteps)
+			self.R22 += np.mean(v**2,axis=(-1,-2)) / len(self.para.tsteps)
+			self.R33 += np.mean(w**2,axis=(-1,-2)) / len(self.para.tsteps)
+			self.R12 += np.mean(u*v, axis=(-1,-2)) / len(self.para.tsteps)
+			self.R23 += np.mean(v*w, axis=(-1,-2)) / len(self.para.tsteps)
+			self.R13 += np.mean(u*w, axis=(-1,-2)) / len(self.para.tsteps)
 
-			self.Rpu += np.mean(p*u, axis=(-1,-2))
-			self.Rpv += np.mean(p*v, axis=(-1,-2))
-			self.Rpw += np.mean(p*w, axis=(-1,-2))
-			self.Rpp += np.mean(p**2, axis=(-1,-2))
+			self.Rpu += np.mean(p*u, axis=(-1,-2)) / len(self.para.tsteps)
+			self.Rpv += np.mean(p*v, axis=(-1,-2)) / len(self.para.tsteps)
+			self.Rpw += np.mean(p*w, axis=(-1,-2)) / len(self.para.tsteps)
+			self.Rpp += np.mean(p**2,axis=(-1,-2)) / len(self.para.tsteps)
 
-		self.Um[:] = 0.5 * ( self.Um + self.Um[::-1] ) / len(self.para.tsteps)
-		self.Vm[:] = 0.5 * ( self.Vm - self.Vm[::-1] ) / len(self.para.tsteps)
-		self.Wm[:] = 0.5 * ( self.Wm + self.Wm[::-1] ) / len(self.para.tsteps)
-		self.Pm[:] = 0.5 * ( self.Pm + self.Pm[::-1] ) / len(self.para.tsteps)
+			self.Euu += self.__flipk( np.abs(spec(u))**2 ) / len(self.para.tsteps)
+			self.Evv += self.__flipk( np.abs(spec(v))**2 ) / len(self.para.tsteps)
+			self.Eww += self.__flipk( np.abs(spec(w))**2 ) / len(self.para.tsteps)
+			self.Epp += self.__flipk( np.abs(spec(p))**2 ) / len(self.para.tsteps)
+			self.Euv += self.__flipk( (np.conj(spec(u))*spec(v)).real ) / len(self.para.tsteps)
+			self.Evw += self.__flipk( (np.conj(spec(v))*spec(w)).real ) / len(self.para.tsteps)
+			self.Euw += self.__flipk( (np.conj(spec(u))*spec(w)).real ) / len(self.para.tsteps)
 
-		self.R11[:] = 0.5 * ( self.R11 + self.R11[::-1] ) / len(self.para.tsteps)
-		self.R22[:] = 0.5 * ( self.R22 + self.R22[::-1] ) / len(self.para.tsteps)
-		self.R33[:] = 0.5 * ( self.R33 + self.R33[::-1] ) / len(self.para.tsteps)
-		self.R12[:] = 0.5 * ( self.R12 - self.R12[::-1] ) / len(self.para.tsteps)
-		self.R23[:] = 0.5 * ( self.R23 - self.R23[::-1] ) / len(self.para.tsteps)
-		self.R13[:] = 0.5 * ( self.R13 + self.R13[::-1] ) / len(self.para.tsteps)
+	def __flipk(self, q):
+		ny, nz, nx = q.shape
+		nxc, nzc = int(nx/2+1), int(nz/2+1)
+		q[:,:,1:] += q[:,:,:0:-1]
+		q[:,1:,:] += q[:,:0:-1,:]
+		if not (nx % 2): q[:,:,nxc-1] /= 2
+		if not (nz % 2): q[:,nzc-1,:] /= 2
+		return q[:,:nzc,:nxc]
 
-		self.Rpu[:] = 0.5 * ( self.Rpu + self.Rpu[::-1] ) / len(self.para.tsteps)
-		self.Rpv[:] = 0.5 * ( self.Rpv - self.Rpv[::-1] ) / len(self.para.tsteps)
-		self.Rpw[:] = 0.5 * ( self.Rpw + self.Rpw[::-1] ) / len(self.para.tsteps)
-		self.Rpp[:] = 0.5 * ( self.Rpp + self.Rpp[::-1] ) / len(self.para.tsteps)
+	def flipy(self):
+		self.Um[:] = 0.5 * (self.Um + self.Um[::-1])
+		self.Vm[:] = 0.5 * (self.Vm - self.Vm[::-1])
+		self.Wm[:] = 0.5 * (self.Wm + self.Wm[::-1])
+		self.Pm[:] = 0.5 * (self.Pm + self.Pm[::-1])
+
+		self.R11[:] = 0.5 * (self.R11 + self.R11[::-1])
+		self.R22[:] = 0.5 * (self.R22 + self.R22[::-1])
+		self.R33[:] = 0.5 * (self.R33 + self.R33[::-1])
+		self.R12[:] = 0.5 * (self.R12 - self.R12[::-1])
+		self.R23[:] = 0.5 * (self.R23 - self.R23[::-1])
+		self.R13[:] = 0.5 * (self.R13 + self.R13[::-1])
+
+		self.Rpu[:] = 0.5 * (self.Rpu + self.Rpu[::-1])
+		self.Rpv[:] = 0.5 * (self.Rpv - self.Rpv[::-1])
+		self.Rpw[:] = 0.5 * (self.Rpw + self.Rpw[::-1])
+		self.Rpp[:] = 0.5 * (self.Rpp + self.Rpp[::-1])
+
+		self.Euu[:] = 0.5 * (self.Euu + self.Euu[::-1])
+		self.Evv[:] = 0.5 * (self.Evv + self.Evv[::-1])
+		self.Eww[:] = 0.5 * (self.Eww + self.Eww[::-1])
+		self.Epp[:] = 0.5 * (self.Epp + self.Epp[::-1])
+		self.Euv[:] = 0.5 * (self.Euv - self.Euv[::-1])
+		self.Evw[:] = 0.5 * (self.Evw - self.Evw[::-1])
+		self.Euw[:] = 0.5 * (self.Euw + self.Euw[::-1])
+
 
 

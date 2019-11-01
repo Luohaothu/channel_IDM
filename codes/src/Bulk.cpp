@@ -141,54 +141,13 @@ double* Bulk::bulkMlt(double a)
 
 /***** file IO *****/
 
-void Bulk::fileIO(char *path, char *name, char mode)
-/* read & write field from & to binary files */
-{
-	FILE *fp;
-	char str[1024];
-	float *buf = new float [nxz*ny];
-	int i, j, k, idx;
-
-	sprintf(str, "%s%s.bin", path, name);
-
-	fp = fopen( str, (mode == 'w' ? "wb" : "rb") );
-
-		// write domain information at the beginning
-		if (mode == 'w') {
-			fwrite(& nx, sizeof(int), 1, fp);
-			fwrite(& ny, sizeof(int), 1, fp);
-			fwrite(& nz, sizeof(int), 1, fp);
-		}
-		// data begin after the info section
-		fseek(fp, sizeof(float) * nxz, SEEK_SET);
-		if (mode == 'w') {
-			for (j=0; j<ny; j++) {
-			for (k=0; k<nz; k++) {
-			for (i=0; i<nx; i++) {
-				idx = nxz * j + nx * k + i;
-				buf[idx] = (float)q[idx];
-			}}}
-			fwrite(buf, sizeof(float) * nxz, ny, fp);
-		}
-		if (mode == 'r') {
-			fread (buf, sizeof(float) * nxz, ny, fp);
-			for (j=0; j<ny; j++) {
-			for (k=0; k<nz; k++) {
-			for (i=0; i<nx; i++) {
-				idx = nxz * j + nx * k + i;
-				q[idx] = (double)buf[idx];
-			}}}
-		}
-
-	fclose(fp);
-	delete [] buf;
-}
-
 // void Bulk::fileIO(char *path, char *name, char mode)
 // /* read & write field from & to binary files */
 // {
 // 	FILE *fp;
 // 	char str[1024];
+// 	float *buf = new float [nxz*ny];
+// 	int i, j, k, idx;
 
 // 	sprintf(str, "%s%s.bin", path, name);
 
@@ -201,12 +160,53 @@ void Bulk::fileIO(char *path, char *name, char mode)
 // 			fwrite(& nz, sizeof(int), 1, fp);
 // 		}
 // 		// data begin after the info section
-// 		fseek(fp, sizeof(double) * nxz, SEEK_SET);
-// 		if (mode == 'w') fwrite(q, sizeof(double) * nxz, ny, fp);
-// 		if (mode == 'r') fread (q, sizeof(double) * nxz, ny, fp);
+// 		fseek(fp, sizeof(float) * nxz, SEEK_SET);
+// 		if (mode == 'w') {
+// 			for (j=0; j<ny; j++) {
+// 			for (k=0; k<nz; k++) {
+// 			for (i=0; i<nx; i++) {
+// 				idx = nxz * j + nx * k + i;
+// 				buf[idx] = (float)q[idx];
+// 			}}}
+// 			fwrite(buf, sizeof(float) * nxz, ny, fp);
+// 		}
+// 		if (mode == 'r') {
+// 			fread (buf, sizeof(float) * nxz, ny, fp);
+// 			for (j=0; j<ny; j++) {
+// 			for (k=0; k<nz; k++) {
+// 			for (i=0; i<nx; i++) {
+// 				idx = nxz * j + nx * k + i;
+// 				q[idx] = (double)buf[idx];
+// 			}}}
+// 		}
 
 // 	fclose(fp);
+// 	delete [] buf;
 // }
+
+void Bulk::fileIO(char *path, char *name, char mode)
+/* read & write field from & to binary files */
+{
+	FILE *fp;
+	char str[1024];
+
+	sprintf(str, "%s%s.bin", path, name);
+
+	fp = fopen( str, (mode == 'w' ? "wb" : "rb") );
+
+		// write domain information at the beginning
+		if (mode == 'w') {
+			fwrite(& nx, sizeof(int), 1, fp);
+			fwrite(& ny, sizeof(int), 1, fp);
+			fwrite(& nz, sizeof(int), 1, fp);
+		}
+		// data begin after the info section
+		fseek(fp, sizeof(double) * nxz, SEEK_SET);
+		if (mode == 'w') fwrite(q, sizeof(double) * nxz, ny, fp);
+		if (mode == 'r') fread (q, sizeof(double) * nxz, ny, fp);
+
+	fclose(fp);
+}
 
 void Bulk::debug_AsciiOutput(char *path, char *name, int j1, int j2)
 /* write the fields in ascii files for check */

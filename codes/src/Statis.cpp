@@ -123,8 +123,8 @@ double Statis::checkEner(Vctr &U, Scla &P)
 		// calculate fluctuations at cell centers
 		ul.layerUG2CC(U1,0,j).layerAdd(-Um[j]);
 		vl.layerVG2CC(U2,0,j).layerAdd(-Vm[j]);
-		wl.layerUG2CC(U3,0,j).layerAdd(-Wm[j]);
-		pl.layerUG2CC(P ,0,j).layerAdd(-Pm[j]);
+		wl.layerWG2CC(U3,0,j).layerAdd(-Wm[j]);
+		pl.layerCpy(P,0,j).layerAdd(-Pm[j]);
 
 		// calculate Reynolds stress and cross correlations at cell centers
 		ql.layerCpy(ul).layersMlt(ul); R11[j] = ql.layerMean();
