@@ -55,8 +55,8 @@ void Field::initField(double energy)
 		}}
 	}
 
-	// impose parabolic profile from laminar flow
-	for (j=1; j<Ny; j++) U1.layerAdd(yc[j] * (Ly-yc[j]), j);
+	// impose parabolic profile from laminar flow (Ly is taken for 2.0)
+	for (j=1; j<Ny; j++) U1.layerAdd(yc[j] * (2.-yc[j]), j);
 
 	// modify flow rate // note: boundary will be modified through using bulk functions
 	U1.bulkMlt(1.0 / U1.bulkMeanU()); // rescale the mass flow rate to be equal to 2.0 (bulk mean U = 1.0 because of non-dimensionalization)
@@ -99,6 +99,13 @@ void Field::bcond(int tstep)
 	UBC.com1.bulkSet(0);
 	UBC.com2.bulkSet(0);
 	UBC.com3.bulkSet(0);
+}
+
+void Field::bcond(Vctr &UBC0)
+{
+	UBC.com1.bulkCpy(UBC0.com1);
+	UBC.com2.bulkCpy(UBC0.com2);
+	UBC.com3.bulkCpy(UBC0.com3);
 }
 
 

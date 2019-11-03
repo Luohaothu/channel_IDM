@@ -44,8 +44,8 @@ class Bulk
 		void debug_AsciiOutput(char *path, char *name, int j1, int j2);
 
 	protected:
-		double *q;
-		double *fq;		// Fourier tansformed q with only the kx >= 0 half
+		double *q;	// pointer to the bulk memory
+		double *fq;	// Fourier tansformed q with only the kx >= 0 half
 
 	private:
 		const int nx, ny, nz, nxz;
@@ -58,17 +58,16 @@ class Bulk
 class Mesh
 {
 	public:
-		Mesh(int n1, int n2, int n3);	// memory allocation, dim is the mesh dimension, whose Ny is 1 less than the array dimension
+		Mesh(int n1, int n2, int n3, double l1, double l2, double l3, double *ymesh=NULL);	// here n2=Ny is less than the array dimension by 1
 		void freeall();
 
 		const int Nx, Ny, Nz, Nxz;
-		int IDX(int i, int j, int k) { return Nxz * j + Nx * k + i; };
+		const double Lx, Ly, Lz;		// domain lengths
+		const double dx, dz, dx2, dz2;	// grid interval of X & Z and their squares
+		const double vol;				// volume of the whole physical domain
 
-		double Lx, Ly, Lz;			// domain lengths
-		double dx, dz, dx2, dz2;	// grid interval of X & Z and their squares
-		double vol, *dvol;			// volume of the whole physical domain and of every cell
-
-		double *y,  *yc;			// y coordinates in wall-normal direction (y for V, yc for U,W,P)
+		double *dvol;				// volume of every cell
+		double *yc;					// y coordinates in wall-normal direction for U,W,P
 		double *dy, *h;				// y interval of the wall-normal grid (dy for V, h for U,W,P)
 		double *hm,  *hc,  *hp;		// coefficients for wall-normal 2nd-order derivative of U,W
 		double *dym, *dyc, *dyp;	// coefficients for wall-normal 2nd-order derivative of V
@@ -79,26 +78,27 @@ class Mesh
 		int *kpa, *kma;				// the forward and backward node indices in periodic Z direction
 		int *ipa, *ima;				// the forward and backward node indices in periodic X direction
 
+		int IDX(int i, int j, int k) { return Nxz * j + Nx * k + i; };
 		double kx(int i) { return ( i - ( i > (int)(Nx/2) ? Nx : 0 ) ) * (2.0*PI/Lx); };
 		double kz(int k) { return ( k - ( k > (int)(Nz/2) ? Nz : 0 ) ) * (2.0*PI/Lz); };
 
-		void initMesh(double l1, double l2, double l3, double *ymesh);
-		void checkYmesh(double *ymesh, char *path=NULL);
-		double* getYmesh(double dy_min, double y_max);
+		void initYmesh(double *ymesh);
+		bool checkYmesh(char *path=NULL);
+		double* getYmesh(double dy_min);
 		double* getYmesh(char *path);
+
+	private:
+		double *y;					// y coordinates in wall-normal direction for V
 };
 
 
-// # include <iostream>
-// using namespace std;
-
-class Scla: public Mesh, public Bulk
+class Scla: private Mesh, public Bulk
 {
 	public:
 		Scla(const Mesh &mesh, const Bulk &bulk): Mesh(mesh), Bulk(bulk) {};
 		Scla(const Mesh &mesh, bool inift=false): Mesh(mesh), Bulk(Nx, Ny+1, Nz, inift) {};
 
-		// Mesh& meshGet() { return (Mesh&)(*this); };
+		Mesh& meshGet() { return (*this); };
 
 		// integration
 		double yMeanU(int i, int k);
@@ -108,13 +108,13 @@ class Scla: public Mesh, public Bulk
 		double bulkMeanV();
 
 		// interpolation
-		double* layerUG2CC(double *src, int j1=0, int j0=0);
-		double* layerVG2CC(double *src, int j1,   int j0);
-		double* layerWG2CC(double *src, int j1=0, int j0=0);
+		double* layerUG2CC(double *dst, int j1=0, int j0=0);
+		double* layerVG2CC(double *dst, int j1,   int j0);
+		double* layerWG2CC(double *dst, int j1=0, int j0=0);
 
-		Scla& layerUG2CC(Scla &s, int j1=0, int j0=0) { this->layerUG2CC(s.bulkGet(), j1, j0); return *this; };
-		Scla& layerVG2CC(Scla &s, int j1,   int j0)   { this->layerVG2CC(s.bulkGet(), j1, j0); return *this; };
-		Scla& layerWG2CC(Scla &s, int j1=0, int j0=0) { this->layerWG2CC(s.bulkGet(), j1, j0); return *this; };
+		Scla& layerUG2CC(Scla &s, int j1=0, int j0=0) { this->layerUG2CC(s.bulkGet(), j1, j0); return s; };
+		Scla& layerVG2CC(Scla &s, int j1,   int j0)   { this->layerVG2CC(s.bulkGet(), j1, j0); return s; };
+		Scla& layerWG2CC(Scla &s, int j1=0, int j0=0) { this->layerWG2CC(s.bulkGet(), j1, j0); return s; };
 
 		Scla& interpolate(Scla &src);
 
@@ -144,7 +144,7 @@ class Vctr: private Mesh
 		// 	com1.interpolate(src.com1);
 		// 	com2.interpolate(src.com2);
 		// 	com3.interpolate(src.com3);
-		// };
+		// }; // not viable because com1,2,3 may not have fft initiated
 
 		// vector operators
 		double  divergence(int i, int j, int k);

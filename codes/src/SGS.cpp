@@ -26,13 +26,13 @@ void SGS::smargorinsky(Scla &EV, Vctr &U, double Re)
 	double tauw = (0.5/Re) * (
 		(U1.layerMean(1) - U1.layerMean(0))    / h[1]
 	-	(U1.layerMean(Ny)- U1.layerMean(Ny-1)) / h[Ny] );
-	double Lyp = Ly * Re * sqrt(tauw);
+	double Ret = Re * sqrt(tauw);	// Ly is taken for 2.0 as default
 
 	// calculate eddy viscosity at cell centers
 	for (j=1; j<Ny; j++) {
 
 		dlt = pow( dvol[j], 1.0/3.0 ); // filter size
-		dmp = 1.0 - exp( (fabs(0.5-y[j]/Ly) - 0.5) * Lyp / 25.0 ); // Van Driest damping: 1-exp(y^+/A^+), with A^+ = 25
+		dmp = 1.0 - exp( (fabs(1.-yc[j]) - 1.) * Ret / 25.0 ); // Van Driest damping: 1-exp(-y^+/A^+), with A^+ = 25
 
 		for (k=0; k<Nz; k++) {
 		for (i=0; i<Nx; i++) {

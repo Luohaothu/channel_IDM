@@ -113,17 +113,16 @@ double Statis::checkTauw(double Re)
 double Statis::checkEner(Vctr &U, Scla &P)
 /* calculate Reynolds stresses, pressure-velocity correlations, and the total fluctuation energy */
 {
-	Scla &U1 = U.com1, &U2 = U.com2, &U3 = U.com3;
-	Mesh mesh(Nx,0,Nz); mesh.initMesh(Lx,0,Lz,NULL);
-	Scla ul(mesh), vl(U2), wl(mesh), pl(mesh), ql(mesh);
+	Mesh mesh(Nx,0,Nz,Lx,0,Lz);
+	Scla ul(mesh), vl(mesh), wl(mesh), pl(mesh), ql(mesh);
 
 	ener = 0.0;
 
 	for (int j=0; j<=Ny; j++) {
 		// calculate fluctuations at cell centers
-		ul.layerUG2CC(U1,0,j).layerAdd(-Um[j]);
-		vl.layerVG2CC(U2,0,j).layerAdd(-Vm[j]);
-		wl.layerWG2CC(U3,0,j).layerAdd(-Wm[j]);
+		U.com1.layerUG2CC(ul,0,j).layerAdd(-Um[j]);
+		U.com2.layerVG2CC(vl,0,j).layerAdd(-Vm[j]);
+		U.com3.layerWG2CC(wl,0,j).layerAdd(-Wm[j]);
 		pl.layerCpy(P,0,j).layerAdd(-Pm[j]);
 
 		// calculate Reynolds stress and cross correlations at cell centers
@@ -260,16 +259,6 @@ void Statis::writeLogfile(char *path, int tstep, double time)
 		div, divpos[0], divpos[1], divpos[2],
 		cfl, cflpos[0], cflpos[1], cflpos[2]	);
 	fputs(str, fp);
-
-	// // because line lengths are not necessarily the same,
-	// // undesired lines may be caused by inserting line in the middle of the file.
-	// // These lines are overwritten by ' ' to keep the text format,
-	// // and the empty line will be finally removed when the writing reaches the end of file.
-	// pos = ftell(fp);
-	// if (fgets(str, 1024, fp) && str[0] != ' ') {
-	// 	fseek(fp, pos, SEEK_SET);
-	// 	for (char *c = str; *c != '\0'; c++) fputc(' ', fp);
-	// }
 
 	fclose(fp);
 }

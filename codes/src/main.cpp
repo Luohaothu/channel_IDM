@@ -17,17 +17,38 @@ void output(int tstep, double time, Para &para, Field &field, Statis &stas);
 void input (int tstep, Para &para);
 
 
+
+// Vctr& BC_generator(double bc_time)
+// {
+// 	static Para para("bcpath/XINDAT");
+// 	static Mesh mesh(para.Nx, para.Ny, para.Nz);
+// 	if (mesh.checkYmesh(mesh.y)) mesh.initYmesh (para.Lx, para.Ly, para.Lz, mesh.getYmesh(para.dy_min, para.Ly));
+// 	static Field field(mesh);
+// 	static double time = initiate(field, para);
+// 	static int tstep = (time < 1e-10 ? 0 : para.nread);
+
+// 	while (bc_time - time > 1e-10) {
+// 		time += para.dt;
+
+// 		field.bcond();
+// 		field.getnu(para.Re, 0);
+// 		field.getup(para.dt, para.nthrds);
+// 	}
+
+// 	return field.UBC;
+// }
+
 int main()
 {
 	Para para("XINDAT");
 	para.showPara();
 
-	Mesh mesh(para.Nx, para.Ny, para.Nz);
-	mesh.initMesh  (para.Lx, para.Ly, para.Lz, mesh.getYmesh(para.dy_min, para.Ly));
-	mesh.checkYmesh(mesh.y,  para.statpath);
+	Mesh mesh(para.Nx, para.Ny, para.Nz, para.Lx, para.Ly, para.Lz);
+	mesh.initYmesh(mesh.getYmesh(para.dy_min));
+	mesh.checkYmesh(para.statpath);
 
-	Field  field(mesh);
-	Statis stas (mesh);
+	Field field(mesh);
+	Statis stas(mesh);
 	double time = initiate(field, para);
 	int tstep = (time < 1e-10 ? 0 : para.nread); // continue last case or start a new case depending on whether a continue time is read
 	
@@ -35,6 +56,7 @@ int main()
 
 	// main loop
 	while (tstep++ < para.Nt) {
+		time += para.dt;
 
 		field.bcond(tstep);								// set boundary conditions
 		field.getnu(para.Re, para.bftype==2 ? 0.18 : 0);// get the viscosity field
@@ -42,7 +64,7 @@ int main()
 
 		if (para.bftype == 1) field.removeSpanMean();	// for MFU
 		
-		output(tstep, (time = time + para.dt), para, field, stas);
+		output(tstep, time, para, field, stas);
 		input (tstep, para);
 	}
 
@@ -67,8 +89,8 @@ double initiate(Field &field, Para &para)
 	para0.showPara();
 
 	sprintf(str, "%s%s", para.inpath, para0.statpath);
-	Mesh mesh0(para0.Nx, para0.Ny, para0.Nz);
-	mesh0.initMesh(para0.Lx, para0.Ly, para0.Lz, mesh0.getYmesh(str));
+	Mesh mesh0(para0.Nx, para0.Ny, para0.Nz, para0.Lx, para0.Ly, para0.Lz);
+	mesh0.initYmesh(mesh0.getYmesh(str));
 
 	sprintf(str, "%s%s", para.inpath, para0.fieldpath);
 	Field field0(mesh0);

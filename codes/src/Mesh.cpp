@@ -11,12 +11,12 @@ using namespace std;
 
 
 
-Mesh::Mesh(int n1, int n2, int n3):
+Mesh::Mesh(int n1, int n2, int n3, double l1, double l2, double l3, double *ymesh):
 /* allocate memory for pointers */
-Nx(n1),
-Ny(n2),
-Nz(n3),
-Nxz(n1*n3)
+Nx(n1), Ny(n2), Nz(n3), Nxz(n1 * n3),
+Lx(l1), Ly(l2), Lz(l3), vol(Lx * Ly * Lz),
+dx((double) Lx / Nx), dx2(dx * dx),
+dz((double) Lz / Nz), dz2(dz * dz)
 {
 	y = new double [Ny+1];	// Ny layers (including 2 walls) + 1 redundant layer (index 0)
 	yc= new double [Ny+1];	// Ny+1 layers (including 2 walls)
@@ -46,6 +46,22 @@ Nxz(n1*n3)
 
 	ipa = new int [Nx];
 	ima = new int [Nx];
+
+	int i, k;
+	// initiate wavenumbers
+	for (i=0; i<Nx; i++) ak1[i] = 2.0/dx2 * ( 1.0 - cos(kx(i) * dx) );
+	for (k=0; k<Nz; k++) ak3[k] = 2.0/dz2 * ( 1.0 - cos(kz(k) * dz) );
+	// initiate indexes
+	for (k=0; k<Nz; k++) {
+		kpa[k] = (k+1) % Nz;
+		kma[k] = (k-1+Nz) % Nz;
+	}
+	for (i=0; i<Nx; i++) {
+		ipa[i] = (i+1) % Nx;
+		ima[i] = (i-1+Nx) % Nx;
+	}
+	// initiate y mesh
+	if (ymesh) this->initYmesh(ymesh);
 }
 
 void Mesh::freeall()
@@ -61,46 +77,22 @@ void Mesh::freeall()
 }
 
 
-void Mesh::initMesh(double l1, double l2, double l3, double *ymesh)
+void Mesh::initYmesh(double *ymesh)
 {
 	int i, j, k;
 
-	Lx = l1;
-	Ly = l2;
-	Lz = l3;
-	dx = (double) Lx / Nx;
-	dz = (double) Lz / Nz;
-	dx2 = dx * dx;
-	dz2 = dz * dz;
-	vol = Lx * Ly * Lz;
-	
+	if (! ymesh) cout << "\nNo valid ymesh provided !" << endl;
 
-	// initiate wavenumbers
-	for (i=0; i<Nx; i++) ak1[i] = 2.0/dx2 * ( 1.0 - cos(kx(i) * dx) );
-	for (k=0; k<Nz; k++) ak3[k] = 2.0/dz2 * ( 1.0 - cos(kz(k) * dz) );
-
-	// initiate indexes
-	for (k=0; k<Nz; k++) {
-		kpa[k] = (k+1) % Nz;
-		kma[k] = (k-1+Nz) % Nz;
-	}
-	for (i=0; i<Nx; i++) {
-		ipa[i] = (i+1) % Nx;
-		ima[i] = (i-1+Nx) % Nx;
-	}
-
-	if (! ymesh) return;
-
+	// y coordinates
 	memcpy(this->y, ymesh, sizeof(double) * (Ny+1));
-	delete [] ymesh;
 
-	yc[0] = 0.0;
-	yc[Ny] = Ly;
-	for (j=1; j<Ny; j++)	yc[j] = 0.5 * ( y[j] + y[j+1] );
+	yc[0] = y[0];	// y[0] must be equal to the boundary position
+	yc[Ny] = y[Ny];
+	for (j=1; j<Ny; j++) yc[j] = 0.5 * ( y[j] + y[j+1] );
 
 	// y intervals
-	for (j=1; j<Ny; j++)	{ dy[j] = y[j+1] - y[j]; dvol[j] = dy[j] * dx * dz; }
-	for (j=2; j<Ny; j++)	{ h[j] = (y[j+1] - y[j-1]) / 2.0; }
+	for (j=1; j<Ny; j++) { dy[j] = y[j+1] - y[j]; dvol[j] = dy[j] * dx * dz; }
+	for (j=2; j<Ny; j++) { h[j] = (y[j+1] - y[j-1]) / 2.0; }
 	dy[0] = 0.0;
 	dy[Ny] = 0.0;
 	dvol[0] = 0.0;
@@ -123,7 +115,7 @@ void Mesh::initMesh(double l1, double l2, double l3, double *ymesh)
 	for (j=1; j<Ny; j++) {	// for P in divergence-gradient operator, boundaries excluded
 		if (j>1 && j<Ny-1) {
 			ppj[j] = hp[j];
-			pcj[j] = - hc[j];								// no need to multiply by -1 in use
+			pcj[j] = - hc[j];								// NO need to multiply by -1 in use
 			pmj[j] = hm[j];		}
 		else if (j==1) {
 			ppj[j] = hp[1];
@@ -136,62 +128,58 @@ void Mesh::initMesh(double l1, double l2, double l3, double *ymesh)
 	}
 }
 
-void Mesh::checkYmesh(double *ymesh, char *path)
+bool Mesh::checkYmesh(char *path)
 {
-	FILE *fp;
-	char str[1024];
-
-	/* check failed */
-	if ( fabs(ymesh[Ny] - Ly) > 1e-10 ) {
-		cout << "Mesh error: channel height does not match !" << endl;
-		exit(0);
-	}
-
-	/* check passed */
-	// write grid file to specified path
+	// check failed
+	if ( fabs((y[Ny]-y[0]) - Ly) > 1e-10 ) return false;
+	// check passed
 	if (path) {
+		// write grid file to specified path
+		FILE *fp;
+		char str[1024];
 		sprintf(str, "%sCHANNEL.GRD", path);
 		fp = fopen(str, "w");
 			for (int j=0; j<=Ny; j++) {
-				sprintf(str, "%.18e\n", ymesh[j]);
+				sprintf(str, "%.18e\n", y[j]);
 				fputs(str, fp);
 			}
 		fclose(fp);
+		// print grid information
+		cout << "\ndy_min = " << y[2]-y[1] << ", dy_max = " << y[Ny/2+1]-y[Ny/2] << endl;
 	}
-	// print grid information
-	cout << "\ndy_min = " << ymesh[2]-ymesh[1] << ", dy_max = " << ymesh[Ny/2+1]-ymesh[Ny/2] << endl;
+	return true;
 }
 
 
 
-double hyptan(int j, double gamma, int ny, double y_max)
+double hyptan(int j, double gamma, int ny, double ly)
 /* generate y grids with hyperbolic tangent distribution */
 {
-	double delta = y_max / 2.0;
+	double delta = ly / 2.0;
 	double ytild = 2.0 * (j-1) / (ny-1) - 1.0;
-	return delta * ( 1.0 + tanh(gamma * delta * ytild) / tanh(gamma * delta) );
+	return 1.0 + delta * tanh(gamma * delta * ytild) / tanh(gamma * delta);
 }
-double* Mesh::getYmesh(double dy_min, double y_max)
+double* Mesh::getYmesh(double dy_min)
 /* generate hyperbolic tangent grid (Newton iteration to determine parameter)
-target equation: F(gamma) = hyptan(2, gamma, Ny, y_max) - dy_min = 0 */
+target equation: F(gamma) = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, l2) - dy_min = 0 */
 {
 	int j;
 	double *ymesh = new double [Ny+1];
 
 	double gamma = 1.0, dgamma = 0.1, grad;
-	double F, F0 = hyptan(2, gamma-dgamma, Ny, y_max) - dy_min;
+	double F, F0 = hyptan(2, gamma-dgamma, Ny, Ly) - hyptan(1, gamma-dgamma, Ny, Ly) - dy_min;
 	// determine hyperbolic tangent parameter
 	for (j=0; j<100; j++) {
-		F = hyptan(2, gamma, Ny, y_max) - dy_min;
+		F = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, Ly) - dy_min;
 		grad = (F-F0) / dgamma;	if (! grad) break;
 		dgamma = - F / grad;	if (! dgamma) break;
 		gamma += dgamma;		if (gamma <= 0) {printf("Mesh error: too large dy_min !"); exit(0);}
 		F0 = F;
 	}
 	// generate grid
-	ymesh[0] = 0.0;
 	for (j=1; j<=Ny; j++)
-		ymesh[j] = hyptan(j, gamma, Ny, y_max);
+		ymesh[j] = hyptan(j, gamma, Ny, Ly);
+	ymesh[0] = ymesh[1];	// for staggered grid, y[0] is an extrapolation of y[1]
 
 	return ymesh; // need to delete after use
 }
@@ -210,6 +198,6 @@ double* Mesh::getYmesh(char *path)
 			sscanf(fgets(str, 1024, fp), "%le", & ymesh[j]);
 	fclose(fp);
 
-	return ymesh; // need to delete after use
+	return ymesh; // need to delete after use, but currently it may cause problem if delete in initYmesh
 }
 

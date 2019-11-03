@@ -50,51 +50,76 @@ double Scla::bulkMeanV() // only for V
 
 /********** interpolation functions **********/
 
-double* Scla::layerUG2CC(double *src, int j1, int j0)	// CAUTION: pointer src must NOT be self
-/* interpolate j0 layer of src from U grid to cell center, result stored in j1 layer of q */
+double* Scla::layerUG2CC(double *dst, int j1, int j0)	// CAUTION: pointer dst must NOT be self
+/* interpolate j0 layer from U grid of src to j1 layer of cell center of dst */
 {
 	int i, k, kk0, kk1;
 	for (k=0; k<Nz; k++) { kk0 = Nxz * j0 + Nx * k; kk1 = Nxz * j1 + Nx * k;
-	for (i=0; i<Nx; i++) { this->q[kk1+i] = 0.5 * (src[kk0+i] + src[kk0+ipa[i]]); }}
-	return this->q;
+	for (i=0; i<Nx; i++) { dst[kk1+i] = 0.5 * (q[kk0+i] + q[kk0+ipa[i]]); }}
+	return dst;
 }
-double* Scla::layerVG2CC(double *src, int j1, int j0)	// CAUTION: pointer src must NOT be self
-/* interpolate j0,j0+1 layers of src from V grid to cell center, result stored in j1 layer of q */
+double* Scla::layerVG2CC(double *dst, int j1, int j0)	// CAUTION: pointer dst must NOT be self
+/* interpolate j0,j0+1 layers from V grid of src to j1 layer of cell center of dst */
 {
 	int i, k, kkd, kku, kk1, jd = (j0==0 ? 1 : j0), ju = (j0==Ny ? Ny : j0+1);
 	for (k=0; k<Nz; k++) { kkd = Nxz * jd + Nx * k; kku = Nxz * ju + Nx * k; kk1 = Nxz * j1 + Nx * k;
-	for (i=0; i<Nx; i++) { this->q[kk1+i] = 0.5 * (src[kkd+i] + src[kku+i]);	}}
-	return this->q;
+	for (i=0; i<Nx; i++) { dst[kk1+i] = 0.5 * (q[kkd+i] + q[kku+i]);	}}
+	return dst;
 }
-double* Scla::layerWG2CC(double *src, int j1, int j0)	// CAUTION: pointer src must NOT be self
-/* interpolate j0 layer of src from W grid to cell center, result stored in j1 layer of q */
+double* Scla::layerWG2CC(double *dst, int j1, int j0)	// CAUTION: pointer dst must NOT be self
+/* interpolate j0 layer from W grid of src to j1 layer of cell center of dst */
 {
 	int i, k, kkb, kkf, kk1;
 	for (k=0; k<Nz; k++) { kkb = Nxz * j0 + Nx * k; kkf = Nxz * j0 + Nx * kpa[k]; kk1 = Nxz * j1 + Nx * k;
-	for (i=0; i<Nx; i++) { this->q[kk1+i] = 0.5 * (src[kkb+i] + src[kkf+i]);	}}
-	return this->q;
+	for (i=0; i<Nx; i++) { dst[kk1+i] = 0.5 * (q[kkb+i] + q[kkf+i]);	}}
+	return dst;
 }
+// double* Scla::layerUG2CC(double *src, int j1, int j0)	// CAUTION: pointer src must NOT be self
+// /* interpolate j0 layer of src from U grid to cell center, result stored in j1 layer of q */
+// {
+// 	int i, k, kk0, kk1;
+// 	for (k=0; k<Nz; k++) { kk0 = Nxz * j0 + Nx * k; kk1 = Nxz * j1 + Nx * k;
+// 	for (i=0; i<Nx; i++) { this->q[kk1+i] = 0.5 * (src[kk0+i] + src[kk0+ipa[i]]); }}
+// 	return this->q;
+// }
+// double* Scla::layerVG2CC(double *src, int j1, int j0)	// CAUTION: pointer src must NOT be self
+// /* interpolate j0,j0+1 layers of src from V grid to cell center, result stored in j1 layer of q */
+// {
+// 	int i, k, kkd, kku, kk1, jd = (j0==0 ? 1 : j0), ju = (j0==Ny ? Ny : j0+1);
+// 	for (k=0; k<Nz; k++) { kkd = Nxz * jd + Nx * k; kku = Nxz * ju + Nx * k; kk1 = Nxz * j1 + Nx * k;
+// 	for (i=0; i<Nx; i++) { this->q[kk1+i] = 0.5 * (src[kkd+i] + src[kku+i]);	}}
+// 	return this->q;
+// }
+// double* Scla::layerWG2CC(double *src, int j1, int j0)	// CAUTION: pointer src must NOT be self
+// /* interpolate j0 layer of src from W grid to cell center, result stored in j1 layer of q */
+// {
+// 	int i, k, kkb, kkf, kk1;
+// 	for (k=0; k<Nz; k++) { kkb = Nxz * j0 + Nx * k; kkf = Nxz * j0 + Nx * kpa[k]; kk1 = Nxz * j1 + Nx * k;
+// 	for (i=0; i<Nx; i++) { this->q[kk1+i] = 0.5 * (src[kkb+i] + src[kkf+i]);	}}
+// 	return this->q;
+// }
 
 Scla& Scla::interpolate(Scla &src)
 /* initiate flow field from given fields, interpolated to the current grid */
 {
 	int i, j, k, idx, j0, *i0 = new int [Nx], *k0 = new int [Nz];
-	int Nx0 = src.Nx, Ny0 = src.Ny, Nz0 = src.Nz, Nxz0 = src.Nxz;
-	double *y0 = src.y, *yc0 = src.yc;
+	Mesh &mesh0 = src.meshGet();
+	int Nx0 = mesh0.Nx, Ny0 = mesh0.Ny, Nz0 = mesh0.Nz, Nxz0 = mesh0.Nxz;
+	double *yc0 = mesh0.yc;
 
 	// nearest interpolation for x and z directions in Fourier space
 	// find out nearest point for every wavenumber k_z
 	for (k=0; k<Nz; k++) {	k0[k] = 0;
 	for (int k1=1; k1<Nz0; k1++) {
-		if (  fabs(kz(k) - src.kz(k1)   )
-			< fabs(kz(k) - src.kz(k0[k]))	)	k0[k] = k1;
+		if (  fabs(kz(k) - mesh0.kz(k1)   )
+			< fabs(kz(k) - mesh0.kz(k0[k]))	)	k0[k] = k1;
 
 	}}
 	// find out nearesr point for every wavenumber k_x
 	for (i=0; i<Nx; i++) {	i0[i] = 0;
 	for (int i1=1; i1<Nx0; i1++) {
-		if (  fabs(kx(i) - src.kx(i1)   )
-			< fabs(kx(i) - src.kx(i0[i]))	)	i0[i] = i1;
+		if (  fabs(kx(i) - mesh0.kx(i1)   )
+			< fabs(kx(i) - mesh0.kx(i0[i]))	)	i0[i] = i1;
 	}}
 
 	src.fft();
