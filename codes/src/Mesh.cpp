@@ -85,18 +85,16 @@ void Mesh::initYmesh(double *ymesh)
 
 	// y coordinates
 	memcpy(this->y, ymesh, sizeof(double) * (Ny+1));
-
-	yc[0] = y[0];	// y[0] must be equal to the boundary position
+	y[0] = 0;
+	yc[0] = y[1];
 	yc[Ny] = y[Ny];
 	for (j=1; j<Ny; j++) yc[j] = 0.5 * ( y[j] + y[j+1] );
 
 	// y intervals
 	for (j=1; j<Ny; j++) { dy[j] = y[j+1] - y[j]; dvol[j] = dy[j] * dx * dz; }
 	for (j=2; j<Ny; j++) { h[j] = (y[j+1] - y[j-1]) / 2.0; }
-	dy[0] = 0.0;
-	dy[Ny] = 0.0;
-	dvol[0] = 0.0;
-	dvol[Ny] = 0.0;
+	dy[0] = dvol[0] = 0.0;
+	dy[Ny]= dvol[Ny]= 0.0;
 	h[0] = 0.0;
 	h[1] = dy[1] / 2.0;
 	h[Ny] = dy[Ny-1] / 2.0;
@@ -131,7 +129,7 @@ void Mesh::initYmesh(double *ymesh)
 bool Mesh::checkYmesh(char *path)
 {
 	// check failed
-	if ( fabs((y[Ny]-y[0]) - Ly) > 1e-10 ) return false;
+	if ( fabs((y[Ny]-y[1]) - Ly) > 1e-10 ) return false;
 	// check passed
 	if (path) {
 		// write grid file to specified path
@@ -173,13 +171,13 @@ target equation: F(gamma) = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, l2) 
 		F = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, Ly) - dy_min;
 		grad = (F-F0) / dgamma;	if (! grad) break;
 		dgamma = - F / grad;	if (! dgamma) break;
-		gamma += dgamma;		if (gamma <= 0) {printf("Mesh error: too large dy_min !"); exit(0);}
+		gamma += dgamma;		if (gamma <= 0) { cout << "Mesh error: too large dy_min !" << endl; exit(0); }
 		F0 = F;
 	}
 	// generate grid
+	ymesh[0] = 0;
 	for (j=1; j<=Ny; j++)
 		ymesh[j] = hyptan(j, gamma, Ny, Ly);
-	ymesh[0] = ymesh[1];	// for staggered grid, y[0] is an extrapolation of y[1]
 
 	return ymesh; // need to delete after use
 }

@@ -6,6 +6,7 @@
 # include <cmath>
 
 # include "Field.h"
+# include "Interp.h"
 
 using namespace std;
 
@@ -71,23 +72,13 @@ void Field::initField(Field &field)
 {
 	Scla *src[4] = {&field.U.com1, &field.U.com2, &field.U.com3, &field.P};
 	Scla *dst[4] = {&U.com1, &U.com2, &U.com3, &P};
+
+	for (int n=0; n<4; n++) Interp(*src[n], *dst[n]).interpolate(n==1?'V':'U');
 	
-	for (int n=0; n<4; n++) {
-		field.DP.bulkCpy(*src[n]);
-		dst[n]->bulkCpy(DP.interpolate(field.DP));
-	}
-
-	// field.DP.bulkCpy(field.U.com1);
-	// U.com1.bulkCpy(DP.interpolate(field.DP));
-
-	// field.DP.bulkCpy(field.U.com2);
-	// U.com2.bulkCpy(DP.interpolate(field.DP));
-
-	// field.DP.bulkCpy(field.U.com3);
-	// U.com3.bulkCpy(DP.interpolate(field.DP));
-
-	// field.DP.bulkCpy(field.P);
-	// P.bulkCpy(DP.interpolate(field.DP));
+	// for (int n=0; n<4; n++) {
+	// 	field.DP.bulkCpy(*src[n]);
+	// 	dst[n]->bulkCpy(DP.interpolate(field.DP));
+	// }
 }
 
 
@@ -145,25 +136,26 @@ void Field::applyBC()
 void Field::applyBC(double dt)
 /* apply Dirichlet BC on velocities, with boundary time derivative considered */
 {
-	Bulk &U1 = U.com1,   &U2 = U.com2,   &U3 = U.com3;
-	Bulk &H1 = UH.com1,  &H2 = UH.com2,  &H3 = UH.com3;
-	Bulk &B1 = UBC.com1, &B2 = UBC.com2, &B3 = UBC.com3;
-	Bulk ul(Nx,1,Nz), vl(Nx,1,Nz), wl(Nx,1,Nz);
+	Scla &U1 = U.com1,   &U2 = U.com2,   &U3 = U.com3;
+	Scla &H1 = UH.com1,  &H2 = UH.com2,  &H3 = UH.com3;
+	Scla &B1 = UBC.com1, &B2 = UBC.com2, &B3 = UBC.com3;
+	Scla ul(Mesh(Nx,0,Nz,Lx,0,Lz)), vl(ul.meshGet()), wl(ul.meshGet());
 	
-	ul.layerCpy(U1,0,0).layerMlt(-1);
-	vl.layerCpy(U2,0,1).layerMlt(-1);
-	wl.layerCpy(U3,0,0).layerMlt(-1);
-	H1.layerCpy(ul.layersAdd(B1,0,0).layerMlt(1.0/dt), 0);
-	H2.layerCpy(vl.layersAdd(B2,0,0).layerMlt(1.0/dt), 1);
-	H3.layerCpy(wl.layersAdd(B3,0,0).layerMlt(1.0/dt), 0);
+	ul.layerCpy(U1,0,0).layerMlt(-1); ul.layersAdd(B1,0,0).layerMlt(1.0/dt);
+	vl.layerCpy(U2,0,1).layerMlt(-1); vl.layersAdd(B2,0,0).layerMlt(1.0/dt);
+	wl.layerCpy(U3,0,0).layerMlt(-1); wl.layersAdd(B3,0,0).layerMlt(1.0/dt);
+	H1.layerCpy(ul, 0);
+	H2.layerCpy(vl, 1);
+	H3.layerCpy(wl, 0);
 
-	ul.layerCpy(U1,0,Ny).layerMlt(-1);
-	vl.layerCpy(U2,0,Ny).layerMlt(-1);
-	wl.layerCpy(U3,0,Ny).layerMlt(-1);
-	H1.layerCpy(ul.layersAdd(B1,0,1).layerMlt(1.0/dt), Ny);
-	H2.layerCpy(vl.layersAdd(B2,0,1).layerMlt(1.0/dt), Ny);
-	H3.layerCpy(wl.layersAdd(B3,0,1).layerMlt(1.0/dt), Ny);
+	ul.layerCpy(U1,0,Ny).layerMlt(-1); ul.layersAdd(B1,0,1).layerMlt(1.0/dt);
+	vl.layerCpy(U2,0,Ny).layerMlt(-1); vl.layersAdd(B2,0,1).layerMlt(1.0/dt);
+	wl.layerCpy(U3,0,Ny).layerMlt(-1); wl.layersAdd(B3,0,1).layerMlt(1.0/dt);
+	H1.layerCpy(ul, Ny);
+	H2.layerCpy(vl, Ny);
+	H3.layerCpy(wl, Ny);
 
+	ul.meshGet().freeall();
 	this->applyBC();
 }
 

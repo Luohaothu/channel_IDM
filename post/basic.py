@@ -124,7 +124,7 @@ class Statis:
 		self.utau = self.tauw**0.5
 		self.dnu = 1.0 / self.para.Re / self.utau
 		self.tnu  = self.dnu / self.utau
-		self.Ret = 0.5 * self.para.Ly / self.dnu
+		self.Ret = 1.0 / self.dnu # channel height is taken for 2.0
 
 	def calc_statis(self):
 		nx, ny, nz = self.para.Nx, self.para.Ny + 1, self.para.Nz
@@ -172,8 +172,10 @@ class Statis:
 	def __flipk(self, q):
 		ny, nz, nx = q.shape
 		nxc, nzc = int(nx/2+1), int(nz/2+1)
-		q[:,:,1:] += q[:,:,:0:-1]
-		q[:,1:,:] += q[:,:0:-1,:]
+		# q[:,:,1:] += q[:,:,:0:-1]
+		# q[:,1:,:] += q[:,:0:-1,:]
+		q[:, :, 1:nxc] += q[:, :, :-nxc:-1]
+		q[:, 1:nzc, :] += q[:, :-nzc:-1, :]
 		if not (nx % 2): q[:,:,nxc-1] /= 2
 		if not (nz % 2): q[:,nzc-1,:] /= 2
 		return q[:,:nzc,:nxc]

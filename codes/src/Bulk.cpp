@@ -41,7 +41,7 @@ nxzr(nz*nxr)
 	}
 }
 
-void Bulk::freeall()
+Bulk::~Bulk()
 {
 	delete [] q;
 	if (fq) {

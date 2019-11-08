@@ -9,13 +9,13 @@ class Bulk
 {
 	public:
 		Bulk(int n1, int n2, int n3, bool inift=false);	// memory allocation, dim is the array dimension, unrelated to the mesh dimension
-		void freeall();
+		~Bulk();
 
 		double* fft ();
 		double* ifft();
 
 		// memory access functions
-		double& id (int i, int j=0, int k=0) { return  q [nxz * j + nx * k + i]; };
+		double& id (int i, int j=0, int k=0) { return  q[nxz * j + nx * k + i]; };
 		double& idf(int i, int j=0, int k=0) { return fq[nxzr* j + nxr* k + i]; };
 
 		// tool functions
@@ -34,10 +34,10 @@ class Bulk
 		double* bulkAdd (double a);
 		double* bulkMlt (double a);
 
-		Bulk& layerCpy (Bulk &b, int j1=0, int j0=0) { this->layerCpy (b.bulkGet(), j1, j0); return *this; };
-		Bulk& layersAdd(Bulk &b, int j1=0, int j0=0) { this->layersAdd(b.bulkGet(), j1, j0); return *this; };
-		Bulk& layersMlt(Bulk &b, int j1=0, int j0=0) { this->layersMlt(b.bulkGet(), j1, j0); return *this; };
-		Bulk& bulkCpy  (Bulk &b) { this->bulkCpy(b.bulkGet()); return *this; };
+		// Bulk& layerCpy (Bulk &b, int j1=0, int j0=0) { this->layerCpy (b.bulkGet(), j1, j0); return *this; };
+		// Bulk& layersAdd(Bulk &b, int j1=0, int j0=0) { this->layersAdd(b.bulkGet(), j1, j0); return *this; };
+		// Bulk& layersMlt(Bulk &b, int j1=0, int j0=0) { this->layersMlt(b.bulkGet(), j1, j0); return *this; };
+		// Bulk& bulkCpy  (Bulk &b) { this->bulkCpy(b.bulkGet()); return *this; };
 
 		// IO functions
 		void fileIO(char *path, char *name, char mode);
@@ -66,9 +66,9 @@ class Mesh
 		const double dx, dz, dx2, dz2;	// grid interval of X & Z and their squares
 		const double vol;				// volume of the whole physical domain
 
-		double *dvol;				// volume of every cell
-		double *yc;					// y coordinates in wall-normal direction for U,W,P
+		double *y, *yc;				// y coordinates in wall-normal direction (y for V, yc U,W,P)
 		double *dy, *h;				// y interval of the wall-normal grid (dy for V, h for U,W,P)
+		double *dvol;				// volume of every cell
 		double *hm,  *hc,  *hp;		// coefficients for wall-normal 2nd-order derivative of U,W
 		double *dym, *dyc, *dyp;	// coefficients for wall-normal 2nd-order derivative of V
 
@@ -82,23 +82,18 @@ class Mesh
 		double kx(int i) { return ( i - ( i > (int)(Nx/2) ? Nx : 0 ) ) * (2.0*PI/Lx); };
 		double kz(int k) { return ( k - ( k > (int)(Nz/2) ? Nz : 0 ) ) * (2.0*PI/Lz); };
 
-		void initYmesh(double *ymesh);
-		bool checkYmesh(char *path=NULL);
 		double* getYmesh(double dy_min);
 		double* getYmesh(char *path);
-
-	private:
-		double *y;					// y coordinates in wall-normal direction for V
+		void initYmesh(double *ymesh);
+		bool checkYmesh(char *path=NULL);
 };
 
 
 class Scla: private Mesh, public Bulk
 {
 	public:
-		Scla(const Mesh &mesh, const Bulk &bulk): Mesh(mesh), Bulk(bulk) {};
 		Scla(const Mesh &mesh, bool inift=false): Mesh(mesh), Bulk(Nx, Ny+1, Nz, inift) {};
-
-		Mesh& meshGet() { return (*this); };
+		// Scla(const Mesh &mesh, const Bulk &bulk): Mesh(mesh), Bulk(bulk) {};
 
 		// integration
 		double yMeanU(int i, int k);
@@ -112,39 +107,40 @@ class Scla: private Mesh, public Bulk
 		double* layerVG2CC(double *dst, int j1,   int j0);
 		double* layerWG2CC(double *dst, int j1=0, int j0=0);
 
-		Scla& layerUG2CC(Scla &s, int j1=0, int j0=0) { this->layerUG2CC(s.bulkGet(), j1, j0); return s; };
-		Scla& layerVG2CC(Scla &s, int j1,   int j0)   { this->layerVG2CC(s.bulkGet(), j1, j0); return s; };
-		Scla& layerWG2CC(Scla &s, int j1=0, int j0=0) { this->layerWG2CC(s.bulkGet(), j1, j0); return s; };
-
-		Scla& interpolate(Scla &src);
-
 		// operators
 		double* gradient(int i, int j, int k);
+
+		Mesh& meshGet() { return *this; };
+
+		Scla& layerCpy (Scla &src, int j1=0, int j0=0) { Bulk::layerCpy (src.bulkGet(), j1, j0); return *this; };
+		Scla& layersAdd(Scla &src, int j1=0, int j0=0) { Bulk::layersAdd(src.bulkGet(), j1, j0); return *this; };
+		Scla& layersMlt(Scla &src, int j1=0, int j0=0) { Bulk::layersMlt(src.bulkGet(), j1, j0); return *this; };
+		Scla& bulkCpy  (Scla &src)                     { Bulk::bulkCpy  (src.bulkGet());         return *this; };
+
+		Scla& layerUG2CC(Scla &dst, int j1=0, int j0=0) { this->layerUG2CC(dst.bulkGet(), j1, j0); return dst; };
+		Scla& layerVG2CC(Scla &dst, int j1,   int j0)   { this->layerVG2CC(dst.bulkGet(), j1, j0); return dst; };
+		Scla& layerWG2CC(Scla &dst, int j1=0, int j0=0) { this->layerWG2CC(dst.bulkGet(), j1, j0); return dst; };
+
+		// Scla& interpolate(Scla &src);
 };
 
 
 class Vctr: private Mesh
 {
 	public:
-		Vctr(const Mesh &mesh, const Scla &s1, const Scla &s2, const Scla &s3):
-			Mesh(mesh),
-			com1(s1), com2(s2), com3(s3),
-			u(com1.bulkGet()), v(com2.bulkGet()), w(com3.bulkGet()) {};
-
 		Vctr(const Mesh &mesh, bool inift=false):
 			Mesh(mesh),
 			com1(mesh, inift), com2(mesh, inift), com3(mesh, inift),
 			u(com1.bulkGet()), v(com2.bulkGet()), w(com3.bulkGet()) {};
+		// Vctr(const Mesh &mesh, const Scla &s1, const Scla &s2, const Scla &s3):
+		// 	Mesh(mesh),
+		// 	com1(s1), com2(s2), com3(s3),
+		// 	u(com1.bulkGet()), v(com2.bulkGet()), w(com3.bulkGet()) {};
 
 		Scla com1, com2, com3;
 
+		Mesh& meshGet() { return *this; };
 		double* bulkGet(int i) { return (i==1 ? u : i==2 ? v : i==3 ? w : NULL); };
-		
-		// void interpolate(Vctr &src) {
-		// 	com1.interpolate(src.com1);
-		// 	com2.interpolate(src.com2);
-		// 	com3.interpolate(src.com3);
-		// }; // not viable because com1,2,3 may not have fft initiated
 
 		// vector operators
 		double  divergence(int i, int j, int k);
@@ -152,9 +148,7 @@ class Vctr: private Mesh
 		double* strainrate(int i, int j, int k);
 
 	private:
-		double *u;
-		double *v;
-		double *w;
+		double *u, *v, *w;
 };
 
 

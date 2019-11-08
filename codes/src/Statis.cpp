@@ -113,8 +113,8 @@ double Statis::checkTauw(double Re)
 double Statis::checkEner(Vctr &U, Scla &P)
 /* calculate Reynolds stresses, pressure-velocity correlations, and the total fluctuation energy */
 {
-	Mesh mesh(Nx,0,Nz,Lx,0,Lz);
-	Scla ul(mesh), vl(mesh), wl(mesh), pl(mesh), ql(mesh);
+	Scla ql(Mesh(Nx,0,Nz,Lx,0,Lz)), \
+	ul(ql.meshGet()), vl(ql.meshGet()), wl(ql.meshGet()), pl(ql.meshGet());
 
 	ener = 0.0;
 
@@ -126,21 +126,22 @@ double Statis::checkEner(Vctr &U, Scla &P)
 		pl.layerCpy(P,0,j).layerAdd(-Pm[j]);
 
 		// calculate Reynolds stress and cross correlations at cell centers
-		ql.layerCpy(ul).layersMlt(ul); R11[j] = ql.layerMean();
-		ql.layerCpy(vl).layersMlt(vl); R22[j] = ql.layerMean();
-		ql.layerCpy(wl).layersMlt(wl); R33[j] = ql.layerMean();
-		ql.layerCpy(ul).layersMlt(vl); R12[j] = ql.layerMean();
-		ql.layerCpy(vl).layersMlt(wl); R23[j] = ql.layerMean();
-		ql.layerCpy(wl).layersMlt(ul); R13[j] = ql.layerMean();
+		R11[j] = ql.layerCpy(ul).layersMlt(ul).layerMean();
+		R22[j] = ql.layerCpy(vl).layersMlt(vl).layerMean();
+		R33[j] = ql.layerCpy(wl).layersMlt(wl).layerMean();
+		R12[j] = ql.layerCpy(ul).layersMlt(vl).layerMean();
+		R23[j] = ql.layerCpy(vl).layersMlt(wl).layerMean();
+		R13[j] = ql.layerCpy(wl).layersMlt(ul).layerMean();
 
-		ql.layerCpy(pl).layersMlt(ul); Rpu[j] = ql.layerMean();
-		ql.layerCpy(pl).layersMlt(vl); Rpv[j] = ql.layerMean();
-		ql.layerCpy(pl).layersMlt(wl); Rpw[j] = ql.layerMean();
-		ql.layerCpy(pl).layersMlt(pl); Rpp[j] = ql.layerMean();
+		Rpu[j] = ql.layerCpy(pl).layersMlt(ul).layerMean();
+		Rpv[j] = ql.layerCpy(pl).layersMlt(vl).layerMean();
+		Rpw[j] = ql.layerCpy(pl).layersMlt(wl).layerMean();
+		Rpp[j] = ql.layerCpy(pl).layersMlt(pl).layerMean();
 
 		ener += 0.5 * ( R11[j] + R22[j] + R33[j] ) * ( dy[j] / Ly );
 	}
 
+	ql.meshGet().freeall();
 	return ener;
 }
 

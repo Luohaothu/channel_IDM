@@ -12,18 +12,16 @@ using namespace std;
 
 class Field: private Mesh
 {
-
-	private:
-		IDM idm;
-		SGS sgs;
-		double bcpos[2];
-
 	public:
 		Field(const Mesh &mesh):
-			Mesh(mesh), idm(mesh), sgs(mesh), bcpos{mesh.yc[0], mesh.yc[Ny]},
-			U(mesh), UH(mesh), UBC(Mesh(Nx,2-1,Nz,Lx,Ly,Lz,bcpos)),
+			Mesh(mesh), idm(mesh), sgs(mesh),
+			U(mesh), UH(mesh), UBC(Mesh(Nx,2-1,Nz,Lx,Ly,Lz)),
 			P(mesh), DP(mesh, true), NU(mesh),
-			mpg{0,0,0} {};
+			mpg{0,0,0}
+		{
+			UBC.meshGet().y[0] = UBC.meshGet().yc[0] = y[1];
+			UBC.meshGet().y[1] = UBC.meshGet().yc[1] = y[Ny];
+		};
 
 		Vctr U, UH, UBC;// UH also serve to store the RHS of delta u^* (increment of intermediate velocities), and delta u^* itself
 		Scla P, DP, NU;	// dp also serve to store the RHS of the pressure Poisson equation
@@ -50,6 +48,9 @@ class Field: private Mesh
 		void writeTecplot(char *path, int tstep, double time);
 		void debug_Output(int tstep);
 
+	private:
+		IDM idm;
+		SGS sgs;
 };
 
 

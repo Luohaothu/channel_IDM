@@ -74,13 +74,13 @@ header = \
 	% (	"log<sub>10</sub>(<greek>l</greek><sub>x</sub><sup>+</sup>)",
 		"log<sub>10</sub>(<greek>l</greek><sub>z</sub><sup>+</sup>)",
 		"y<sup>+</sup>",
-		"E<sub>uu</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>vv</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>ww</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>pp</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>uv</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>vw</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>uw</sub>/u<sub><greek>t</greek></sub><sup>2</sup>"	) + \
+		"k<sub>x</sub>k<sub>z</sub>E<sub>uu</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>x</sub>k<sub>z</sub>E<sub>vv</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>x</sub>k<sub>z</sub>E<sub>ww</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>x</sub>k<sub>z</sub>E<sub>pp</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>x</sub>k<sub>z</sub>E<sub>uv</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>x</sub>k<sub>z</sub>E<sub>vw</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>x</sub>k<sub>z</sub>E<sub>uw</sub>/u<sub><greek>t</greek></sub><sup>2</sup>"	) + \
 	'zone t = "%s", i = %i, j = %i, k = %i' %( casename, len(jrange), len(krange), len(irange) )
 
 data = np.empty([10, len(irange), len(krange), len(jrange)])
@@ -117,13 +117,13 @@ header = \
 	'variables = "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"\n' \
 	% (	"log<sub>10</sub>(<greek>l</greek><sub>x</sub><sup>+</sup>)",
 		"log<sub>10</sub>(y<sup>+</sup>)",
-		"E<sub>uu</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>vv</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>ww</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>pp</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>uv</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>vw</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>uw</sub>/u<sub><greek>t</greek></sub><sup>2</sup>"	) + \
+		"k<sub>x</sub>E<sub>uu</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>x</sub>E<sub>vv</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>x</sub>E<sub>ww</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>x</sub>E<sub>pp</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>x</sub>E<sub>uv</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>x</sub>E<sub>vw</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>x</sub>E<sub>uw</sub>/u<sub><greek>t</greek></sub><sup>2</sup>"	) + \
 	'zone t = "%s", i = %i, j = %i' %( casename, len(jrange), len(irange) )
 
 data = np.empty([9, len(irange), len(jrange)])
@@ -159,13 +159,13 @@ header = \
 	'variables = "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"\n' \
 	% (	"log<sub>10</sub>(<greek>l</greek><sub>z</sub><sup>+</sup>)",
 		"log<sub>10</sub>(y<sup>+</sup>)",
-		"E<sub>uu</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>vv</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>ww</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>pp</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>uv</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>vw</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
-		"E<sub>uw</sub>/u<sub><greek>t</greek></sub><sup>2</sup>"	) + \
+		"k<sub>z</sub>E<sub>uu</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>z</sub>E<sub>vv</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>z</sub>E<sub>ww</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>z</sub>E<sub>pp</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>z</sub>E<sub>uv</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>z</sub>E<sub>vw</sub>/u<sub><greek>t</greek></sub><sup>2</sup>",
+		"k<sub>z</sub>E<sub>uw</sub>/u<sub><greek>t</greek></sub><sup>2</sup>"	) + \
 	'zone t = "%s", i = %i, j = %i' %( casename, len(jrange), len(krange) )
 
 data = np.empty([9, len(krange), len(jrange)])
