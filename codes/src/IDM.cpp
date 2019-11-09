@@ -901,7 +901,7 @@ void IDM::meanpg(double *mpg, Vctr &U)
 	int i, j, k;
 	Scla &U1 = U.com1, &U3 = U.com3;
 	// mean pressure gradient increment is solved by fixing streamwise flow rate 2.0 and spanwise flow rate 0
-	double dmpg1 = (U1.bulkMeanU() - 1.0502472) / dt;
+	double dmpg1 = (U1.bulkMeanU() - 1.0) / dt;
 	double dmpg3 =  U3.bulkMeanU()        / dt;
 	// update the mean pressure gradient
 	mpg[0] += dmpg1;
