@@ -113,13 +113,20 @@ void Field::getup(double dt, int nthrds)
 	this->applyBC(dt);
 }
 
-void Field::getnu(double Re, double Cs)
+void Field::getnu(double Re, int bftype)
 {
-	if (Cs > 0) {
-		this->sgs.evcalc(NU, U, Re, Cs);
-		NU.bulkAdd(1.0 / Re);
+	switch (bftype) {
+		case 2:
+			this->sgs.smargorinsky(NU, U, 0.18, Re);
+			NU.bulkAdd(1.0 / Re);
+		break;
+		case 3:
+			this->sgs.dynamicsmarg(NU, U);
+			NU.bulkAdd(1.0 / Re);
+		break;
+		default:
+			NU.bulkSet(1.0 / Re);
 	}
-	else  NU.bulkSet(1.0 / Re);
 }
 
 void Field::applyBC()

@@ -146,6 +146,7 @@ class Vctr: private Mesh
 		double  divergence(int i, int j, int k);
 		double  convection(int i, int j, int k);
 		double* strainrate(int i, int j, int k);
+		double* gradient  (int i, int j, int k);
 
 	private:
 		double *u, *v, *w;

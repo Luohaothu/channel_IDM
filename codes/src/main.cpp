@@ -58,9 +58,9 @@ int main()
 	while (tstep++ < para.Nt) {
 		time += para.dt;
 
-		field.bcond(tstep);								// set boundary conditions
-		field.getnu(para.Re, para.bftype==2 ? 0.18 : 0);// get the viscosity field
-		field.getup(para.dt, para.nthrds);				// time evolution
+		field.bcond(tstep);					// set boundary conditions
+		field.getnu(para.Re, para.bftype);	// get the viscosity field
+		field.getup(para.dt, para.nthrds);	// time evolution
 
 		if (para.bftype == 1) field.removeSpanMean();	// for MFU
 		

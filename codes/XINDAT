@@ -10,7 +10,7 @@ statpath = "statdata/"
 postpath = "postdata/"
 
 // computation control
-bftype = 2		// type of body force (0: DNS, 1: MFU, 2: LES)
+bftype = 2		// type of body force (0:DNS, 1:MFU, 2:LES_SM, 3:LES_DSM, 4:LES_DVR)
 nthrds = 8		// number of threads for openmp (0 for automatically choose)
 
 // physical parameters

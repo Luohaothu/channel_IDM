@@ -111,7 +111,7 @@ void Para::showPara()
 	cout << "inpath = \"" << inpath << '\"' << endl;
 	cout << endl;
 	cout << "Computation control:" << endl;
-	cout << "body force type = " << (bftype==1 ? "MFU" : bftype==2 ? "LES" : "DNS") << endl;
+	cout << "body force type = " << (bftype==0 ? "DNS" : bftype==1 ? "MFU" : bftype==2 ? "LES_SM" : bftype==3 ? "LES_DSM" : "LES_DVR") << endl;
 	cout << "number of threads = " << nthrds << endl;
 	cout << endl;
 	cout << "Physical Parameters:" << endl;

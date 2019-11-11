@@ -36,7 +36,7 @@ class Field: private Mesh
 		void bcond(Vctr &UBC0);
 
 		// computation related
-		void getnu(double Re, double Cs);
+		void getnu(double Re, int bftype);
 		void getup(double dt, int nthrds);
 		void applyBC();
 		void applyBC(double dt);
