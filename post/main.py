@@ -1,29 +1,18 @@
 #!/root/Software/anaconda3/bin/python3
 from basic import *
 
-para = DataSetInfo("/run/media/student/DATA/whn/channel_IDM/data_LES1000_SM_CORS/")
+para = DataSetInfo("/run/media/student/DATA/whn/channel_IDM/data_DNS180/")
 feld = Field(para)
 stas = Statis(para, feld)
 
 stas.calc_statis()
-stas.inner_scale()
+stas.calc_wallscale()
 stas.flipy()
 
 
-qs = (stas.Euu, stas.Evv, stas.Eww, stas.Epp, stas.Euv, stas.Evw, stas.Euw)
-fns= ("Euu.bin","Evv.bin","Eww.bin","Epp.bin","Euv.bin","Evw.bin","Euw.bin")
-for q, fn in zip(qs, fns): write_channel(para.postpath+fn, q)
 
-# nx, ny, nz = para.Nx, para.Ny + 1, para.Nz
-# nxc, nzc = int(nx/2+1), int(nz/2+1)
-# stas.Euu, stas.Evv, stas.Eww, stas.Epp= [np.zeros([ny, nzc, nxc]) for n in range(4)]
-# stas.Euv, stas.Evw, stas.Euw = [np.zeros([ny, nzc, nxc]) for n in range(3)]
 
-# qs = (stas.Euu, stas.Evv, stas.Eww, stas.Epp, stas.Euv, stas.Evw, stas.Euw)
-# fns= ("Euu.bin","Evv.bin","Eww.bin","Epp.bin","Euv.bin","Evw.bin","Euw.bin")
-# for q, fn in zip(qs, fns): q[:] = read_channel(para.postpath+fn)
-
-with open(para.postpath+"innerscale.txt", 'w') as fp:
+with open(para.postpath+"wallscale.txt", 'w') as fp:
 	fp.write("Re_tau = %.18e\n"%stas.Ret)
 	fp.write("u_tau = %.18e\n"%stas.utau)
 	fp.write("tau_w = %.18e\n"%stas.tauw)
@@ -32,8 +21,24 @@ with open(para.postpath+"innerscale.txt", 'w') as fp:
 	fp.write("dy_min_plus = %.18e\n"%((para.y[2]-para.y[1])/stas.dnu))
 	fp.write("dy_max_plus = %.18e\n"%((para.y[int(para.Ny/2+1)]-para.y[int(para.Ny/2)])/stas.dnu))
 
+##################################################
+qs = (stas.Euu, stas.Evv, stas.Eww, stas.Epp, stas.Euv, stas.Evw, stas.Euw)
+fns= ("Euu.bin","Evv.bin","Eww.bin","Epp.bin","Euv.bin","Evw.bin","Euw.bin")
+for q, fn in zip(qs, fns): write_channel(para.postpath+fn, q)
+########### above: write & below: read ###########
+# stas.Euu = read_channel(para.postpath + "Euu.bin")
+# stas.Evv = read_channel(para.postpath + "Evv.bin")
+# stas.Eww = read_channel(para.postpath + "Eww.bin")
+# stas.Euv = read_channel(para.postpath + "Euv.bin")
+# stas.Evw = read_channel(para.postpath + "Evw.bin")
+# stas.Euw = read_channel(para.postpath + "Euw.bin")
+##################################################
 
 
+
+
+# stas.outer_scale()
+stas.inner_scale()
 
 casename = para.datapath.split('/')[-2]
 jrange = range(1, int(para.Ny/2+1)) #range(1, para.Ny) #
@@ -53,13 +58,13 @@ header = \
 		"<u'p'><sup>+</sup>", "<v'p'><sup>+</sup>", "<w'p'><sup>+</sup>", "<p'p'><sup>+</sup>"	) + \
 	'zone t = "%s", i = %i' %( casename, len(jrange) )
 
-data = np.vstack([ para.yc/stas.dnu,
-	stas.Um,	stas.Vm,	stas.Wm,	stas.Pm/stas.tauw,
+data = np.vstack([ para.yc/stas.lc,
+	stas.Um,	stas.Vm,	stas.Wm,	stas.Pm/stas.pc,
 	stas.R11,	stas.R22,	stas.R33,	stas.R12,	stas.R23,	stas.R13,
-	stas.Rpu,	stas.Rpv,	stas.Rpw,	stas.Rpp/stas.tauw**2	])
-data[1:4] /= stas.utau
-data[5:11] /= stas.utau**2
-data[11:14] /= stas.utau * stas.tauw
+	stas.Rpu,	stas.Rpv,	stas.Rpw,	stas.Rpp/stas.pc**2	])
+data[1:4] /= stas.uc
+data[5:11] /= stas.uc**2
+data[11:14] /= stas.uc * stas.pc
 data = data.T[jrange]
 
 np.savetxt(para.postpath+"profiles.dat", data, header=header, comments='')
@@ -97,10 +102,10 @@ for i in irange:
 				stas.Evw[j,k,i],
 				stas.Euw[j,k,i]	]
 
-data[3:] *= data[0] * data[1] / (4*np.pi**2 / para.Lx / para.Lz) / stas.utau**2
-data[6] *= stas.utau**2 / stas.tauw**2
-data[:2] = np.log10(2*np.pi / data[:2] / stas.dnu)
-data[2] /= stas.dnu
+data[3:] *= data[0] * data[1] / (4*np.pi**2 / para.Lx / para.Lz) / stas.uc**2
+data[6] *= stas.uc**2 / stas.pc**2
+data[:2] = np.log10(2*np.pi / data[:2] / stas.lc)
+data[2] /= stas.lc
 data = np.array([np.ravel(temp) for temp in data]).T
 
 pame = para.postpath + "ES2D.dat"
@@ -139,10 +144,10 @@ for i in irange:
 			np.sum(stas.Evw[j,:,i]),
 			np.sum(stas.Euw[j,:,i])	]
 
-data[2:] *= data[0] / (2*np.pi / para.Lx) / stas.utau**2
-data[5] *= stas.utau**2 / stas.tauw**2
+data[2:] *= data[0] / (2*np.pi / para.Lx) / stas.uc**2
+data[5] *= stas.uc**2 / stas.pc**2
 data[0] = 2*np.pi / data[0]
-data[:2] = np.log10(data[:2] / stas.dnu)
+data[:2] = np.log10(data[:2] / stas.lc)
 data = np.array([np.ravel(temp) for temp in data]).T
 
 pame = para.postpath + "ES1D_xy.dat"
@@ -181,10 +186,10 @@ for k in krange:
 			np.sum(stas.Evw[j,k]),
 			np.sum(stas.Euw[j,k])	]
 
-data[2:] *= data[0] / (2*np.pi / para.Lz) / stas.utau**2
-data[5] *= stas.utau**2 / stas.tauw**2
+data[2:] *= data[0] / (2*np.pi / para.Lz) / stas.uc**2
+data[5] *= stas.uc**2 / stas.pc**2
 data[0] = 2*np.pi / data[0]
-data[:2] = np.log10(data[:2] / stas.dnu)
+data[:2] = np.log10(data[:2] / stas.lc)
 data = np.array([np.ravel(temp) for temp in data]).T
 
 pame = para.postpath + "ES1D_zy.dat"

@@ -5,6 +5,23 @@ from struct import pack, unpack
 import os
 
 
+
+
+##### common functions #####
+
+def write_channel(pame, q):
+	ny, nz, nx = q.shape
+	info = np.array([nx, ny, nz]+[0]*(2*nx*nz-3), dtype=np.int32).tobytes() # 2* for 4bit -> 8bit
+	np.hstack([ unpack(nx*nz*'d', info), np.ravel(q) ]).tofile(pame)
+
+def read_channel(pame):
+	with open(pame, 'rb') as fp: nx, ny, nz = unpack('3i', fp.read(12))
+	return np.fromfile(pame, np.float64, offset=(nx*nz)*8).reshape([ny, nz, nx])
+
+###########################
+
+
+
 class DataSetInfo:
 	def __init__(self, path):
 		self.datapath = path
@@ -53,26 +70,10 @@ class DataSetInfo:
 
 
 
-def write_channel(pame, q):
-	ny, nz, nx = q.shape
-	info = np.array([nx, ny, nz]+[0]*(2*nx*nz-3), dtype=np.int32).tobytes() # 2* for 4bit -> 8bit
-	np.hstack([ unpack(nx*nz*'d', info), np.ravel(q) ]).tofile(pame)
-
-def read_channel(pame):
-	with open(pame, 'rb') as fp: nx, ny, nz = unpack('3i', fp.read(12))
-	return np.fromfile(pame, np.float64, offset=(nx*nz)*8).reshape([ny, nz, nx])
-
-
 class Field:
 	def __init__(self, para):
 		self.Nx, self.Ny, self.Nz, self.Nxz = para.Nx, para.Ny, para.Nz, para.Nxz
 		self.fieldpath = para.fieldpath
-
-		# N = (Ny+1) * Nxz;
-		# with open(pame, 'rb') as fp:
-		# 	fp.seek(Nxz*8) # skipping info section
-		# 	q = np.reshape( unpack(N*'d', fp.read(N*8)), [Ny+1, Nz, Nx] )
-		# return q
 
 	def read_fluc_mean(self, name, stagtyp=4):
 		q = self.__to_cellcenter(
@@ -115,16 +116,6 @@ class Statis:
 			print("Reading umean: tstep", tstep)
 			u = self.feld.read_mean("U%08i.bin"%tstep, stagtyp=1)
 			self.Um += u / len(self.para.tsteps)
-
-	def inner_scale(self):
-		dU = 0.5 * (self.Um[1] - self.Um[0] + self.Um[-2] - self.Um[-1])
-		dy = self.para.yc[1] - self.para.yc[0]
-
-		self.tauw = dU / dy / self.para.Re
-		self.utau = self.tauw**0.5
-		self.dnu = 1.0 / self.para.Re / self.utau
-		self.tnu  = self.dnu / self.utau
-		self.Ret = 1.0 / self.dnu # channel height is taken for 2.0
 
 	def calc_statis(self):
 		nx, ny, nz = self.para.Nx, self.para.Ny + 1, self.para.Nz
@@ -172,8 +163,6 @@ class Statis:
 	def __flipk(self, q):
 		ny, nz, nx = q.shape
 		nxc, nzc = int(nx/2+1), int(nz/2+1)
-		# q[:,:,1:] += q[:,:,:0:-1]
-		# q[:,1:,:] += q[:,:0:-1,:]
 		q[:, :, 1:nxc] += q[:, :, :-nxc:-1]
 		q[:, 1:nzc, :] += q[:, :-nzc:-1, :]
 		if not (nx % 2): q[:,:,nxc-1] /= 2
@@ -205,6 +194,30 @@ class Statis:
 		self.Euv[:] = 0.5 * (self.Euv - self.Euv[::-1])
 		self.Evw[:] = 0.5 * (self.Evw - self.Evw[::-1])
 		self.Euw[:] = 0.5 * (self.Euw + self.Euw[::-1])
+
+	def calc_wallscale(self):
+		nudUdy = np.gradient(self.Um, self.para.yc) / self.para.Re
+
+		# self.tauw = 0.5 * (nudUdy[0] - nudUdy[-1])
+		# integrate to get tauw using relation dU^+/dy^+ - <u'v'>^+ = 1 - y\bar, accurancy tested to be good ( O(10e-4) )
+		self.tauw = np.sum( abs(nudUdy - self.R12)[1:-1] * (self.para.y[2:] - self.para.y[1:-1]) ) / (0.25 * self.para.Ly**2)
+
+		self.utau = self.tauw**0.5
+		self.dnu = 1.0 / self.para.Re / self.utau
+		self.tnu  = self.dnu / self.utau
+		self.Ret = 1.0 / self.dnu # channel height is taken for 2.0
+
+	def inner_scale(self):
+		self.lc = self.dnu
+		self.tc = self.tnu
+		self.uc = self.utau
+		self.pc = self.tauw
+
+	def outer_scale(self):
+		self.lc = 1.
+		self.tc = 1.
+		self.uc = 1.
+		self.pc = 1.
 
 
 

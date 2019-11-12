@@ -112,6 +112,10 @@ class Scla: private Mesh, public Bulk
 
 		Mesh& meshGet() { return *this; };
 
+		using Bulk::layerCpy;
+		using Bulk::layersAdd;
+		using Bulk::layersMlt;
+		using Bulk::bulkCpy;
 		Scla& layerCpy (Scla &src, int j1=0, int j0=0) { Bulk::layerCpy (src.bulkGet(), j1, j0); return *this; };
 		Scla& layersAdd(Scla &src, int j1=0, int j0=0) { Bulk::layersAdd(src.bulkGet(), j1, j0); return *this; };
 		Scla& layersMlt(Scla &src, int j1=0, int j0=0) { Bulk::layersMlt(src.bulkGet(), j1, j0); return *this; };

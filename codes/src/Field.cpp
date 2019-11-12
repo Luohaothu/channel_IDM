@@ -143,27 +143,41 @@ void Field::applyBC()
 void Field::applyBC(double dt)
 /* apply Dirichlet BC on velocities, with boundary time derivative considered */
 {
+	int i, k;
 	Scla &U1 = U.com1,   &U2 = U.com2,   &U3 = U.com3;
 	Scla &H1 = UH.com1,  &H2 = UH.com2,  &H3 = UH.com3;
 	Scla &B1 = UBC.com1, &B2 = UBC.com2, &B3 = UBC.com3;
-	Scla ul(Mesh(Nx,0,Nz,Lx,0,Lz)), vl(ul.meshGet()), wl(ul.meshGet());
-	
-	ul.layerCpy(U1,0,0).layerMlt(-1); ul.layersAdd(B1,0,0).layerMlt(1.0/dt);
-	vl.layerCpy(U2,0,1).layerMlt(-1); vl.layersAdd(B2,0,0).layerMlt(1.0/dt);
-	wl.layerCpy(U3,0,0).layerMlt(-1); wl.layersAdd(B3,0,0).layerMlt(1.0/dt);
-	H1.layerCpy(ul, 0);
-	H2.layerCpy(vl, 1);
-	H3.layerCpy(wl, 0);
 
-	ul.layerCpy(U1,0,Ny).layerMlt(-1); ul.layersAdd(B1,0,1).layerMlt(1.0/dt);
-	vl.layerCpy(U2,0,Ny).layerMlt(-1); vl.layersAdd(B2,0,1).layerMlt(1.0/dt);
-	wl.layerCpy(U3,0,Ny).layerMlt(-1); wl.layersAdd(B3,0,1).layerMlt(1.0/dt);
-	H1.layerCpy(ul, Ny);
-	H2.layerCpy(vl, Ny);
-	H3.layerCpy(wl, Ny);
+	for (k=0; k<Nz; k++) {
+	for (i=0; i<Nx; i++) {
+		H1.id(i,0,k) = (B1.id(i,0,k) - U1.id(i,0,k)) / dt;
+		H2.id(i,1,k) = (B2.id(i,0,k) - U2.id(i,1,k)) / dt;
+		H3.id(i,0,k) = (B3.id(i,0,k) - U3.id(i,0,k)) / dt;
 
-	ul.meshGet().freeall();
+		H1.id(i,Ny,k) = (B1.id(i,1,k) - U1.id(i,Ny,k)) / dt;
+		H2.id(i,Ny,k) = (B2.id(i,1,k) - U2.id(i,Ny,k)) / dt;
+		H3.id(i,Ny,k) = (B3.id(i,1,k) - U3.id(i,Ny,k)) / dt;
+	}}
 	this->applyBC();
+
+
+	// Scla ul(Mesh(Nx,0,Nz,Lx,0,Lz)), vl(ul.meshGet()), wl(ul.meshGet());
+	
+	// ul.layerCpy(U1,0,0).layerMlt(-1); ul.layersAdd(B1,0,0).layerMlt(1.0/dt);
+	// vl.layerCpy(U2,0,1).layerMlt(-1); vl.layersAdd(B2,0,0).layerMlt(1.0/dt);
+	// wl.layerCpy(U3,0,0).layerMlt(-1); wl.layersAdd(B3,0,0).layerMlt(1.0/dt);
+	// H1.layerCpy(ul, 0);
+	// H2.layerCpy(vl, 1);
+	// H3.layerCpy(wl, 0);
+
+	// ul.layerCpy(U1,0,Ny).layerMlt(-1); ul.layersAdd(B1,0,1).layerMlt(1.0/dt);
+	// vl.layerCpy(U2,0,Ny).layerMlt(-1); vl.layersAdd(B2,0,1).layerMlt(1.0/dt);
+	// wl.layerCpy(U3,0,Ny).layerMlt(-1); wl.layersAdd(B3,0,1).layerMlt(1.0/dt);
+	// H1.layerCpy(ul, Ny);
+	// H2.layerCpy(vl, Ny);
+	// H3.layerCpy(wl, Ny);
+
+	// ul.meshGet().freeall();
 }
 
 void Field::removeSpanMean()
