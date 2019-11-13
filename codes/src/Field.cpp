@@ -72,13 +72,7 @@ void Field::initField(Field &field)
 {
 	Scla *src[4] = {&field.U.com1, &field.U.com2, &field.U.com3, &field.P};
 	Scla *dst[4] = {&U.com1, &U.com2, &U.com3, &P};
-
 	for (int n=0; n<4; n++) Interp(*src[n], *dst[n]).interpolate(n==1?'V':'U');
-	
-	// for (int n=0; n<4; n++) {
-	// 	field.DP.bulkCpy(*src[n]);
-	// 	dst[n]->bulkCpy(DP.interpolate(field.DP));
-	// }
 }
 
 
@@ -92,11 +86,11 @@ void Field::bcond(int tstep)
 	UBC.com3.bulkSet(0);
 }
 
-void Field::bcond(Vctr &UBC0)
+void Field::bcond(Vctr &U0)
 {
-	UBC.com1.bulkCpy(UBC0.com1);
-	UBC.com2.bulkCpy(UBC0.com2);
-	UBC.com3.bulkCpy(UBC0.com3);
+	Interp(U0.com1, UBC.com1).interpolate2('U');
+	Interp(U0.com2, UBC.com2).interpolate2('V');
+	Interp(U0.com3, UBC.com3).interpolate2('U');
 }
 
 
@@ -159,25 +153,6 @@ void Field::applyBC(double dt)
 		H3.id(i,Ny,k) = (B3.id(i,1,k) - U3.id(i,Ny,k)) / dt;
 	}}
 	this->applyBC();
-
-
-	// Scla ul(Mesh(Nx,0,Nz,Lx,0,Lz)), vl(ul.meshGet()), wl(ul.meshGet());
-	
-	// ul.layerCpy(U1,0,0).layerMlt(-1); ul.layersAdd(B1,0,0).layerMlt(1.0/dt);
-	// vl.layerCpy(U2,0,1).layerMlt(-1); vl.layersAdd(B2,0,0).layerMlt(1.0/dt);
-	// wl.layerCpy(U3,0,0).layerMlt(-1); wl.layersAdd(B3,0,0).layerMlt(1.0/dt);
-	// H1.layerCpy(ul, 0);
-	// H2.layerCpy(vl, 1);
-	// H3.layerCpy(wl, 0);
-
-	// ul.layerCpy(U1,0,Ny).layerMlt(-1); ul.layersAdd(B1,0,1).layerMlt(1.0/dt);
-	// vl.layerCpy(U2,0,Ny).layerMlt(-1); vl.layersAdd(B2,0,1).layerMlt(1.0/dt);
-	// wl.layerCpy(U3,0,Ny).layerMlt(-1); wl.layersAdd(B3,0,1).layerMlt(1.0/dt);
-	// H1.layerCpy(ul, Ny);
-	// H2.layerCpy(vl, Ny);
-	// H3.layerCpy(wl, Ny);
-
-	// ul.meshGet().freeall();
 }
 
 void Field::removeSpanMean()

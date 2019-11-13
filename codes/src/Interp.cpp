@@ -251,6 +251,23 @@ void Interp::interpolate(char stgtyp)
 	mid.meshGet().freeall();
 }
 
+void Interp::interpolate2(char stgtyp)
+{
+	int j;
+	Scla mid(Mesh(Nx0,Ny1,Nz0,Lx0,Ly1,Lz0));
+	memcpy(mid.meshGet().y, mesh1.y, sizeof(double) * (Ny1+1));
+	memcpy(mid.meshGet().yc,mesh1.yc,sizeof(double) * (Ny1+1));
+
+	Interp int1(src,mid), int2(mid,dst);
+
+	for (j=(stgtyp=='U'?0:1); j<=Ny1; j++) {
+		int1.layerY(j, stgtyp);
+		int2.layerPrdLin(j, j);
+	}
+
+	mid.meshGet().freeall();
+}
+
 
 // Scla& Scla::interpolate(Scla &src)
 // /* initiate flow field from given fields, interpolated to the current grid */

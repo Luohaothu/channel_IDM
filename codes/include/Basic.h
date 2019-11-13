@@ -34,11 +34,6 @@ class Bulk
 		double* bulkAdd (double a);
 		double* bulkMlt (double a);
 
-		// Bulk& layerCpy (Bulk &b, int j1=0, int j0=0) { this->layerCpy (b.bulkGet(), j1, j0); return *this; };
-		// Bulk& layersAdd(Bulk &b, int j1=0, int j0=0) { this->layersAdd(b.bulkGet(), j1, j0); return *this; };
-		// Bulk& layersMlt(Bulk &b, int j1=0, int j0=0) { this->layersMlt(b.bulkGet(), j1, j0); return *this; };
-		// Bulk& bulkCpy  (Bulk &b) { this->bulkCpy(b.bulkGet()); return *this; };
-
 		// IO functions
 		void fileIO(char *path, char *name, char mode);
 		void debug_AsciiOutput(char *path, char *name, int j1, int j2);
@@ -124,8 +119,6 @@ class Scla: private Mesh, public Bulk
 		Scla& layerUG2CC(Scla &dst, int j1=0, int j0=0) { this->layerUG2CC(dst.bulkGet(), j1, j0); return dst; };
 		Scla& layerVG2CC(Scla &dst, int j1,   int j0)   { this->layerVG2CC(dst.bulkGet(), j1, j0); return dst; };
 		Scla& layerWG2CC(Scla &dst, int j1=0, int j0=0) { this->layerWG2CC(dst.bulkGet(), j1, j0); return dst; };
-
-		// Scla& interpolate(Scla &src);
 };
 
 

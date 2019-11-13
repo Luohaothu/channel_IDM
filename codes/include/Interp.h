@@ -13,7 +13,8 @@ class Interp
 		void layerPrdFlt(int j0, int j1);
 		void layerTriFlt(int j0, int j1);
 		void layerY(int j1, char stgtyp='U');
-		void interpolate(char stgtyp);
+		void interpolate(char stgtyp);	// 3D interpolation, wall-parallel prior
+		void interpolate2(char stgtyp);	// 3D interpolation, wall-normal prior
 
 	private:
 		Scla &src, &dst;

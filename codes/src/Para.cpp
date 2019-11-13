@@ -9,7 +9,7 @@ using namespace std;
 
 
 
-Para::Para(char filename[1024])
+Para::Para(char workpath[1024])
 {
 	/* initiate default parameters */
 
@@ -48,8 +48,8 @@ Para::Para(char filename[1024])
 	nprobe = 0;
 	jprbs[0] = 0;
 
-	/* if filename provided, read the file */
-	if (filename) this->readPara(filename);
+	/* if workpath provided, read the input file */
+	if (workpath != NULL) this->readPara(workpath);
 }
 
 
@@ -63,10 +63,10 @@ void parseJprbs(int *jprbs, char *str)
 		else { jprbs[0] = j-1; break; }
 	}
 }
-void Para::readPara(char filename[1024])
+void Para::readPara(char workpath[1024])
 {
 	char str[1024], *s;
-	FILE *fp = fopen(filename, "r");
+	FILE *fp = fopen(strcat(strcpy(str, workpath), "XINDAT"), "r");
 
 	while ( fgets(str, 1024, fp) ) {
 		if ( (s = strstr(str, "//")) )	{ *s = '\0'; }	// strip the comments
@@ -95,6 +95,13 @@ void Para::readPara(char filename[1024])
 		if (strstr(str, "nprobe")   ) { s = strchr(str, '='); sscanf(++s, "%i",  & nprobe); }
 		if (strstr(str, "jprbs")    ) { parseJprbs(jprbs, str); }
 	}
+
+	// change relative-to-XINDAT paths to be absolute or relative to the executable
+	strcpy(fieldpath, strcat(strcpy(str, workpath), fieldpath));
+	strcpy(probepath, strcat(strcpy(str, workpath), probepath));
+	strcpy(statpath, strcat(strcpy(str, workpath), statpath));
+	strcpy(postpath, strcat(strcpy(str, workpath), postpath));
+	if (inpath[0] != '/' && inpath[0] != '\\') strcpy(inpath, strcat(strcpy(str, workpath), inpath));
 }
 
 

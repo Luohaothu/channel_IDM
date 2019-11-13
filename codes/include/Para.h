@@ -4,7 +4,7 @@
 class Para
 {
 	public:
-		Para(char filename[1024] = NULL);
+		Para(char workpath[1024]); // default workpath is where the executable exists
 
 		// file paths
 		char fieldpath[1024];
@@ -41,7 +41,7 @@ class Para
 		int nprobe;			// step interval for writing time serials of probed layers (0 for not outputing)
 		int jprbs[1024];	// layer indexes of layers to be probed (jprbs[0] store the number of layers)
 
-		void readPara(char filename[1024]);	// if no filename if provided, initiate with debug parameters
+		void readPara(char workpath[1024]);	// if NULL is provided, use the current path and initiate with debug parameters
 		void showPara();
 };
 

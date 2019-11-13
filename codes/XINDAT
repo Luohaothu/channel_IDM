@@ -3,7 +3,7 @@
 // update allowed during computation
 // *********************************
 
-// file paths (must be relative paths)
+// file paths (relative paths with respect to XINDAT)
 fieldpath = "fielddata/"
 probepath = "probedata/"
 statpath = "statdata/"
@@ -19,8 +19,8 @@ dt = 5e-3		// time step length
 
 // time step control
 Nt = 1000000	// total time steps to evolve
-nwrite = 2000	// step interval for writing whole fields (0 for not outputing)
-nprint = 50		// step interval for printing and updating log of computation state (0 for not outputing)
+nwrite = 1000	// step interval for writing whole fields (0 for not outputing)
+nprint = 100	// step interval for printing and updating log of computation state (0 for not outputing)
 nprobe = 0		// step interval for writing time serials of probed layers (0 for not outputing)
 
 // probe control
@@ -33,7 +33,7 @@ jprbs = 0		// layer indexes of layers to be probed (jprbs[0] store the number of
 
 // initial settings
 nread = 2000	// step number of fields to read for continuing computation (0 for not inputing)
-inpath = ""		// path of the continue computation files, can be relative or absolute
+inpath = ""		// path of the continue computation files (relative paths with respect to XINDAT, or absolute paths)
 inener = 0.5	// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
 
 

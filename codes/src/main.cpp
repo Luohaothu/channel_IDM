@@ -14,33 +14,12 @@ using namespace std;
 
 double initiate(Field &field, Para &para);
 void output(int tstep, double time, Para &para, Field &field, Statis &stas);
-void input (int tstep, Para &para);
+void input (int tstep, Para &para, char workpath[1024]);
 
-
-
-// Vctr& BC_generator(double bc_time)
-// {
-// 	static Para para("bcpath/XINDAT");
-// 	static Mesh mesh(para.Nx, para.Ny, para.Nz);
-// 	if (mesh.checkYmesh(mesh.y)) mesh.initYmesh (para.Lx, para.Ly, para.Lz, mesh.getYmesh(para.dy_min, para.Ly));
-// 	static Field field(mesh);
-// 	static double time = initiate(field, para);
-// 	static int tstep = (time < 1e-10 ? 0 : para.nread);
-
-// 	while (bc_time - time > 1e-10) {
-// 		time += para.dt;
-
-// 		field.bcond();
-// 		field.getnu(para.Re, 0);
-// 		field.getup(para.dt, para.nthrds);
-// 	}
-
-// 	return field.UBC;
-// }
 
 int main()
 {
-	Para para("XINDAT");
+	Para para("");
 	para.showPara();
 
 	Mesh mesh(para.Nx, para.Ny, para.Nz, para.Lx, para.Ly, para.Lz);
@@ -49,6 +28,7 @@ int main()
 
 	Field field(mesh);
 	Statis stas(mesh);
+
 	double time = initiate(field, para);
 	int tstep = (time < 1e-10 ? 0 : para.nread); // continue last case or start a new case depending on whether a continue time is read
 	
@@ -65,7 +45,7 @@ int main()
 		if (para.bftype == 1) field.removeSpanMean();	// for MFU
 		
 		output(tstep, time, para, field, stas);
-		input (tstep, para);
+		input (tstep, para, "");
 	}
 
 }
@@ -75,34 +55,33 @@ int main()
 
 double initiate(Field &field, Para &para)
 {
+	double time = 0;
+
 	if (para.nread == 0) {
 		field.initField(para.inener);
 		cout << endl << "Flow fields initiated from laminar." << endl;
-		return 0;
 	}
+	else {
+		Para para0(para.inpath);
+		cout << endl << "Parameters for continue computing:" << endl;
+		para0.showPara();
 
-	char str[1024];
+		Mesh mesh0(para0.Nx, para0.Ny, para0.Nz, para0.Lx, para0.Ly, para0.Lz);
+		mesh0.initYmesh(mesh0.getYmesh(para0.statpath));
 
-	sprintf(str, "%s%s", para.inpath, "XINDAT");
-	Para para0(str);
-	cout << endl << "Parameters for continue computing:" << endl;
-	para0.showPara();
+		Field field0(mesh0);
+		field0.readField(para0.fieldpath, para.nread);
 
-	sprintf(str, "%s%s", para.inpath, para0.statpath);
-	Mesh mesh0(para0.Nx, para0.Ny, para0.Nz, para0.Lx, para0.Ly, para0.Lz);
-	mesh0.initYmesh(mesh0.getYmesh(str));
+		field.initField(field0);
+		cout << endl << "Flow fields initiated from existing fields." << endl;
 
-	sprintf(str, "%s%s", para.inpath, para0.fieldpath);
-	Field field0(mesh0);
-	field0.readField(str, para.nread);
-	field.initField(field0);
-	cout << endl << "Flow fields initiated from existing fields." << endl;
+		// read continue time for inplace continuing computation
+		if (! strcmp(para0.statpath, para.statpath)) // not the best way to determine whether two paths are quivalent
+			time = Statis(mesh0).getLogtime(para0.statpath, para.nread);
 
-	sprintf(str, "%s%s", para.inpath, para0.statpath);
-	Statis stas0(mesh0);
-	if (! strcmp(para.inpath, "")) // only read continue time for inplace (inpath="") continue computation
-		return stas0.getLogtime(str, para.nread);
-	else return 0;
+		mesh0.freeall();
+	}
+	return time;
 }
 
 void output(int tstep, double time, Para &para, Field &field, Statis &stas)
@@ -118,12 +97,12 @@ void output(int tstep, double time, Para &para, Field &field, Statis &stas)
 	}
 }
 
-void input(int tstep, Para &para)
+void input(int tstep, Para &para, char workpath[1024])
 {
 	static time_t last_time = 0;
-	char filename[] = "XINDAT";
 
 	if (tstep % para.nprint == 0) {
+		char filename[1024]; strcat(strcpy(filename, workpath), "XINDAT");
 		struct stat buf;
 		stat(filename, &buf);
 
@@ -132,8 +111,8 @@ void input(int tstep, Para &para)
 		if (buf.st_mtime > last_time) {
 			last_time = buf.st_mtime;
 
-			para.readPara(filename);
-			cout << endl << "Parameters updated at step " << tstep << " as:" << endl;
+			para.readPara(workpath);
+			cout << endl << filename << " updated at step " << tstep << " as:" << endl;
 			para.showPara();
 		}
 	}
@@ -142,9 +121,19 @@ void input(int tstep, Para &para)
 
 
 
+/***** time test example *****/
+// # include <sys/time.h>
 
+// struct timeval *time0 = new struct timeval;
+// struct timeval *time1 = new struct timeval;
+// long duration = 0;
 
+// gettimeofday(time0, NULL);
+// ///// codes to be timed
+// gettimeofday(time1, NULL);
 
+// duration = 1e6 * (time1->tv_sec - time0->tv_sec) + (time1->tv_usec - time0->tv_usec);
+/*****************************/
 
 
 
