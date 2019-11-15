@@ -118,6 +118,10 @@ void Field::getnu(double Re, int bftype)
 			this->sgs.dynamicsmarg(NU, U);
 			NU.bulkAdd(1.0 / Re);
 		break;
+		case 4:
+			this->sgs.dynamicvreman(NU, U, Re);
+			NU.bulkAdd(1.0 / Re);
+		break;
 		default:
 			NU.bulkSet(1.0 / Re);
 	}

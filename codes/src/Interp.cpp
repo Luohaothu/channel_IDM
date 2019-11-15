@@ -201,9 +201,12 @@ void Interp::layerTriFlt(int j0, int j1)
 		imkp = Nx0 * kp0 + im0;
 		ipkm = Nx0 * km0 + ip0;
 
-		q1[idx] = 0.25 * q0[idx] + \
-			0.125 * (q0[im] + q0[ip] + q0[km] + q0[kp]) + \
-			0.0625 * (q0[imkm] + q0[ipkp] + q0[imkp] + q0[ipkm]);
+		// q1[idx] = 0.25 * q0[idx] + \
+		// 	0.125 * (q0[im] + q0[ip] + q0[km] + q0[kp]) + \
+		// 	0.0625 * (q0[imkm] + q0[ipkp] + q0[imkp] + q0[ipkm]);
+		q1[idx] = 4./9. * q0[idx] + \
+			1./9. * (q0[im] + q0[ip] + q0[km] + q0[kp]) + \
+			1./36. * (q0[imkm] + q0[ipkp] + q0[imkp] + q0[ipkm]);
 	}}
 }
 

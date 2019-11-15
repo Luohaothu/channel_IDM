@@ -129,7 +129,7 @@ void Mesh::initYmesh(double *ymesh)
 bool Mesh::checkYmesh(char *path)
 {
 	// check failed
-	if ( fabs((y[Ny]-y[1]) - Ly) > 1e-10 ) return false;
+	if ( fabs((y[Ny]-y[1]) - Ly) > 1e-10 ) return false; // need modyfication. the initial value of y in the memory is random.
 	// check passed
 	if (path) {
 		// write grid file to specified path

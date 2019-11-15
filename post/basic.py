@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.fft import fft2 as phys
 from numpy.fft import ifft2 as spec
+from scipy.integrate import trapz
 from struct import pack, unpack
 import os
 
@@ -200,7 +201,8 @@ class Statis:
 
 		# self.tauw = 0.5 * (nudUdy[0] - nudUdy[-1])
 		# integrate to get tauw using relation dU^+/dy^+ - <u'v'>^+ = 1 - y\bar, accurancy tested to be good ( O(10e-4) )
-		self.tauw = np.sum( abs(nudUdy - self.R12)[1:-1] * (self.para.y[2:] - self.para.y[1:-1]) ) / (0.25 * self.para.Ly**2)
+		# self.tauw = np.sum( abs(nudUdy - self.R12)[1:-1] * (self.para.y[2:] - self.para.y[1:-1]) ) / (0.25 * self.para.Ly**2)
+		self.tauw = trapz(abs(nudUdy - self.R12), self.para.yc) / (0.25 * self.para.Ly**2)
 
 		self.utau = self.tauw**0.5
 		self.dnu = 1.0 / self.para.Re / self.utau

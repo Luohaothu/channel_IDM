@@ -98,6 +98,7 @@ double* Vctr::gradient(int i, int j, int k)
 	w2 = 0.25 * ( w[idx] + w[ip] + w[kp] + w[ipkp] );
 	w1 = 0.25 * ( w[idx] + w[im] + w[kp] + w[imkp] );
 	gr[2] = (w2-w1) / dx;
+
 	// a21
 	u2 = ( (u[idx]+u[ip]) * dy[j+1] + (u[jp]+u[ipjp]) * dy[j] ) / (4.0*h[j+1]);
 	u1 = ( (u[idx]+u[ip]) * dy[j-1] + (u[jm]+u[ipjm]) * dy[j] ) / (4.0*h[j]);
@@ -108,6 +109,7 @@ double* Vctr::gradient(int i, int j, int k)
 	w2 = ( (w[idx]+w[kp]) * dy[j+1] + (w[jp]+w[jpkp]) * dy[j] ) / (4.0*h[j+1]);
 	w1 = ( (w[idx]+w[kp]) * dy[j-1] + (w[jm]+w[jmkp]) * dy[j] ) / (4.0*h[j]);
 	gr[5] = (w2-w1) / dy[j];
+	
 	// a31
 	u2 = 0.25 * ( u[idx] + u[ip] + u[kp] + u[ipkp] );
 	u1 = 0.25 * ( u[idx] + u[ip] + u[km] + u[ipkm] );
