@@ -37,8 +37,8 @@ rscl1(Lx0*Lz0/Lx1/Lz1)
 	nif = new int [Nx1];
 	nkf = new int [Nz1];
 
-	j0u = new int [Ny1];
-	j0v = new int [Ny1];
+	j0u = new int [Ny1+1];
+	j0v = new int [Ny1+1];
 
 	int i0, j0, k0, i1, j1, k1;
 	double x0, y0, z0, x1, y1, z1;
@@ -84,13 +84,12 @@ rscl1(Lx0*Lz0/Lx1/Lz1)
 		while (y0 <= y1 && j0 < Ny0) y0 = mesh0.yc[++j0];
 		j0u[j1] = j0 - 1;
 	}
-	for (j1=1; j1<=Ny1; j1++) {
+	for (j1=0; j1<=Ny1; j1++) {
 		y1 = mesh1.y[j1];
-		if (j1 == 1) y0 = mesh0.y[j0=2];
+		if (j1 == 0) y0 = mesh0.y[j0=1]; // note: Y1[0] also participate in interpolation, but if Y1[0]==0, it should access the wall value 
 		while (y0 <= y1 && j0 < Ny0) y0 = mesh0.y[++j0];
 		j0v[j1] = j0 - 1;
 	}
-	j0v[0] = 0;
 }
 
 Interp::~Interp()
@@ -249,7 +248,7 @@ void Interp::interpolate(char stgtyp)
 	Interp int1(src,mid), int2(mid,dst);
 
 	for (j=0; j<=Ny0; j++) int1.layerPrdLin(j, j);
-	for (j=(stgtyp=='U'?0:1); j<=Ny1; j++) int2.layerY(j, stgtyp);
+	for (j=0; j<=Ny1; j++) int2.layerY(j, stgtyp);
 
 	mid.meshGet().freeall();
 }
@@ -263,7 +262,7 @@ void Interp::interpolate2(char stgtyp)
 
 	Interp int1(src,mid), int2(mid,dst);
 
-	for (j=(stgtyp=='U'?0:1); j<=Ny1; j++) {
+	for (j=0; j<=Ny1; j++) {
 		int1.layerY(j, stgtyp);
 		int2.layerPrdLin(j, j);
 	}
