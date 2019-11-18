@@ -11,7 +11,7 @@ using namespace std;
 
 
 
-Mesh::Mesh(int n1, int n2, int n3, double l1, double l2, double l3, double *ymesh):
+Mesh::Mesh(int n1, int n2, int n3, double l1, double l2, double l3, double dy_min, char* path):
 /* allocate memory for pointers */
 Nx(n1), Ny(n2), Nz(n3), Nxz(n1 * n3),
 Lx(l1), Ly(l2), Lz(l3), vol(Lx * Ly * Lz),
@@ -61,7 +61,8 @@ dz((double) Lz / Nz), dz2(dz * dz)
 		ima[i] = (i-1+Nx) % Nx;
 	}
 	// initiate y mesh
-	if (ymesh) this->initYmesh(ymesh);
+	if (dy_min > 0){ this->getYmesh(dy_min);this->initYmesh(); }
+	else if (path) { this->getYmesh(path);  this->initYmesh(); }
 }
 
 void Mesh::freeall()
@@ -77,14 +78,12 @@ void Mesh::freeall()
 }
 
 
-void Mesh::initYmesh(double *ymesh)
+void Mesh::initYmesh()
 {
 	int i, j, k;
 
-	if (! ymesh) cout << "\nNo valid ymesh provided !" << endl;
-
 	// y coordinates
-	memcpy(this->y, ymesh, sizeof(double) * (Ny+1));
+	if ( fabs((y[Ny]-y[1]) - Ly) > 1e-10 ) { cout << endl << "No valid Y mesh provided !" << endl; exit(0); }	// check failed
 	y[0] = 0;
 	yc[0] = y[1];
 	yc[Ny] = y[Ny];
@@ -126,26 +125,15 @@ void Mesh::initYmesh(double *ymesh)
 	}
 }
 
-bool Mesh::checkYmesh(char *path)
+void Mesh::writeYmesh(char *path)
 {
-	// check failed
-	if ( fabs((y[Ny]-y[1]) - Ly) > 1e-10 ) return false; // need modyfication. the initial value of y in the memory is random.
-	// check passed
-	if (path) {
-		// write grid file to specified path
-		FILE *fp;
-		char str[1024];
-		sprintf(str, "%sCHANNEL.GRD", path);
-		fp = fopen(str, "w");
-			for (int j=0; j<=Ny; j++) {
-				sprintf(str, "%.18e\n", y[j]);
-				fputs(str, fp);
-			}
-		fclose(fp);
-		// print grid information
-		cout << "\ndy_min = " << y[2]-y[1] << ", dy_max = " << y[Ny/2+1]-y[Ny/2] << endl;
-	}
-	return true;
+	char str[1024];
+	FILE *fp = fopen(strcat(strcpy(str, path), "CHANNEL.GRD"), "w");
+	for (int j=0; j<=Ny; j++) {
+		sprintf(str, "%.18e\n", y[j]);
+		fputs(str, fp);	}
+	fclose(fp);
+	cout << "\ndy_min = " << y[2]-y[1] << ", dy_max = " << y[Ny/2+1]-y[Ny/2] << endl;
 }
 
 
@@ -157,17 +145,14 @@ double hyptan(int j, double gamma, int ny, double ly)
 	double ytild = 2.0 * (j-1) / (ny-1) - 1.0;
 	return 1.0 + delta * tanh(gamma * delta * ytild) / tanh(gamma * delta);
 }
-double* Mesh::getYmesh(double dy_min)
+void Mesh::getYmesh(double dy_min)
 /* generate hyperbolic tangent grid (Newton iteration to determine parameter)
 target equation: F(gamma) = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, l2) - dy_min = 0 */
 {
-	int j;
-	double *ymesh = new double [Ny+1];
-
-	double gamma = 1.0, dgamma = 0.1, grad;
-	double F, F0 = hyptan(2, gamma-dgamma, Ny, Ly) - hyptan(1, gamma-dgamma, Ny, Ly) - dy_min;
+	double F, gamma = 1.0, dgamma = 0.1, grad;
+	double F0 = hyptan(2, gamma-dgamma, Ny, Ly) - hyptan(1, gamma-dgamma, Ny, Ly) - dy_min;
 	// determine hyperbolic tangent parameter
-	for (j=0; j<100; j++) {
+	for (int j=0; j<100; j++) {
 		F = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, Ly) - dy_min;
 		grad = (F-F0) / dgamma;	if (! grad) break;
 		dgamma = - F / grad;	if (! dgamma) break;
@@ -175,27 +160,18 @@ target equation: F(gamma) = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, l2) 
 		F0 = F;
 	}
 	// generate grid
-	ymesh[0] = 0;
-	for (j=1; j<=Ny; j++)
-		ymesh[j] = hyptan(j, gamma, Ny, Ly);
-
-	return ymesh; // need to delete after use
+	y[0] = 0;
+	for (int j=1; j<=Ny; j++)
+		y[j] = hyptan(j, gamma, Ny, Ly);
 }
 
-double* Mesh::getYmesh(char *path)
+void Mesh::getYmesh(char *path)
 /* read grid from file at specified path */
 {
-	FILE *fp;
 	char str[1024];
-	double *ymesh = new double [Ny+1];
-
-	sprintf(str, "%sCHANNEL.GRD", path);
-
-	fp = fopen(str, "r");
-		for (int j=0; j<=Ny; j++)
-			sscanf(fgets(str, 1024, fp), "%le", & ymesh[j]);
+	FILE *fp = fopen(strcat(strcpy(str, path), "CHANNEL.GRD"), "r");
+	for (int j=0; j<=Ny; j++)
+		sscanf(fgets(str, 1024, fp), "%le", & y[j]);
 	fclose(fp);
-
-	return ymesh; // need to delete after use, but currently it may cause problem if delete in initYmesh
 }
 

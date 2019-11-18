@@ -12,111 +12,124 @@
 using namespace std;
 
 
-double initiate(Field &field, Para &para);
-void output(int tstep, double time, Para &para, Field &field, Statis &stas);
-void input (int tstep, Para &para, char workpath[1024]);
+class FluidSolver
+{
+	public:
+		Para para;
+		Mesh mesh;
+		Field field;
+		Statis stas;
+		int tstep;
+		double time;
 
+		FluidSolver(char path[1024]):
+			para(path),
+			mesh(para.Nx,para.Ny,para.Nz, para.Lx,para.Ly,para.Lz, para.dy_min),
+			field(mesh),
+			stas(mesh),
+			tstep(0),
+			time(0)
+			{
+				para.showPara();
+				mesh.writeYmesh(para.statpath);
+				this->initiate();
+				if (tstep == 0)	this->output();
+				
+				XINDAT_modify_time = 0;
+				strcpy(workpath, path);
+			};
+
+		Field& solve(double target_time) {
+			while (target_time - time > 1e-10) {
+				tstep ++;
+				time += para.dt;
+
+				field.bcond(tstep);					// set boundary conditions
+				field.getnu(para.Re, para.bftype);	// get the viscosity field
+				field.getup(para.dt, para.nthrds);	// time evolution
+				if (para.bftype == 1) field.removeSpanMean();	// for MFU
+				
+				this->output();
+				this->input ();
+			}
+			return field;
+		};
+
+		void output()
+		{
+			if (tstep % para.nwrite == 0) {
+				field.writeField(para.fieldpath, tstep);
+				cout << "Files successfully written for step " << tstep << endl;
+			}
+			if (tstep % para.nprint == 0) {
+				stas.check(field.U, field.P, field.NU, para.Re, para.dt);
+				stas.writeProfile(para.statpath);
+				stas.writeLogfile(para.statpath, tstep, time);
+			}
+		};
+
+		void input()
+		{
+			if (tstep % para.nprint == 0) {
+				char filename[1024];
+				struct stat buf;
+				stat(strcat(strcpy(filename, workpath), "XINDAT"), &buf);
+
+				if (buf.st_mtime > XINDAT_modify_time && (int)XINDAT_modify_time != 0) {
+					para.readPara(workpath);
+					cout << endl << filename << " updated at step " << tstep << " as:" << endl;
+					para.showPara();
+				}
+				XINDAT_modify_time = buf.st_mtime;
+			}
+		};
+
+	private:
+		time_t XINDAT_modify_time;
+		char workpath[1024];
+		
+		void initiate()
+		{
+			if (para.nread == 0) {
+				field.initField(para.inener);
+				cout << endl << "Flow fields initiated from laminar." << endl;
+			}
+			else if (! strcmp(Para(para.inpath).statpath, para.statpath)) {
+				tstep = para.nread;
+				time = stas.getLogtime(para.statpath, tstep);
+				field.readField(para.fieldpath, tstep);
+				cout << endl << "Continue from step " << tstep << ", time " << time << endl;
+			}
+			else {
+				Para para0(para.inpath);
+				Mesh mesh0(para0.Nx, para0.Ny, para0.Nz, para0.Lx, para0.Ly, para0.Lz, 0, para0.statpath);
+				Field field0(mesh0);
+				field0.readField(para0.fieldpath, para.nread);
+				field.initField(field0);
+				mesh0.freeall();
+				cout << endl << "Flow fields initiated from existing fields with parameters:" << endl;
+				para0.showPara();
+			}
+		};
+};
 
 int main()
 {
-	Para para("");
-	para.showPara();
+	FluidSolver flow("");
+	while (flow.tstep++ < flow.para.Nt) {
+		flow.time += flow.para.dt;
 
-	Mesh mesh(para.Nx, para.Ny, para.Nz, para.Lx, para.Ly, para.Lz);
-	mesh.initYmesh(mesh.getYmesh(para.dy_min));
-	mesh.checkYmesh(para.statpath);
-
-	Field field(mesh);
-	Statis stas(mesh);
-
-	double time = initiate(field, para);
-	int tstep = (time < 1e-10 ? 0 : para.nread); // continue last case or start a new case depending on whether a continue time is read
-	
-	if (tstep == 0)	output(tstep, time, para, field, stas);
-
-	// main loop
-	while (tstep++ < para.Nt) {
-		time += para.dt;
-
-		field.bcond(tstep);					// set boundary conditions
-		field.getnu(para.Re, para.bftype);	// get the viscosity field
-		field.getup(para.dt, para.nthrds);	// time evolution
-
-		if (para.bftype == 1) field.removeSpanMean();	// for MFU
+		flow.field.bcond(flow.tstep);						// set boundary conditions
+		flow.field.getnu(flow.para.Re, flow.para.bftype);	// get the viscosity field
+		flow.field.getup(flow.para.dt, flow.para.nthrds);	// time evolution
+		if (flow.para.bftype == 1) flow.field.removeSpanMean();	// for MFU
 		
-		output(tstep, time, para, field, stas);
-		input (tstep, para, "");
-	}
-
-}
-
-
-
-
-double initiate(Field &field, Para &para)
-{
-	double time = 0;
-
-	if (para.nread == 0) {
-		field.initField(para.inener);
-		cout << endl << "Flow fields initiated from laminar." << endl;
-	}
-	else {
-		Para para0(para.inpath);
-		cout << endl << "Parameters for continue computing:" << endl;
-		para0.showPara();
-
-		Mesh mesh0(para0.Nx, para0.Ny, para0.Nz, para0.Lx, para0.Ly, para0.Lz);
-		mesh0.initYmesh(mesh0.getYmesh(para0.statpath));
-
-		Field field0(mesh0);
-		field0.readField(para0.fieldpath, para.nread);
-
-		field.initField(field0);
-		cout << endl << "Flow fields initiated from existing fields." << endl;
-
-		// read continue time for inplace continuing computation
-		if (! strcmp(para0.statpath, para.statpath)) // not the best way to determine whether two paths are quivalent
-			time = Statis(mesh0).getLogtime(para0.statpath, para.nread);
-
-		mesh0.freeall();
-	}
-	return time;
-}
-
-void output(int tstep, double time, Para &para, Field &field, Statis &stas)
-{
-	if (tstep % para.nwrite == 0) {
-		field.writeField(para.fieldpath, tstep);
-		cout << "Files successfully written for step " << tstep << endl;
-	}
-	if (tstep % para.nprint == 0) {
-		stas.check(field.U, field.P, field.NU, para.Re, para.dt);
-		stas.writeProfile(para.statpath);
-		stas.writeLogfile(para.statpath, tstep, time);
+		flow.output();
+		flow.input ();
 	}
 }
 
-void input(int tstep, Para &para, char workpath[1024])
-{
-	static time_t last_time = 0;
 
-	if (tstep % para.nprint == 0) {
-		char filename[1024]; strcat(strcpy(filename, workpath), "XINDAT");
-		struct stat buf;
-		stat(filename, &buf);
-
-		if ((int)last_time == 0) last_time = buf.st_mtime;
-
-		if (buf.st_mtime > last_time) {
-			last_time = buf.st_mtime;
-
-			para.readPara(workpath);
-			cout << endl << filename << " updated at step " << tstep << " as:" << endl;
-			para.showPara();
-		}
-	}
-}
 
 
 

@@ -53,7 +53,7 @@ class Bulk
 class Mesh
 {
 	public:
-		Mesh(int n1, int n2, int n3, double l1, double l2, double l3, double *ymesh=NULL);	// here n2=Ny is less than the array dimension by 1
+		Mesh(int n1, int n2, int n3, double l1, double l2, double l3, double dy_min=0, char* path=NULL);	// here n2=Ny is less than the array dimension by 1
 		void freeall();
 
 		const int Nx, Ny, Nz, Nxz;
@@ -77,10 +77,12 @@ class Mesh
 		double kx(int i) { return ( i - ( i > (int)(Nx/2) ? Nx : 0 ) ) * (2.0*PI/Lx); };
 		double kz(int k) { return ( k - ( k > (int)(Nz/2) ? Nz : 0 ) ) * (2.0*PI/Lz); };
 
-		double* getYmesh(double dy_min);
-		double* getYmesh(char *path);
-		void initYmesh(double *ymesh);
-		bool checkYmesh(char *path=NULL);
+		void writeYmesh(char *path);
+
+	private:
+		void getYmesh(double dy_min);
+		void getYmesh(char *path);
+		void initYmesh();
 };
 
 
