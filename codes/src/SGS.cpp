@@ -54,7 +54,7 @@ void SGS::dynamicsmarg(Scla &EV, Vctr &U)
 	double *sr, sra, dlt1, dlt2, u, v, w;
 
 # ifdef SGSDEBUG
-	FILE *fp = fopen("Cd.dat", "a");
+	FILE *fp = fopen("Cd.dat", "w");
 	char str[64];
 # endif
 
@@ -166,38 +166,42 @@ void SGS::dynamicsmarg(Scla &EV, Vctr &U)
 		}}
 
 		/***** calculate eddy viscosity *****/
-		dlt1 = dlt2 = 0;
-
-		for (k=0; k<Nz; k++) {
 		for (i=0; i<Nx; i++) {
+			dlt1 = dlt2 = 0;
 
-			dlt1 +=	L11.id(i,0,k) * M11.id(i,0,k)
-				+	L22.id(i,0,k) * M22.id(i,0,k)
-				+	L33.id(i,0,k) * M33.id(i,0,k)
-				+	L12.id(i,0,k) * M12.id(i,0,k) * 2.
-				+	L23.id(i,0,k) * M23.id(i,0,k) * 2.
-				+	L13.id(i,0,k) * M13.id(i,0,k) * 2.;
+			for (k=0; k<Nz; k++) {
 
-			dlt2 +=	M11.id(i,0,k) * M11.id(i,0,k)
-				+	M22.id(i,0,k) * M22.id(i,0,k)
-				+	M33.id(i,0,k) * M33.id(i,0,k)
-				+	M12.id(i,0,k) * M12.id(i,0,k) * 2.
-				+	M23.id(i,0,k) * M23.id(i,0,k) * 2.
-				+	M13.id(i,0,k) * M13.id(i,0,k) * 2.;
-		}}
+				dlt1 +=	L11.id(i,0,k) * M11.id(i,0,k)
+					+	L22.id(i,0,k) * M22.id(i,0,k)
+					+	L33.id(i,0,k) * M33.id(i,0,k)
+					+	L12.id(i,0,k) * M12.id(i,0,k) * 2.
+					+	L23.id(i,0,k) * M23.id(i,0,k) * 2.
+					+	L13.id(i,0,k) * M13.id(i,0,k) * 2.;
 
-		EV.layerMlt(fmin(fmax(.5*dlt1/dlt2, 0), .5) * pow(dvol[j], 2./3.), j); // |Sij| has been assigned to EV
+				dlt2 +=	M11.id(i,0,k) * M11.id(i,0,k)
+					+	M22.id(i,0,k) * M22.id(i,0,k)
+					+	M33.id(i,0,k) * M33.id(i,0,k)
+					+	M12.id(i,0,k) * M12.id(i,0,k) * 2.
+					+	M23.id(i,0,k) * M23.id(i,0,k) * 2.
+					+	M13.id(i,0,k) * M13.id(i,0,k) * 2.;
+			}
+
+			for (k=0; k<Nz; k++)
+				EV.id(i,j,k) *= fmin(fmax(.5*dlt1/dlt2, 0), .5) * pow(dvol[j], 2./3.); // |Sij| has been assigned to EV
 
 # ifdef SGSDEBUG
-		sprintf(str, "%.18e\t", fmin(fmax(.5*dlt1/dlt2, 0), .5));
-		fputs(str, fp);
+			sprintf(str, "%.18e\t", fmin(fmax(.5*dlt1/dlt2, 0), .5));
+			fputs(str, fp);
 # endif
+			
+		}
+
+# ifdef SGSDEBUG
+		fputs("\n", fp);
+		if (j==Ny-1) fclose(fp);
+# endif
+
 	}
-
-# ifdef SGSDEBUG
-	fputs("\n", fp);
-	fclose(fp);
-# endif
 	
 	EV.layerCpy(EV, 0 , 1);
 	EV.layerCpy(EV, Ny, Ny-1);
