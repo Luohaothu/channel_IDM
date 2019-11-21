@@ -17,7 +17,7 @@ void SGS::smargorinsky(Scla &EV, Vctr &U, double Cs, double Re)
 	int i, j, k;
 	double *sr, sra, dlt, dmp;
 
-	// calculate delta_nu
+	// calculate delta_nu. NOTE: this only applys when boundary is on the wall
 	Scla &U1 = U.com1;
 	double tauw = (0.5/Re) * (
 		(U1.layerMean(1) - U1.layerMean(0))    / h[1]

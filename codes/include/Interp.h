@@ -12,9 +12,9 @@ class Interp
 		void layerPrdLin(int j0, int j1);
 		void layerPrdFlt(int j0, int j1);
 		void layerTriFlt(int j0, int j1);
-		void layerY(int j1, char stgtyp='U');
-		void interpolate(char stgtyp);	// 3D interpolation, wall-parallel prior
-		void interpolate2(char stgtyp);	// 3D interpolation, wall-normal prior
+		void layerY(int j1, char stgtyp);
+		void bulkInterp(char stgtyp);	// 3D interpolation, wall-parallel prior
+		void bulkFilter(char stgtyp);	// wall-normal periodic filtering (prior) with wall-normal interpolation
 
 	private:
 		Scla &src, &dst;
@@ -26,7 +26,7 @@ class Interp
 		const double Lx1, Ly1, Lz1, dx1, dz1;
 		const double rscl0, rscl1;
 
-		int *i0l, *k0l;
-		int *i0f, *k0f, *nif, *nkf;
-		int *j0u, *j0v;
+		int *i0l, *k0l;				// indeces for wall paralell interpolation
+		int *i0f, *k0f, *nif, *nkf;	// indeces for wall paralell filtering
+		int *j0u, *j0v, *j0x;		// indeces for wall normal interpolation
 };

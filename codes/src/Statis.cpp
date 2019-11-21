@@ -94,19 +94,58 @@ double Statis::checkMean(Vctr &U, Scla &P, Scla &NU)
 	return velm[0];
 }
 
-// note: checkMean() must be called before this function
-double Statis::checkTauw(double Re)
-/* calculate three components of wall stress */
-/* tau_2i = 2 nu S_2i; S_2i = 0.5 ( du_i/dy + dv/dx_i ) */
-/* applying no-slip BC, tau_21 = nu du/dy, tau_22 = 2 nu dv/dy, tau_23 = nu dw/dy */
+double Statis::checkTaub(Vctr &U, double Re)
+/* calculate three components of total stress acting on the boundary */
+/* tau_2i = 2 nu S_2i - <v'u_i'>; S_2i = 0.5 ( du_i/dy + dv/dx_i ) */
+/* applying mass conservation, on the boundary tau_2i = nu d<u_i>/dy - <v'u_i'> */
 {
-	double taud, tauu, *vel[3] = {Um, Vm, Wm};
-	for (int i=0; i<3; i++) {
-		taud = ( vel[i][1]	- vel[i][0]		) / h[1];
-		tauu = ( vel[i][Ny] - vel[i][Ny-1]	) / h[Ny];
-		tauw[i] = 0.5 * ( taud - tauu ) * ( i==1 ? (2.0/Re) : (1.0/Re) );
-	}
-	return tauw[0];
+	double qm1, qm2;
+	Scla q(Mesh(Nx,0,Nz,Lx,0,Lz)), v(q.meshGet());
+
+
+	U.com2.layerVG2CC(v, 0, 0).layerAdd(-v.layerMean());
+
+	qm2 = U.com1.layerUG2CC(q, 0, 1).layerMean();
+	U.com1.layerUG2CC(q, 0, 0).layerAdd(-(qm1 = q.layerMean()));
+	taub[0] = 1./Re * (qm2 - qm1) / h[1] - q.layersMlt(v).layerMean();
+
+	qm2 = U.com2.layerVG2CC(q, 0, 1).layerMean();
+	U.com2.layerVG2CC(q, 0, 0).layerAdd(-(qm1 = q.layerMean()));
+	taub[1] = 1./Re * (qm2 - qm1) / h[1] - q.layersMlt(v).layerMean();
+
+	qm2 = U.com3.layerWG2CC(q, 0, 1).layerMean();
+	U.com3.layerWG2CC(q, 0, 0).layerAdd(-(qm1 = q.layerMean()));
+	taub[2] = 1./Re * (qm2 - qm1) / h[1] - q.layersMlt(v).layerMean();
+
+
+	U.com2.layerVG2CC(v, 0, Ny).layerAdd(-v.layerMean());
+
+	qm1 = U.com1.layerUG2CC(q, 0, Ny-1).layerMean();
+	U.com1.layerUG2CC(q, 0, Ny).layerAdd(-(qm2 = q.layerMean()));
+	taub[0] -= 1./Re * (qm2 - qm1) / h[1] - q.layersMlt(v).layerMean();
+
+	qm1 = U.com2.layerVG2CC(q, 0, Ny-1).layerMean();
+	U.com2.layerVG2CC(q, 0, Ny).layerAdd(-(qm2 = q.layerMean()));
+	taub[1] -= 1./Re * (qm2 - qm1) / h[1] - q.layersMlt(v).layerMean();
+
+	qm1 = U.com3.layerWG2CC(q, 0, Ny-1).layerMean();
+	U.com3.layerWG2CC(q, 0, Ny).layerAdd(-(qm2 = q.layerMean()));
+	taub[2] -= 1./Re * (qm2 - qm1) / h[1] - q.layersMlt(v).layerMean();
+
+
+	taub[0] *= .5;
+	taub[1] *= .5;
+	taub[2] *= .5;
+
+	q.meshGet().freeall();
+
+	// double taud, tauu, *vel[3] = {Um, Vm, Wm};
+	// for (int i=0; i<3; i++) {
+	// 	taud = ( vel[i][1]	- vel[i][0]		) / h[1];
+	// 	tauu = ( vel[i][Ny] - vel[i][Ny-1]	) / h[Ny];
+	// 	taub[i] = 0.5 * ( taud - tauu ) * ( i==1 ? (2.0/Re) : (1.0/Re) );
+	// }
+	return taub[0];
 }
 
 // note: must call checkMean() before this function
@@ -249,13 +288,14 @@ void Statis::writeLogfile(char *path, int tstep, double time)
 	else {
 		fp = fopen(str, "w");
 		fputs("Title = \"Running log\"\n", fp);
-		fputs("variables = \"n\", \"t\", \"ener\", \"tauw21\", \"tauw22\", \"tauw23\", \"Um\", \"Vm\", \"Wm\", \"div\", \"divposx\", \"divposy\", \"divposz\", \"cfl\", \"cflposx\", \"cflposy\", \"cflposz\"\n", fp);
+		fputs("variables = \"n\", \"t\", \"ener\", \"taub21\", \"taub22\", \"taub23\", \"mpg1\", \"mpg2\", \"mpg3\", \"Um\", \"Vm\", \"Wm\", \"div\", \"divposx\", \"divposy\", \"divposz\", \"cfl\", \"cflposx\", \"cflposy\", \"cflposz\"\n", fp);
 		fputs("zone t = \"statis\"\n", fp);
 	}
 
-	sprintf(str, "%i\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%i\t%i\t%i\t%.18e\t%i\t%i\t%i\n",
+	sprintf(str, "%i\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%i\t%i\t%i\t%.18e\t%i\t%i\t%i\n",
 		tstep, time, ener,
-		tauw[0], tauw[1], tauw[2],
+		taub[0], taub[1], taub[2],
+		mpg [0], mpg [1], mpg [2],
 		velm[0], velm[1], velm[2],
 		div, divpos[0], divpos[1], divpos[2],
 		cfl, cflpos[0], cflpos[1], cflpos[2]	);

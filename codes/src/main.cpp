@@ -62,7 +62,7 @@ class FluidSolver
 				cout << "Files successfully written for step " << tstep << endl;
 			}
 			if (tstep % para.nprint == 0) {
-				stas.check(field.U, field.P, field.NU, para.Re, para.dt);
+				stas.check(field.U, field.P, field.NU, field.mpg, para.Re, para.dt);
 				stas.writeProfile(para.statpath);
 				stas.writeLogfile(para.statpath, tstep, time);
 			}

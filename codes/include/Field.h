@@ -19,8 +19,12 @@ class Field: private Mesh
 			P(mesh), DP(mesh, true), NU(mesh),
 			mpg{0,0,0}
 		{
-			UBC.meshGet().y[0] = UBC.meshGet().yc[0] = y[1];
-			UBC.meshGet().y[1] = UBC.meshGet().yc[1] = y[Ny];
+			// UBC.meshGet().y[0] = UBC.meshGet().yc[0] = y[1];
+			// UBC.meshGet().y[1] = UBC.meshGet().yc[1] = y[Ny];
+			UBC.meshGet().y[0] = 0;
+			UBC.meshGet().y[1] = 0;
+			UBC.meshGet().yc[0] = y[1];
+			UBC.meshGet().yc[1] = y[Ny];
 		};
 
 		Vctr U, UH, UBC;// UH also serve to store the RHS of delta u^* (increment of intermediate velocities), and delta u^* itself
@@ -33,7 +37,7 @@ class Field: private Mesh
 
 		// boundary (UBC) process
 		void bcond(int tstep);
-		void bcond(Vctr &UBC0);
+		void bcond(Vctr &U0);
 
 		// computation related
 		void getnu(double Re, int bftype);

@@ -72,7 +72,7 @@ void Field::initField(Field &field)
 {
 	Scla *src[4] = {&field.U.com1, &field.U.com2, &field.U.com3, &field.P};
 	Scla *dst[4] = {&U.com1, &U.com2, &U.com3, &P};
-	for (int n=0; n<4; n++) Interp(*src[n], *dst[n]).interpolate(n==1?'V':'U');
+	for (int n=0; n<4; n++) Interp(*src[n], *dst[n]).bulkInterp(n==1?'V':'U');
 }
 
 
@@ -88,9 +88,9 @@ void Field::bcond(int tstep)
 
 void Field::bcond(Vctr &U0)
 {
-	Interp(U0.com1, UBC.com1).interpolate2('U');
-	Interp(U0.com2, UBC.com2).interpolate2('V');
-	Interp(U0.com3, UBC.com3).interpolate2('U');
+	Interp(U0.com1, UBC.com1).bulkFilter('U');
+	Interp(U0.com2, UBC.com2).bulkFilter('X');
+	Interp(U0.com3, UBC.com3).bulkFilter('U');
 }
 
 

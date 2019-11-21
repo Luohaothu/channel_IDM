@@ -39,6 +39,7 @@ rscl1(Lx0*Lz0/Lx1/Lz1)
 
 	j0u = new int [Ny1+1];
 	j0v = new int [Ny1+1];
+	j0x = new int [Ny1+1];
 
 	int i0, j0, k0, i1, j1, k1;
 	double x0, y0, z0, x1, y1, z1;
@@ -78,17 +79,27 @@ rscl1(Lx0*Lz0/Lx1/Lz1)
 	}
 
 	// for every Y1, find the largest Y0 that is <= Y1
+	// yc -> yc
 	for (j1=0; j1<=Ny1; j1++) {
 		y1 = mesh1.yc[j1];
 		if (j1 == 0) y0 = mesh0.yc[j0=1];
 		while (y0 <= y1 && j0 < Ny0) y0 = mesh0.yc[++j0];
 		j0u[j1] = j0 - 1;
 	}
-	for (j1=0; j1<=Ny1; j1++) {
+	// y -> y
+	j0v[0] = 0; // note: Y1[0] do not participate in interpolation
+	for (j1=1; j1<=Ny1; j1++) {
 		y1 = mesh1.y[j1];
-		if (j1 == 0) y0 = mesh0.y[j0=1]; // note: Y1[0] also participate in interpolation, but if Y1[0]==0, it should access the wall value 
+		if (j1 == 1) y0 = mesh0.y[j0=2];
 		while (y0 <= y1 && j0 < Ny0) y0 = mesh0.y[++j0];
 		j0v[j1] = j0 - 1;
+	}
+	// y-> yc
+	for (j1=0; j1<=Ny1; j1++) {
+		y1 = mesh1.yc[j1];
+		if (j1 == 0) y0 = mesh0.y[j0=1];
+		while (y0 <= y1 && j0 < Ny0) y0 = mesh0.y[++j0];
+		j0x[j1] = j0 - 1;
 	}
 }
 
@@ -200,12 +211,12 @@ void Interp::layerTriFlt(int j0, int j1)
 		imkp = Nx0 * kp0 + im0;
 		ipkm = Nx0 * km0 + ip0;
 
-		// q1[idx] = 0.25 * q0[idx] + \
-		// 	0.125 * (q0[im] + q0[ip] + q0[km] + q0[kp]) + \
-		// 	0.0625 * (q0[imkm] + q0[ipkp] + q0[imkp] + q0[ipkm]);
-		q1[idx] = 4./9. * q0[idx] + \
-			1./9. * (q0[im] + q0[ip] + q0[km] + q0[kp]) + \
-			1./36. * (q0[imkm] + q0[ipkp] + q0[imkp] + q0[ipkm]);
+		q1[idx] = 0.25 * q0[idx] + \
+			0.125 * (q0[im] + q0[ip] + q0[km] + q0[kp]) + \
+			0.0625 * (q0[imkm] + q0[ipkp] + q0[imkp] + q0[ipkm]);
+		// q1[idx] = 4./9. * q0[idx] + \
+		// 	1./9. * (q0[im] + q0[ip] + q0[km] + q0[kp]) + \
+		// 	1./36. * (q0[imkm] + q0[ipkp] + q0[imkp] + q0[ipkm]);
 	}}
 }
 
@@ -228,6 +239,11 @@ void Interp::layerY(int j1, char stgtyp)
 		y = mesh1.y[j1];
 		y1 = mesh0.y[j0];
 		y2 = mesh0.y[j0+1];	}
+	else if (stgtyp == 'X')
+	{	j0 = j0x[j1];
+		y = mesh1.yc[j1];
+		y1 = mesh0.y[j0];
+		y2 = mesh0.y[j0+1];	}
 
 	for (k=0; k<Nz1; k++) {
 	for (i=0; i<Nx1; i++) {
@@ -238,7 +254,7 @@ void Interp::layerY(int j1, char stgtyp)
 }
 
 
-void Interp::interpolate(char stgtyp)
+void Interp::bulkInterp(char stgtyp)
 {
 	int j;
 	Scla mid(Mesh(Nx1,Ny0,Nz1,Lx1,Ly0,Lz1));
@@ -253,7 +269,7 @@ void Interp::interpolate(char stgtyp)
 	mid.meshGet().freeall();
 }
 
-void Interp::interpolate2(char stgtyp)
+void Interp::bulkFilter(char stgtyp)
 {
 	int j;
 	Scla mid(Mesh(Nx0,Ny1,Nz0,Lx0,Ly1,Lz0));
@@ -264,7 +280,7 @@ void Interp::interpolate2(char stgtyp)
 
 	for (j=0; j<=Ny1; j++) {
 		int1.layerY(j, stgtyp);
-		int2.layerPrdLin(j, j);
+		int2.layerPrdLin(j, j); // should change to filter some day
 	}
 
 	mid.meshGet().freeall();
