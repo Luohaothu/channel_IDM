@@ -223,3 +223,64 @@ class Statis:
 
 
 
+
+class Budgets:
+	def __init__(self, para):
+		self.para = para
+
+	def dissipation(self):
+		nx, ny, nz = self.para.Nx, self.para.Ny + 1, self.para.Nz
+
+		dx, dz = self.para.Lx / nx, self.para.Lz / nz
+		dy= np.hstack([[0], self.para.y[2:] - self.para.y[1:-1], [0]])
+		h = np.hstack([[0], .5 * (dy[1:] + dy[:-1])])
+		dy, h = dy.reshape([ny,1,1]), h.reshape([ny,1,1])
+
+		jc = np.arange(1,ny-1)
+		jm, jp = jc-1, jc+1
+		im, ip = np.arange(-1,nx-1), np.arange(1,nx+1) % nx
+		km, kp = np.arange(-1,nz-1), np.arange(1,nz+1) % nz
+
+		self.epsl = np.zeros(ny)
+		ux, uy, uz = [np.zeros([ny,nz,nx]) for n in range(3)]
+		vx, vy, vz = [np.zeros([ny,nz,nx]) for n in range(3)]
+		wx, wy, wz = [np.zeros([ny,nz,nx]) for n in range(3)]
+
+		for tstep in self.para.tsteps:
+			print("Reading budgets: tstep", tstep)
+			u = read_channel(self.para.fieldpath + "U%08i.bin"%tstep)
+			v = read_channel(self.para.fieldpath + "V%08i.bin"%tstep)
+			w = read_channel(self.para.fieldpath + "W%08i.bin"%tstep)
+
+			u -= np.mean(u, axis=(-1,-2)).reshape([ny,1,1])
+			v -= np.mean(v, axis=(-1,-2)).reshape([ny,1,1])
+			w -= np.mean(w, axis=(-1,-2)).reshape([ny,1,1])
+
+			ux[:] = (u[:,:,ip] - u) / dx
+			wz[:] = (w[:,kp,:] - w) / dz
+			uz[:] = .5/dz * (u[:,kp,:] - u[:,km,:])
+			wx[:] = .5/dx * (w[:,:,ip] - w[:,:,im])
+			vx[:] = .5/dx * (v[:,:,ip] - v[:,:,im])
+			vz[:] = .5/dz * (v[:,kp,:] - v[:,km,:])
+			vy[jc]= (v[jp] - v[jc]) / dy[jc]
+			uy[jc]= .5/dy[jc] * ( (u[jc]*dy[jp]+u[jp]*dy[jc]) / h[jp] - (u[jc]*dy[jm]+u[jm]*dy[jc]) / h[jc] )
+			wy[jc]= .5/dy[jc] * ( (w[jc]*dy[jp]+w[jp]*dy[jc]) / h[jp] - (w[jc]*dy[jm]+w[jm]*dy[jc]) / h[jc] )
+			
+			uz[:] = .5 * (uz + uz[:,:,ip])
+			wx[:] = .5 * (wx + wx[:,kp,:])
+			vx[jc]= .5 * (vx[jc] + vx[jp])
+			vz[jc]= .5 * (vz[jc] + vz[jp])
+			uy[jc]= .5 * (uy + uy[:,:,ip])[jc]
+			wy[jc]= .5 * (wy + wy[:,kp,:])[jc]
+
+			vy[0], vy[-1] = vy[1], vy[-2]
+			vx[0], vx[-1] = .5/dx * (v[1,:,ip] - v[1,:,im]), .5/dx * (v[-1,:,ip] - v[-1,:,im])
+			vz[0], vz[-1] = .5/dz * (v[1,kp,:] - v[1,km,:]), .5/dz * (v[-1,kp,:] - v[-1,km,:])
+			uy[0], uy[-1] = .5/h[1] * ((u[1]-u[0]) + (u[1]-u[0])[:,ip]), .5/h[-1] * ((u[-1]-u[-2]) + (u[-1]-u[-2])[:,ip])
+			wy[0], wy[-1] = .5/h[1] * ((w[1]-w[0]) + (w[1]-w[0])[kp,:]), .5/h[-1] * ((w[-1]-w[-2]) + (w[-1]-w[-2])[kp,:])
+
+			self.epsl += 1. / len(self.para.tsteps) / self.para.Re * \
+				np.mean(ux**2+uy**2+uz**2+vx**2+vy**2+vz**2+wx**2+wy**2+wz**2, axis=(-1,-2))
+
+	def flipy(self):
+		self.epsl[:] = .5 * (self.epsl + self.epsl[::-1])

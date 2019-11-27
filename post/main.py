@@ -1,14 +1,17 @@
 #!/root/Software/anaconda3/bin/python3
 from basic import *
 
-para = DataSetInfo("/run/media/student/DATA/whn/channel_IDM/data_DNS180/")
+para = DataSetInfo("/run/media/student/DATA/whn/channel_OFW/data_DNS180_OFW15_MPG/offwall/")
 feld = Field(para)
 stas = Statis(para, feld)
+bgts = Budgets(para)
 
 stas.calc_statis()
 stas.calc_wallscale()
 stas.flipy()
 
+bgts.dissipation()
+bgts.flipy()
 
 
 
@@ -37,11 +40,11 @@ for q, fn in zip(qs, fns): write_channel(para.postpath+fn, q)
 
 
 
-# stas.outer_scale()
-stas.inner_scale()
+stas.outer_scale()
+# stas.inner_scale()
 
 casename = para.datapath.split('/')[-2]
-jrange = range(1, int(para.Ny/2+1)) #range(1, para.Ny) #
+jrange = range(0, int(para.Ny/2+1)) #range(1, para.Ny) #
 krange = range(1, para.Nzc)
 irange = range(1, para.Nxc)
 
@@ -68,6 +71,18 @@ data[11:14] /= stas.uc * stas.pc
 data = data.T[jrange]
 
 np.savetxt(para.postpath+"profiles.dat", data, header=header, comments='')
+
+
+
+
+
+header = \
+	'Title = "profiles of budgets"\n' + \
+	'variables = "%s", "%s"\n' % ( "y<sup>+</sup>", "<greek>e</greek><sup>+</sup>" ) + \
+	'zone t = "%s", i = %i' %( casename, len(jrange) )
+data = np.vstack([ para.yc/stas.lc, bgts.epsl/(stas.uc**3/stas.lc) ])
+data = data.T[jrange]
+np.savetxt(para.postpath+"budgets.dat", data, header=header, comments='')
 
 
 
