@@ -274,8 +274,8 @@ class Budgets:
 			wy[jc]= .5 * (wy + wy[:,kp,:])[jc]
 
 			vy[0], vy[-1] = vy[1], vy[-2]
-			vx[0], vx[-1] = .5/dx * (v[1,:,ip] - v[1,:,im]), .5/dx * (v[-1,:,ip] - v[-1,:,im])
-			vz[0], vz[-1] = .5/dz * (v[1,kp,:] - v[1,km,:]), .5/dz * (v[-1,kp,:] - v[-1,km,:])
+			vx[0], vx[-1] = .5/dx * (v[1][:,ip] - v[1][:,im]), .5/dx * (v[-1][:,ip] - v[-1][:,im])	# iterable objects can only be used as slice when theres no other indeces than :
+			vz[0], vz[-1] = .5/dz * (v[1][kp,:] - v[1][km,:]), .5/dz * (v[-1][kp,:] - v[-1][km,:])
 			uy[0], uy[-1] = .5/h[1] * ((u[1]-u[0]) + (u[1]-u[0])[:,ip]), .5/h[-1] * ((u[-1]-u[-2]) + (u[-1]-u[-2])[:,ip])
 			wy[0], wy[-1] = .5/h[1] * ((w[1]-w[0]) + (w[1]-w[0])[kp,:]), .5/h[-1] * ((w[-1]-w[-2]) + (w[-1]-w[-2])[kp,:])
 
