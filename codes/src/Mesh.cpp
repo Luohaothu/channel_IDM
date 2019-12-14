@@ -82,8 +82,11 @@ void Mesh::initYmesh()
 {
 	int i, j, k;
 
+	// check
+	if ( fabs((y[Ny]-y[1]) - Ly) > 1e-10 )
+		{ cout << endl << "No valid Y mesh provided !" << endl; exit(0); }
+
 	// y coordinates
-	if ( fabs((y[Ny]-y[1]) - Ly) > 1e-10 ) { cout << endl << "No valid Y mesh provided !" << endl; exit(0); }	// check failed
 	y[0] = 0;
 	yc[0] = y[1];
 	yc[Ny] = y[Ny];
@@ -113,15 +116,18 @@ void Mesh::initYmesh()
 		if (j>1 && j<Ny-1) {
 			ppj[j] = hp[j];
 			pcj[j] = - hc[j];								// NO need to multiply by -1 in use
-			pmj[j] = hm[j];		}
+			pmj[j] = hm[j];
+		}
 		else if (j==1) {
 			ppj[j] = hp[1];
 			pcj[j] = - 1.0 / dy[1] / h[2];
-			pmj[j] = 0.0;		}
+			pmj[j] = 0.0;
+		}
 		else if (j==Ny-1) {
 			ppj[j] = 0.0;
 			pcj[j] = - 1.0 / dy[Ny-1] / h[Ny-1];
-			pmj[j] = hm[Ny-1];	}
+			pmj[j] = hm[Ny-1];
+		}
 	}
 }
 
@@ -156,7 +162,7 @@ target equation: F(gamma) = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, l2) 
 		F = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, Ly) - dy_min;
 		grad = (F-F0) / dgamma;	if (! grad) break;
 		dgamma = - F / grad;	if (! dgamma) break;
-		gamma += dgamma;		if (gamma <= 0) { cout << "Mesh error: too large dy_min !" << endl; exit(0); }
+		gamma += dgamma;		if (gamma <= 0) { cout << "Mesh error: dy_min too large !" << endl; exit(0); }
 		F0 = F;
 	}
 	// generate grid

@@ -795,14 +795,15 @@ void IDM::rhsdp(double *rdp, double *uh, double *vh, double *wh, double *vbc)
 	for (j=1; j<Ny; j++) {	jup = j==Ny-1 ? 0 : 1;	jum = j==1 ? 0 : 1;
 	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {
-		idx = IDX(i,j,k);	jbp = IDX(i,1,k);	jbm = IDX(i,0,k);
-		ip = IDX(ipa[i],j,k);	jp = IDX(i,j+1,k);	kp = IDX(i,j,kpa[k]);
+		idx = IDX(i,j,k);	ip = IDX(ipa[i],j,k);
+		jbp = IDX(i,1,k);	jp = IDX(i,j+1,k);
+		jbm = IDX(i,0,k);	kp = IDX(i,j,kpa[k]);
 		// ( Du^h - cbc ) / dt
 		rdp[idx] = 1.0/dt * (
 			( uh[ip] - uh[idx] ) / dx
+		+	( wh[kp] - wh[idx] ) / dz
 		+	( vh[jp] * jup + vbc[jbp] * (1-jup)
-			- vh[idx]* jum - vbc[jbm] * (1-jum) ) / dy[j]
-		+	( wh[kp] - wh[idx] ) / dz	);
+			- vh[idx]* jum - vbc[jbm] * (1-jum) ) / dy[j]	);
 	}}}
 }
 
