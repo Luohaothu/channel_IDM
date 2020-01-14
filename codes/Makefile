@@ -19,10 +19,10 @@ CFLAGS = -I $(IDIR) $(LIBS)
 
 ##### file lists #####
 
-_DEPS = Basic.h Para.h Field.h Statis.h Matrix.h Interp.h IDM.h SGS.h
+_DEPS = Basic.h Para.h Field.h Statis.h Matrix.h Interp.h IDM.h SGS.h Solver.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJS = Bulk.o Mesh.o Scla.o Vctr.o Field.o Matrix.o Interp.o IDM.o SGS.o Statis.o Para.o main.o
+_OBJS = Bulk.o Mesh.o Scla.o Vctr.o Field.o Matrix.o Interp.o IDM.o SGS.o Statis.o Para.o Solver.o main.o
 OBJS = $(patsubst %,$(ODIR)/%,$(_OBJS))
 
 
@@ -31,16 +31,6 @@ OBJS = $(patsubst %,$(ODIR)/%,$(_OBJS))
 
 $(OUTPUT): $(OBJS)
 	$(CC) -o $@ $^ $(CFLAGS)
-
-
-##### off-wall program #####
-OUTPUT2 = ofw_whn
-_OBJS2 = Bulk.o Mesh.o Scla.o Vctr.o Field.o Matrix.o Interp.o IDM.o SGS.o Statis.o Para.o main_ofw.o
-OBJS2 = $(patsubst %,$(ODIR)/%,$(_OBJS2))
-ofw: $(OBJS2)
-	$(CC) -o $@ $^ $(CFLAGS)
-############################
-
 
 $(ODIR)/%.o: $(SDIR)/%.cpp $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)

@@ -9,9 +9,9 @@
 using namespace std;
 
 
-Interp::Interp(Scla &s0, Scla &s1):
-src(s0), mesh0(s0.meshGet()),
-dst(s1), mesh1(s1.meshGet()),
+Interp::Interp(Scla &src, Scla &dst):
+src(src), mesh0(src.meshGet()),
+dst(dst), mesh1(dst.meshGet()),
 Nx0(mesh0.Nx), Nx1(mesh1.Nx),
 Ny0(mesh0.Ny), Ny1(mesh1.Ny),
 Nz0(mesh0.Nz), Nz1(mesh1.Nz),
@@ -79,6 +79,7 @@ rscl1(Lx0*Lz0/Lx1/Lz1)
 	}
 
 	// for every Y1, find the largest Y0 that is <= Y1
+	// if Y1 is out of Y0 range, the value will be linearly extrapolated
 	// yc -> yc
 	for (j1=0; j1<=Ny1; j1++) {
 		y1 = mesh1.yc[j1];
@@ -94,10 +95,10 @@ rscl1(Lx0*Lz0/Lx1/Lz1)
 		while (y0 <= y1 && j0 < Ny0) y0 = mesh0.y[++j0];
 		j0v[j1] = j0 - 1;
 	}
-	// y-> yc
+	// y -> yc
 	for (j1=0; j1<=Ny1; j1++) {
 		y1 = mesh1.yc[j1];
-		if (j1 == 0) y0 = mesh0.y[j0=1];
+		if (j1 == 0) y0 = mesh0.y[j0=2];
 		while (y0 <= y1 && j0 < Ny0) y0 = mesh0.y[++j0];
 		j0x[j1] = j0 - 1;
 	}
@@ -114,6 +115,8 @@ Interp::~Interp()
 
 
 void Interp::layerPrdLin(int j0, int j1)
+/* planar linear interpolation in X & Z direction */
+/* from j0 layer of src to j1 layer of dst, periodically extrapolated if needed */
 {
 	int i, k, im0, km0, ip0, kp0;
 	double x, z, x1, z1, x2, z2;
@@ -142,6 +145,9 @@ void Interp::layerPrdLin(int j0, int j1)
 
 
 void Interp::layerPrdFlt(int j0, int j1)
+/* planar filter in X & Z direction */
+/* from j0 layer of src to j1 layer of dst, periodically extrapolated if needed */
+/* filter is defined as the integration of src in a cell determined by the dst grid */
 {
 	int i, k, i0, k0, ii, kk;
 	double x, z, x0, z0;
@@ -190,13 +196,15 @@ void Interp::layerPrdFlt(int j0, int j1)
 
 
 void Interp::layerTriFlt(int j0, int j1)
+/* planar filter in X & Z direction, defined as weighed average of 9 neighbour nodes */
+/* from j0 layer of src to j1 layer of dst, src and dst must have the same planar grid */
 {
 	if (Nx0 != Nx1 || Nz0 != Nz1)
 	{ cout << "Invalid mesh for TriFlt !" << endl; exit(0); }
 
 	int i, j, k, idx, im0, ip0, km0, kp0;
 	int im, ip, km, kp, imkm, ipkp, imkp, ipkm;
-	double *q0 = src.layerGet(j0), *q1 = dst.layerGet(j1);
+	double *q0 = src.lyrGet(j0), *q1 = dst.lyrGet(j1);
 
 	for (k=0; k<Nz0; k++) { km0 = mesh0.kma[k]; kp0 = mesh0.kpa[k];
 	for (i=0; i<Nx0; i++) { im0 = mesh0.ima[i]; ip0 = mesh0.ipa[i];
@@ -222,6 +230,9 @@ void Interp::layerTriFlt(int j0, int j1)
 
 
 void Interp::layerY(int j1, char stgtyp)
+/* linear interpolation in Y direction */
+/* from src to dst, whole bulk interped */
+/* out-of-range points will be linearly extrapolated */
 {
 	if (Nx0 != Nx1 || Nz0 != Nz1)
 	{ cout << "Invalid mesh for y interpolation !" << endl; exit(0); }
@@ -255,27 +266,35 @@ void Interp::layerY(int j1, char stgtyp)
 
 
 void Interp::bulkInterp(char stgtyp)
+/* combination of planar and wall-normal interpolation, planar first */
 {
 	int j;
-	Scla mid(Mesh(Nx1,Ny0,Nz1,Lx1,Ly0,Lz1));
-	memcpy(mid.meshGet().y, mesh0.y, sizeof(double) * (Ny0+1));
-	memcpy(mid.meshGet().yc,mesh0.yc,sizeof(double) * (Ny0+1));
+	Mesh ms(Nx1,Ny0,Nz1,Lx1,Ly0,Lz1);
+	for (j=0; j<=Ny0; j++) {
+		ms.y [j] = mesh0.y [j];
+		ms.yc[j] = mesh0.yc[j];
+	}
 
+	Scla mid(ms);
 	Interp int1(src,mid), int2(mid,dst);
 
 	for (j=0; j<=Ny0; j++) int1.layerPrdLin(j, j);
 	for (j=0; j<=Ny1; j++) int2.layerY(j, stgtyp);
 
-	mid.meshGet().freeall();
+	ms.freeall();
 }
 
 void Interp::bulkFilter(char stgtyp)
+/* combination of wall-normal interpolation and planar filter, wall-normal first */
 {
 	int j;
-	Scla mid(Mesh(Nx0,Ny1,Nz0,Lx0,Ly1,Lz0));
-	memcpy(mid.meshGet().y, mesh1.y, sizeof(double) * (Ny1+1));
-	memcpy(mid.meshGet().yc,mesh1.yc,sizeof(double) * (Ny1+1));
+	Mesh ms(Nx1,Ny0,Nz1,Lx1,Ly0,Lz1);
+	for (j=0; j<=Ny0; j++) {
+		ms.y [j] = mesh0.y [j];
+		ms.yc[j] = mesh0.yc[j];
+	}
 
+	Scla mid(ms);
 	Interp int1(src,mid), int2(mid,dst);
 
 	for (j=0; j<=Ny1; j++) {
@@ -283,7 +302,7 @@ void Interp::bulkFilter(char stgtyp)
 		int2.layerPrdLin(j, j); // should change to filter some day
 	}
 
-	mid.meshGet().freeall();
+	ms.freeall();
 }
 
 

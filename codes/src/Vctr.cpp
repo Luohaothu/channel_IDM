@@ -12,7 +12,7 @@ using namespace std;
 
 
 
-double Vctr::divergence(int i, int j, int k)
+double Vctr::divergence(int i, int j, int k) const
 /* compute divergence of a vector field at the center of cell (i,j,k) */
 {
 	int idx= IDX(i,j,k);
@@ -24,7 +24,7 @@ double Vctr::divergence(int i, int j, int k)
 		+	( w[kp] - w[idx] ) / dz;
 }
 
-double Vctr::convection(int i, int j, int k)
+double Vctr::convection(int i, int j, int k) const
 /* compute convection coefficient of a vector field at the center of cell (i,j,k) */
 {
 	int idx= IDX(i,j,k);
@@ -36,7 +36,7 @@ double Vctr::convection(int i, int j, int k)
 		+	0.5 * ( w[kp] + w[idx] ) / dz;
 }
 
-double* Vctr::strainrate(int i, int j, int k)
+double* Vctr::strainrate(int i, int j, int k) const
 /* compute the strain rate tensor of a vector field at the center of cell (i,j,k) */
 // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
 {
@@ -75,7 +75,7 @@ double* Vctr::strainrate(int i, int j, int k)
 	return sr;
 }
 
-double* Vctr::gradient(int i, int j, int k)
+double* Vctr::gradient(int i, int j, int k) const
 /* compute the gradient tensor of a vector field at the center of cell (i,j,k) */
 // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
 {

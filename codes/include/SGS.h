@@ -5,8 +5,14 @@
 class SGS: private Mesh
 {
 	public:
-		SGS(const Mesh &mesh): Mesh(mesh) {};
-		void smargorinsky(Scla &EV, Vctr &U, double Cs, double Re);
-		void dynamicsmarg(Scla &EV, Vctr &U);
-		void dynamicvreman(Scla &EV, Vctr &U, double Re);
+		SGS(const Mesh &mesh, Scla &EV, Vctr &U):
+		Mesh(mesh), EV(EV), U(U) {};
+		
+		void smargorinsky(double Cs, double Re);
+		void dynamicsmarg();
+		void dynamicvreman(double Re);
+
+	private:
+		Scla &EV;
+		Vctr &U;
 };

@@ -67,39 +67,28 @@ dz((double) Lz / Nz), dz2(dz * dz)
 
 void Mesh::freeall()
 {
-	delete [] y; delete [] yc;
-	delete [] dy; delete [] h; delete [] dvol;
-	delete [] hm; delete [] hc; delete [] hp;
-	delete [] dym; delete [] dyc; delete [] dyp;
-	delete [] pmj; delete [] pcj; delete [] ppj;
-	delete [] ak1; delete [] ak3;
-	delete [] kpa; delete [] kma;
-	delete [] ipa; delete [] ima;
+	delete [] y; delete [] yc;                   y = yc = NULL;
+	delete [] dy; delete [] h; delete [] dvol;   dy = h = dvol = NULL;
+	delete [] hm; delete [] hc; delete [] hp;    hm = hc = hp = NULL;
+	delete [] dym; delete [] dyc; delete [] dyp; dym = dyc = dyp = NULL;
+	delete [] pmj; delete [] pcj; delete [] ppj; pmj = pcj = ppj = NULL;
+	delete [] ak1; delete [] ak3;                ak1 = ak3 = NULL;
+	delete [] kpa; delete [] kma;                kpa = kma = NULL;
+	delete [] ipa; delete [] ima;                ipa = ima = NULL;
 }
 
 
 void Mesh::initYmesh()
 {
-	int i, j, k;
-
-	// check
-	if ( fabs((y[Ny]-y[1]) - Ly) > 1e-10 )
-		{ cout << endl << "No valid Y mesh provided !" << endl; exit(0); }
-
-	// y coordinates
-	y[0] = 0;
-	yc[0] = y[1];
-	yc[Ny] = y[Ny];
-	for (j=1; j<Ny; j++) yc[j] = 0.5 * ( y[j] + y[j+1] );
+	int j;
 
 	// y intervals
-	for (j=1; j<Ny; j++) { dy[j] = y[j+1] - y[j]; dvol[j] = dy[j] * dx * dz; }
-	for (j=2; j<Ny; j++) { h[j] = (y[j+1] - y[j-1]) / 2.0; }
-	dy[0] = dvol[0] = 0.0;
-	dy[Ny]= dvol[Ny]= 0.0;
-	h[0] = 0.0;
-	h[1] = dy[1] / 2.0;
-	h[Ny] = dy[Ny-1] / 2.0;
+	h [0] = 0;
+	dy[0] = 2. * (y[1] - yc[0]);
+	dy[Ny]= 2. * (yc[Ny]-y[Ny]);
+	for (j=1; j<Ny; j++)  dy[j] = y[j+1] - y[j];
+	for (j=1; j<=Ny; j++) h[j] = yc[j] - yc[j-1];
+	for (j=0; j<=Ny; j++) dvol[j] = dy[j] * dx * dz;
 
 	// coefficients for wall-normal 2nd-order derivative
 	for (j=1; j<Ny; j++) {	// for U & W in laplacian operator, boundaries not excluded
@@ -131,7 +120,7 @@ void Mesh::initYmesh()
 	}
 }
 
-void Mesh::writeYmesh(char *path)
+void Mesh::writeYmesh(char *path) const
 {
 	char str[1024];
 	FILE *fp = fopen(strcat(strcpy(str, path), "CHANNEL.GRD"), "w");
@@ -169,6 +158,11 @@ target equation: F(gamma) = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, l2) 
 	y[0] = 0;
 	for (int j=1; j<=Ny; j++)
 		y[j] = hyptan(j, gamma, Ny, Ly);
+
+	// yc coordinates for U grid
+	yc[0] = y[1];
+	yc[Ny] = y[Ny];
+	for (int j=1; j<Ny; j++) yc[j] = 0.5 * ( y[j] + y[j+1] );
 }
 
 void Mesh::getYmesh(char *path)
@@ -177,7 +171,17 @@ void Mesh::getYmesh(char *path)
 	char str[1024];
 	FILE *fp = fopen(strcat(strcpy(str, path), "CHANNEL.GRD"), "r");
 	for (int j=0; j<=Ny; j++)
-		sscanf(fgets(str, 1024, fp), "%le", & y[j]);
+		sscanf(fgets(str, 1024, fp), "%le", &(y[j]));
 	fclose(fp);
+
+	// check
+	if ( fabs((y[Ny]-y[1]) - Ly) > 1e-10 )
+		{ cout << endl << "No valid Y mesh provided !" << endl; exit(0); }
+
+	// y coordinates
+	y[0] = 0;
+	yc[0] = y[1];
+	yc[Ny] = y[Ny];
+	for (int j=1; j<Ny; j++) yc[j] = 0.5 * ( y[j] + y[j+1] );
 }
 

@@ -12,21 +12,21 @@ using namespace std;
 
 /********** integration functions **********/
 
-double Scla::yMeanU(int i, int k)
+double Scla::yMeanU(int i, int k) const
 {
 	int j, ki = Nx * k + i;
 	double integral = 0.0;
 	for (j=1; j<Ny; j++) integral += this->q[Nxz * j + ki] * dy[j];
 	return integral / Ly;
 }
-double Scla::yMeanV(int i, int k)
+double Scla::yMeanV(int i, int k) const
 {
 	int j, ki = Nx * k + i;
 	double integral = 0.0;
-	for (j=1; j<=Ny; j++) integral += this->q[Nxz * j + ki] * h[j];
+	for (j=1; j<=Ny; j++) integral += this->q[Nxz * j + ki] * (j==1 ? dy[1]/2 : j==Ny? dy[Ny-1]/2 : h[j]);
 	return integral / Ly;
 }
-double Scla::layerMean(int j)
+double Scla::layerMean(int j) const
 {
 	int k, i, kk, jj = Nxz * j;
 	double integral = 0.0, dA = dx * dz, A = Lx * Lz;
@@ -34,46 +34,71 @@ double Scla::layerMean(int j)
 	for (i=0; i<Nx; i++) { integral += this->q[kk + i] * dA;	}}
 	return integral / A;
 }
-double Scla::bulkMeanU() // only for U, W
+double Scla::bulkMeanU() const // only for U, W
 {
 	double integral = 0.0;
 	for (int j=1; j<Ny; j++) integral += this->layerMean(j) * dy[j];
 	return integral / Ly;
 }
-double Scla::bulkMeanV() // only for V
+double Scla::bulkMeanV() const // only for V
 {
 	double integral = 0.0;
-	for (int j=1; j<=Ny; j++) integral += this->layerMean(j) * h[j];
+	for (int j=1; j<=Ny; j++) integral += this->layerMean(j) * (j==1 ? dy[1]/2 : j==Ny? dy[Ny-1]/2 : h[j]);
 	return integral / Ly;
 }
 
 
 /********** interpolation functions **********/
 
-double* Scla::layerUG2CC(double *dst, int j1, int j0)	// CAUTION: pointer dst must NOT be self
-/* interpolate j0 layer from U grid of src to j1 layer of cell center of dst */
+void Scla::layerUG2CC(double *dst, int j)
+/* interpolated quantity from U-grid to layer j of cell-center-grid */
 {
-	int i, k, kk0, kk1;
-	for (k=0; k<Nz; k++) { kk0 = Nxz * j0 + Nx * k; kk1 = Nxz * j1 + Nx * k;
-	for (i=0; i<Nx; i++) { dst[kk1+i] = 0.5 * (q[kk0+i] + q[kk0+ipa[i]]); }}
-	return dst;
+	int i, k, kk;
+	double *ql = this->lyrGet(j);
+	for (k=0; k<Nz; k++) { kk = Nx * k;
+	for (i=0; i<Nx; i++) { dst[kk+i] = 0.5 * (ql[kk+i] + ql[kk+ipa[i]]); }}
+	
+	if (j == 0 || j == Ny) { // interpolate virtual boundary to real boundary
+		int ofst = (j==0 ? 1 : -1);
+		double htmp = 0.5 / (j==0 ? h[1] : h[Ny]);
+		ql = this->lyrGet(j + ofst);
+
+		for (k=0; k<Nz; k++) { kk = Nx * k;
+		for (i=0; i<Nx; i++) {
+			dst[kk+i] = htmp * ( dst[kk+i] * dy[j+ofst] + .5 * (ql[kk+i] + ql[kk+ipa[i]]) * dy[j] );
+		}}
+	}
 }
-double* Scla::layerVG2CC(double *dst, int j1, int j0)	// CAUTION: pointer dst must NOT be self
-/* interpolate j0,j0+1 layers from V grid of src to j1 layer of cell center of dst */
+
+void Scla::layerWG2CC(double *dst, int j)
+/* interpolated quantity from W-grid to layer j of cell-center-grid */
 {
-	int i, k, kkd, kku, kk1, jd = (j0==0 ? 1 : j0), ju = (j0==Ny ? Ny : j0+1);
-	for (k=0; k<Nz; k++) { kkd = Nxz * jd + Nx * k; kku = Nxz * ju + Nx * k; kk1 = Nxz * j1 + Nx * k;
-	for (i=0; i<Nx; i++) { dst[kk1+i] = 0.5 * (q[kkd+i] + q[kku+i]);	}}
-	return dst;
+	int i, k, kk, kkf;
+	double *ql = this->lyrGet(j);
+	for (k=0; k<Nz; k++) { kk = Nx * k; kkf = Nx * kpa[k];
+	for (i=0; i<Nx; i++) { dst[kk+i] = 0.5 * (ql[kk+i] + ql[kkf+i]); }}
+	
+	if (j == 0 || j == Ny) { // interpolate virtual boundary to real boundary
+		int ofst = (j==0 ? 1 : -1);
+		double htmp = 0.5 / (j==0 ? h[1] : h[Ny]);
+		ql = this->lyrGet(j + ofst);
+
+		for (k=0; k<Nz; k++) { kk = Nx * k; kkf = Nx * kpa[k];
+		for (i=0; i<Nx; i++) {
+			dst[kk+i] = htmp * ( dst[kk+i] * dy[j+ofst] + .5 * (ql[kk+i] + ql[kkf+i]) * dy[j] );
+		}}
+	}
 }
-double* Scla::layerWG2CC(double *dst, int j1, int j0)	// CAUTION: pointer dst must NOT be self
-/* interpolate j0 layer from W grid of src to j1 layer of cell center of dst */
+
+void Scla::layerVG2CC(double *dst, int j)
+/* interpolated quantity from V-grid to layer j of cell-center-grid */
 {
-	int i, k, kkb, kkf, kk1;
-	for (k=0; k<Nz; k++) { kkb = Nxz * j0 + Nx * k; kkf = Nxz * j0 + Nx * kpa[k]; kk1 = Nxz * j1 + Nx * k;
-	for (i=0; i<Nx; i++) { dst[kk1+i] = 0.5 * (q[kkb+i] + q[kkf+i]);	}}
-	return dst;
+	int i, k, kk;
+	double *ql1 = this->lyrGet(j==0 ? 1 : j), *ql2 = this->lyrGet(j==Ny ? Ny : j+1);
+	for (k=0; k<Nz; k++) { kk = Nx * k;
+	for (i=0; i<Nx; i++) { dst[kk+i] = 0.5 * (ql1[kk+i] + ql2[kk+i]); }}
 }
+
 
 
 /********** differentiation operators **********/

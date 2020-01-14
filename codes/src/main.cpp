@@ -6,51 +6,50 @@
 # include <sys/stat.h>
 
 # include "Para.h"
-# include "Field.h"
 # include "Statis.h"
+# include "Solver.h"
 
 using namespace std;
 
 
-class FluidSolver
+class Flow
 {
 	public:
 		Para para;
 		Mesh mesh;
 		Field field;
-		Statis stas;
+		Statis statis;
+		Solver solver;
 		int tstep;
 		double time;
 
-		FluidSolver(char path[1024]):
-			para(path),
-			mesh(para.Nx,para.Ny,para.Nz, para.Lx,para.Ly,para.Lz, para.dy_min),
-			field(mesh),
-			stas(mesh),
-			tstep(0),
-			time(0)
-			{
-				para.showPara();
-				mesh.writeYmesh(para.statpath);
-				this->initiate();
-				if (tstep == 0)	this->output();
-				
-				XINDAT_modify_time = 0;
-				strcpy(workpath, path);
-			};
+		Flow(char path[1024]):
+		para(path),
+		mesh(para.Nx,para.Ny,para.Nz, para.Lx,para.Ly,para.Lz, para.dy_min),
+		field(mesh),
+		statis(mesh),
+		solver(mesh, field)
+		{
+			tstep = 0;
+			time = 0;
+			XINDAT_modify_time = 0;
+			strcpy(workpath, path);
 
-		Field& solve(double target_time) {
+			para.showPara();
+			mesh.writeYmesh(para.statpath);
+
+			this->initiate();
+			this->input(); // for solver config
+			if (tstep == 0)	this->output();
+		};
+
+		Field& solve(double target_time)
+		{
 			while (target_time - time > 1e-10) {
 				tstep ++;
 				time += para.dt;
-
-				field.bcond(tstep);					// set boundary conditions
-				field.getnu(para.Re, para.bftype);	// get the viscosity field
-				field.getup(para.dt, para.nthrds);	// time evolution
-				if (para.bftype == 1) field.removeSpanMean();	// for MFU
-				
+				solver.getup(para.Re, para.dt, para.bftype);
 				this->output();
-				this->input ();
 			}
 			return field;
 		};
@@ -62,25 +61,11 @@ class FluidSolver
 				cout << "Files successfully written for step " << tstep << endl;
 			}
 			if (tstep % para.nprint == 0) {
-				stas.check(field.U, field.P, field.NU, field.mpg, para.Re, para.dt);
-				stas.writeProfile(para.statpath);
-				stas.writeLogfile(para.statpath, tstep, time);
-			}
-		};
+				statis.check(field.U, field.P, field.NU, para.Re, para.dt);
+				statis.writeProfile(para.statpath);
+				statis.writeLogfile(para.statpath, tstep, time, field.mpg);
 
-		void input()
-		{
-			if (tstep % para.nprint == 0) {
-				char filename[1024];
-				struct stat buf;
-				stat(strcat(strcpy(filename, workpath), "XINDAT"), &buf);
-
-				if (buf.st_mtime > XINDAT_modify_time && (int)XINDAT_modify_time != 0) {
-					para.readPara(workpath);
-					cout << endl << filename << " updated at step " << tstep << " as:" << endl;
-					para.showPara();
-				}
-				XINDAT_modify_time = buf.st_mtime;
+				this->input();
 			}
 		};
 
@@ -96,39 +81,94 @@ class FluidSolver
 			}
 			else if (! strcmp(Para(para.inpath).statpath, para.statpath)) {
 				tstep = para.nread;
-				time = stas.getLogtime(para.statpath, tstep);
+				time = statis.getLogtime(para.statpath, tstep);
 				field.readField(para.fieldpath, tstep);
 				cout << endl << "Continue from step " << tstep << ", time " << time << endl;
 			}
 			else {
 				Para para0(para.inpath);
 				Mesh mesh0(para0.Nx, para0.Ny, para0.Nz, para0.Lx, para0.Ly, para0.Lz, 0, para0.statpath);
-				Field field0(mesh0);
-				field0.readField(para0.fieldpath, para.nread);
-				field.initField(field0);
-				mesh0.freeall();
+
+				field.initField(Field(mesh0).readField(para0.fieldpath, para.nread));
+
 				cout << endl << "Flow fields initiated from existing fields with parameters:" << endl;
 				para0.showPara();
+				mesh0.freeall();
 			}
+		};
+
+		void input()
+		{
+			char filename[1024]; strcat(strcpy(filename, workpath), "XINDAT");
+			struct stat buf; stat(filename, &buf);
+			time_t tempt = XINDAT_modify_time;
+
+			if (tempt < (XINDAT_modify_time = buf.st_mtime)) {
+
+				para.readPara(workpath);
+
+				if ((int)tempt != 0) {
+					cout << endl << filename << " updated at step " << tstep << " as:" << endl;
+					para.showPara();
+				}
+			}
+
+			solver.config(para.nthrds);
 		};
 };
 
+
+// # define CONTROL_TYP 4
+
+# ifndef CONTROL_TYP
+/***** wall-boundary computation *****/
+
 int main()
 {
-	FluidSolver flow("");
+	Flow flow("");
+	while (flow.tstep < flow.para.Nt)
+		flow.solve(flow.time + flow.para.dt);
+	cout << "Computation finished!" << endl;
+}
+
+# else
+/***** off-wall boundary computation *****/
+
+int main()
+{
+	Flow flow("offwall/"), flow0("bcgenerator/");
+
 	while (flow.tstep++ < flow.para.Nt) {
 		flow.time += flow.para.dt;
 
-		flow.field.bcond(flow.tstep);						// set boundary conditions
+		flow.field.bcond(flow0.solve(flow.time).U);			// set boundary conditions
 		flow.field.getnu(flow.para.Re, flow.para.bftype);	// get the viscosity field
 		flow.field.getup(flow.para.dt, flow.para.nthrds);	// time evolution
 		if (flow.para.bftype == 1) flow.field.removeSpanMean();	// for MFU
 		
+		/* flow rate modification for off-wall calculation */
+		if (2.0 - flow.para.Ly > 1e-10) {
+
+// type 4: keep the pressure gradients equal to that of the full-sized channel
+			double dmpg1 = flow0.field.mpg[0] - flow.field.mpg[0];
+			double dmpg3 = flow0.field.mpg[2] - flow.field.mpg[2];
+			flow.field.mpg[0] += dmpg1;
+			flow.field.mpg[2] += dmpg3;
+			for (int j=1; j<flow.para.Ny; j++) {
+				flow.field.U.com1.layerAdd(- flow.para.dt * dmpg1, j);
+				flow.field.U.com3.layerAdd(- flow.para.dt * dmpg3, j);
+			}
+
+		}
+
+
 		flow.output();
 		flow.input ();
 	}
 }
 
+# endif
+/***** ***** *****/
 
 
 

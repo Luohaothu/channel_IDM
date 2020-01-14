@@ -12,16 +12,15 @@
 
 
 
-void SGS::smargorinsky(Scla &EV, Vctr &U, double Cs, double Re)
+void SGS::smargorinsky(double Cs, double Re)
 {
 	int i, j, k;
 	double *sr, sra, dlt, dmp;
 
 	// calculate delta_nu. NOTE: this only applys when boundary is on the wall
-	Scla &U1 = U.com1;
 	double tauw = (0.5/Re) * (
-		(U1.layerMean(1) - U1.layerMean(0))    / h[1]
-	-	(U1.layerMean(Ny)- U1.layerMean(Ny-1)) / h[Ny] );
+		( U[1].av(1) - U[1].av(0)    ) / h[1]
+	  - ( U[1].av(Ny)- U[1].av(Ny-1) ) / h[Ny] );
 	double Ret = Re * sqrt(tauw);	// Ly is taken for 2.0 as default
 
 	// calculate eddy viscosity at cell centers
@@ -42,13 +41,11 @@ void SGS::smargorinsky(Scla &EV, Vctr &U, double Cs, double Re)
 		}}
 	}
 	// equate the boundary eddy viscosity to the first layer off wall
-	EV.layerCpy(EV, 0 , 1);
-	EV.layerCpy(EV, Ny, Ny-1);
-
+	EV.lyrSet(EV[1], 0).lyrSet(EV[Ny-1], Ny);
 }
 
 
-void SGS::dynamicsmarg(Scla &EV, Vctr &U)
+void SGS::dynamicsmarg()
 {
 	int i, j, k;
 	double *sr, sra, dlt1, dlt2, u, v, w;
@@ -58,10 +55,10 @@ void SGS::dynamicsmarg(Scla &EV, Vctr &U)
 	char str[64];
 # endif
 
-	Mesh mesh0(Nx,0,Nz,Lx,0,Lz);
-	Scla S11(mesh0), S22(mesh0), S33(mesh0), S12(mesh0), S23(mesh0), S13(mesh0);
-	Scla M11(mesh0), M22(mesh0), M33(mesh0), M12(mesh0), M23(mesh0), M13(mesh0);
-	Scla L11(mesh0), L22(mesh0), L33(mesh0), L12(mesh0), L23(mesh0), L13(mesh0);
+	Mesh ms(Nx,0,Nz,Lx,0,Lz);
+	Scla S11(ms), S22(ms), S33(ms), S12(ms), S23(ms), S13(ms);
+	Scla M11(ms), M22(ms), M33(ms), M12(ms), M23(ms), M13(ms);
+	Scla L11(ms), L22(ms), L33(ms), L12(ms), L23(ms), L13(ms);
 	Scla &UC1 = L11, &UC2 = L22, &UC3 = L33, &UF1 = S12, &UF2 = S23, &UF3 = S13;
 
 	Interp flt1 (UC1,UF1), flt2 (UC2,UF2), flt3 (UC3,UF3);
@@ -128,9 +125,10 @@ void SGS::dynamicsmarg(Scla &EV, Vctr &U)
 		/***** solve Lij *****/
 
 		// U in cell centers, temporarily stored in Lii
-		U.com1.layerUG2CC(UC1,0,j); // L11
-		U.com2.layerVG2CC(UC2,0,j); // L22
-		U.com3.layerWG2CC(UC3,0,j); // L33
+		U.layer2CC(UC1[0], UC2[0], UC3[0], j); // L11, L22, L33
+		// U.com1.layerUG2CC(UC1,0,j); // L11
+		// U.com2.layerVG2CC(UC2,0,j); // L22
+		// U.com3.layerWG2CC(UC3,0,j); // L33
 
 		for (k=0; k<Nz; k++) {
 		for (i=0; i<Nx; i++) {
@@ -203,15 +201,13 @@ void SGS::dynamicsmarg(Scla &EV, Vctr &U)
 
 	}
 	
-	EV.layerCpy(EV, 0 , 1);
-	EV.layerCpy(EV, Ny, Ny-1);
-
-	mesh0.freeall();
+	EV.lyrSet(EV[1], 0).lyrSet(EV[Ny-1], Ny);
+	ms.freeall();
 }
 
 
 
-void SGS::dynamicvreman(Scla &EV, Vctr &U, double Re)
+void SGS::dynamicvreman(double Re)
 {
 	int i, j, k;
 	double *sr, fsr[6], sr2;
@@ -224,17 +220,17 @@ void SGS::dynamicvreman(Scla &EV, Vctr &U, double Re)
 	char str[64];
 # endif
 
-	Mesh mesh0(Nx,0,Nz,Lx,0,Lz);
+	Mesh ms(Nx,0,Nz,Lx,0,Lz);
 
-	Scla	FG11(mesh0), FG12(mesh0), FG13(mesh0), \
-			FG21(mesh0), FG22(mesh0), FG23(mesh0), \
-			FG31(mesh0), FG32(mesh0), FG33(mesh0), \
-			FGG (mesh0), FPSS(mesh0), FSFS(mesh0);
+	Scla	FG11(ms), FG12(ms), FG13(ms), \
+			FG21(ms), FG22(ms), FG23(ms), \
+			FG31(ms), FG32(ms), FG33(ms), \
+			FGG (ms), FPSS(ms), FSFS(ms);
 
-	Scla	G11(mesh0), G12(mesh0), G13(mesh0), \
-			G21(mesh0), G22(mesh0), G23(mesh0), \
-			G31(mesh0), G32(mesh0), G33(mesh0), \
-			GG (mesh0), PSS(mesh0), &SS = FSFS, \
+	Scla	G11(ms), G12(ms), G13(ms), \
+			G21(ms), G22(ms), G23(ms), \
+			G31(ms), G32(ms), G33(ms), \
+			GG (ms), PSS(ms), &SS = FSFS, \
 			&S11 = G11, &S22 = G12, &S33 = G13, \
 			&S12 = G21, &S23 = G22, &S13 = G23, \
 			&FS11 = FG11, &FS22 = FG12, &FS33 = FG13, \
@@ -330,11 +326,12 @@ void SGS::dynamicvreman(Scla &EV, Vctr &U, double Re)
 		}}
 	}
 
-	EV.bulkMlt(fmin(fmax(-.5/Re*sum1/sum2, 0), .5)); // PI^g has been assigned to EV
+	EV *= fmin(fmax(-.5/Re*sum1/sum2, 0), .5); // PI^g has been assigned to EV
+	// EV.bulkMlt(fmin(fmax(-.5/Re*sum1/sum2, 0), .5));
 	// EV.bulkMlt(0.05);
 
-	EV.layerCpy(EV, 0 , 1);
-	EV.layerCpy(EV, Ny, Ny-1);
+	EV.lyrSet(EV[1], 0).lyrSet(EV[Ny-1], Ny);
+	ms.freeall();
 
 # ifdef SGSDEBUG
 	sprintf(str, "%.18e\n", fmin(fmax(-.5/Re*sum1/sum2, 0), .5));

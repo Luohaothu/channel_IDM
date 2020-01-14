@@ -6,7 +6,7 @@
 class Interp
 {
 	public:
-		Interp(Scla &s0, Scla &s1);
+		Interp(Scla &src, Scla &dst);
 		~Interp();
 		
 		void layerPrdLin(int j0, int j1);
