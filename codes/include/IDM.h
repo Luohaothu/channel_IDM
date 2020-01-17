@@ -1,5 +1,6 @@
 # pragma once
 
+# include <omp.h>
 # include "Basic.h"
 
 
@@ -26,13 +27,16 @@ class IDM: private Mesh
 		void uhcalc(Vctr &UH,
 			const Feld &FLD, const Feld &VIS, const Feld &BC, const Vctr &FB, double dt)
 		{
-			urhs1(UH[1].blkGet(), FLD, VIS, FB[1].blkGet());
-			urhs2(UH[2].blkGet(), FLD, VIS, FB[2].blkGet());
-			urhs3(UH[3].blkGet(), FLD, VIS, FB[3].blkGet());
-			mbc(UH, FLD, VIS, BC);
-			getuh1(UH, FLD.V, VIS, dt);
-			getuh2(UH, FLD.V, VIS, dt);
-			getuh3(UH, FLD.V, VIS, dt);
+			# pragma omp parallel
+			{
+				urhs1(UH[1].blkGet(), FLD, VIS, FB[1].blkGet());
+				urhs2(UH[2].blkGet(), FLD, VIS, FB[2].blkGet());
+				urhs3(UH[3].blkGet(), FLD, VIS, FB[3].blkGet());
+				mbc(UH, FLD, VIS, BC);
+				getuh1(UH, FLD.V, VIS, dt);
+				getuh2(UH, FLD.V, VIS, dt);
+				getuh3(UH, FLD.V, VIS, dt);
+			}
 		};
 		void dpcalc(Feld &FLDH,
 			const Scla &P, const Vctr &UBC, double dt)

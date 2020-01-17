@@ -1,6 +1,5 @@
 # include <iostream>
 # include <math.h>
-# include <omp.h>
 
 # include "IDM.h"
 # include "Matrix.h"

@@ -21,10 +21,10 @@ CFLAGS = -I $(IDIR) $(LIBS)
 
 ##### file lists #####
 
-_DEPS = Basic.h Para.h Field.h Statis.h Matrix.h Interp.h IDM.h SGS.h Solver.h
+_DEPS = Basic.h Matrix.h Interp.h IDM.h SGS.h Solver.h Statis.h Para.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJS = Bulk.o Mesh.o Scla.o Vctr.o Field.o Matrix.o Interp.o IDM.o SGS.o Statis.o Para.o Solver.o main.o
+_OBJS = Mesh.o Bulk.o Scla.o Vctr.o Feld.o Matrix.o Interp.o IDM.o SGS.o Solver.o Statis.o Para.o main.o
 OBJS = $(patsubst %,$(ODIR)/%,$(_OBJS))
 
 
