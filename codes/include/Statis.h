@@ -5,27 +5,22 @@
 class Statis: private Mesh
 {
 	public:
+		Statis(): Mesh(1,0,1,1,0,1) {}; // default constructor, for static function call
 		Statis(const Mesh &mesh);
 		~Statis();
 
-		void check(Vctr &U, Scla &P, Scla &NU, double Re, double dt)
+		void check(const Feld &FLD, const Scla &NU, double Re, double dt)
 		{
-			this->checkDiv (U);
-			this->checkCFL (U, dt);
-			this->checkTaub(U, Re);
-			this->checkEner(U, P, NU);
+			checkDiv (FLD.V);
+			checkCFL (FLD.V, dt);
+			checkTaub(FLD.V, Re);
+			checkEner(FLD.V, FLD.S, NU);
 		};
-		double checkDiv (Vctr &U);
-		double checkCFL (Vctr &U, double dt);
-		double checkTaub(Vctr &U, double Re);
-		double checkEner(Vctr &U, Scla &P, Scla &NU);
 		
-		void writeProfile(char *path, int tstep=-1);
-
-		long int getLogpos(char *path, int tstep);
-		double getLogtime(char *path, int tstep);
-		void writeLogfile(char *path, int tstep, double time, double mpg[3]);
-
+		void writeProfile(const char *path, int tstep=-1) const;
+		void writeLogfile(const char *path, int tstep, double time, const double mpg[3]) const;
+		static double getLogtime(const char *path, int tstep);
+		
 	private:
 		double div;	int divpos[3];
 		double cfl;	int cflpos[3];
@@ -37,4 +32,11 @@ class Statis: private Mesh
 		double *R11, *R22, *R33, *R12, *R23, *R13;
 		double *Rpu, *Rpv, *Rpw, *Rpp;
 		double *Num;
+
+		double checkDiv (const Vctr &U);
+		double checkCFL (const Vctr &U, double dt);
+		double checkTaub(const Vctr &U, double Re);
+		double checkEner(const Vctr &U, const Scla &P, const Scla &NU);
+
+		static long int getLogpos(const char *path, int tstep);
 };

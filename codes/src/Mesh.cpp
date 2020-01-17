@@ -49,8 +49,8 @@ dz((double) Lz / Nz), dz2(dz * dz)
 
 	int i, k;
 	// initiate wavenumbers
-	for (i=0; i<Nx; i++) ak1[i] = 2.0/dx2 * ( 1.0 - cos(kx(i) * dx) );
-	for (k=0; k<Nz; k++) ak3[k] = 2.0/dz2 * ( 1.0 - cos(kz(k) * dz) );
+	for (i=0; i<Nx; i++) ak1[i] = 2./dx2 * ( 1. - cos(kx(i) * dx) );
+	for (k=0; k<Nz; k++) ak3[k] = 2./dz2 * ( 1. - cos(kz(k) * dz) );
 	// initiate indexes
 	for (k=0; k<Nz; k++) {
 		kpa[k] = (k+1) % Nz;

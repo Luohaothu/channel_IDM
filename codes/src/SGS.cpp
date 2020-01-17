@@ -12,7 +12,7 @@
 
 
 
-void SGS::smargorinsky(double Cs, double Re)
+void SGS::smargorinsky(Scla &EV, const Vctr &U, double Re, double Cs)
 {
 	int i, j, k;
 	double *sr, sra, dlt, dmp;
@@ -45,7 +45,7 @@ void SGS::smargorinsky(double Cs, double Re)
 }
 
 
-void SGS::dynamicsmarg()
+void SGS::dynamicsmarg(Scla &EV, const Vctr &U)
 {
 	int i, j, k;
 	double *sr, sra, dlt1, dlt2, u, v, w;
@@ -126,9 +126,6 @@ void SGS::dynamicsmarg()
 
 		// U in cell centers, temporarily stored in Lii
 		U.layer2CC(UC1[0], UC2[0], UC3[0], j); // L11, L22, L33
-		// U.com1.layerUG2CC(UC1,0,j); // L11
-		// U.com2.layerVG2CC(UC2,0,j); // L22
-		// U.com3.layerWG2CC(UC3,0,j); // L33
 
 		for (k=0; k<Nz; k++) {
 		for (i=0; i<Nx; i++) {
@@ -207,7 +204,7 @@ void SGS::dynamicsmarg()
 
 
 
-void SGS::dynamicvreman(double Re)
+void SGS::dynamicvreman(Scla &EV, const Vctr &U, double Re)
 {
 	int i, j, k;
 	double *sr, fsr[6], sr2;
@@ -327,8 +324,6 @@ void SGS::dynamicvreman(double Re)
 	}
 
 	EV *= fmin(fmax(-.5/Re*sum1/sum2, 0), .5); // PI^g has been assigned to EV
-	// EV.bulkMlt(fmin(fmax(-.5/Re*sum1/sum2, 0), .5));
-	// EV.bulkMlt(0.05);
 
 	EV.lyrSet(EV[1], 0).lyrSet(EV[Ny-1], Ny);
 	ms.freeall();

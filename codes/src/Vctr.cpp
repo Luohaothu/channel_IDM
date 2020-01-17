@@ -15,6 +15,7 @@ using namespace std;
 double Vctr::divergence(int i, int j, int k) const
 /* compute divergence of a vector field at the center of cell (i,j,k) */
 {
+	double *u,*v,*w; this->ptrGet(u,v,w);
 	int idx= IDX(i,j,k);
 	int ip = IDX(ipa[i],j,k);
 	int jp = IDX(i,j+1,k);	// 1 <= j <= Ny-1
@@ -27,6 +28,7 @@ double Vctr::divergence(int i, int j, int k) const
 double Vctr::convection(int i, int j, int k) const
 /* compute convection coefficient of a vector field at the center of cell (i,j,k) */
 {
+	double *u,*v,*w; this->ptrGet(u,v,w);
 	int idx= IDX(i,j,k);
 	int ip = IDX(ipa[i],j,k);
 	int jp = IDX(i,j+1,k);	// 1 <= j <= Ny-1
@@ -40,6 +42,7 @@ double* Vctr::strainrate(int i, int j, int k) const
 /* compute the strain rate tensor of a vector field at the center of cell (i,j,k) */
 // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
 {
+	double *u,*v,*w; this->ptrGet(u,v,w);
 	int idx = IDX(i,j,k);	// 1 <= j <= Ny-1
 	int ip = IDX(ipa[i],j,k), jp = IDX(i,j+1,k), kp = IDX(i,j,kpa[k]);
 	int im = IDX(ima[i],j,k), jm = IDX(i,j-1,k), km = IDX(i,j,kma[k]);
@@ -79,6 +82,7 @@ double* Vctr::gradient(int i, int j, int k) const
 /* compute the gradient tensor of a vector field at the center of cell (i,j,k) */
 // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
 {
+	double *u,*v,*w; this->ptrGet(u,v,w);
 	int idx = IDX(i,j,k);
 	int ip = IDX(ipa[i],j,k), jp = IDX(i,j+1,k), kp = IDX(i,j,kpa[k]);
 	int im = IDX(ima[i],j,k), jm = IDX(i,j-1,k), km = IDX(i,j,kma[k]);

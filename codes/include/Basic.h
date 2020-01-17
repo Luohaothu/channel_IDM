@@ -40,22 +40,6 @@ class Mesh
 	private:
 		void getYmesh(double dy_min); // generate hypertan y and infer yc
 		void getYmesh(char *path);    // read existing y and infer yc
-
-	// protected:
-	// 	int idx, ip, im, jp, jm, kp, km,
-	// 		ipjp, jpkp, ipkp,  ipjm, jpkm, imkp,
-	// 		imjp, jmkp, ipkm,  imjm, jmkm, imkm;
-
-	// 	void getIDX(int i, int j, int k)
-	// 	{
-	// 		idx = IDX(i,j,k);
-	// 		ip = IDX(ipa[i],j,k); jp = IDX(i,j+1,k); kp = IDX(i,j,kpa[k]);
-	// 		im = IDX(ima[i],j,k); jm = IDX(i,j-1,k); km = IDX(i,j,kma[k]);
-	// 		ipjp = IDX(ipa[i],j+1,k); jpkp = IDX(i,j+1,kpa[k]); ipkp = IDX(ipa[i],j,kpa[k]);
-	// 		ipjm = IDX(ipa[i],j-1,k); jpkm = IDX(i,j+1,kma[k]); imkp = IDX(ima[i],j,kpa[k]);
-	// 		imjp = IDX(ima[i],j+1,k); jmkp = IDX(i,j-1,kpa[k]); ipkm = IDX(ipa[i],j,kma[k]);
-	// 		imjm = IDX(ima[i],j-1,k); jmkm = IDX(i,j-1,kma[k]); imkm = IDX(ima[i],j,kma[k]);
-	// 	};
 };
 
 
@@ -63,21 +47,22 @@ class Mesh
 class Bulk
 {
 	public:
-		Bulk(int n1, int n2, int n3, bool inift=false);	// memory allocation, dim is the array dimension, unrelated to the mesh dimension
+		Bulk(int n1, int n2, int n3);	// memory allocation, dim is the array dimension, unrelated to the mesh dimension
 		~Bulk();
 
-		double* fft ();
-		double* ifft();
-
 		// memory access functions
-		double& id (int i, int j=0, int k=0) const { return  q[nxz * j + nx * k + i]; };
-		double& idf(int i, int j=0, int k=0) const { return fq[nxzr* j + nxr* k + i]; };
-		double* lyrGet (int j=0) const { return &( q[nxz * j]); };
-		double* lyrGetF(int j=0) const { return &(fq[nxzr* j]); };
-		double* blkGet () const { return  q; };
-		double* blkGetF() const { return fq; };
+		double& id (int idx) const { return q[idx]; };
+		double& id (int i, int j, int k) const { return q[nxz * j + nx * k + i]; };
+		double& idf(int i, int j, int k) const { return q[nxzr* j + nxr* k + i + nxz]; };
+		double* lyrGet (int j=0) const { return &(q[nxz * j]); };
+		double* lyrGetF(int j=0) const { return &(q[nxzr* j + nxz]); };
+		double* blkGet () const { return lyrGet(); };
+		double* blkGetF() const { return lyrGetF(); };
 
 		// tool functions
+		void fft ();
+		void ifft();
+
 		Bulk& lyrSet(double a, int j=0) { this->layerTraverse(a, j, set); return *this; }; // set to a
 		Bulk& lyrAdd(double a, int j=0) { this->layerTraverse(a, j, add); return *this; }; // add a
 		Bulk& lyrMlt(double a, int j=0) { this->layerTraverse(a, j, mlt); return *this; }; // multiply by a
@@ -97,14 +82,12 @@ class Bulk
 		Bulk& blkDvd(double *src) { this->bulkTraverse(src, dvd); return *this; };
 
 		// IO functions
-		void fileIO(char *path, char *name, char mode) const;
-		void debug_AsciiOutput(char *path, char *name, int j1, int j2) const;
-
-	protected:
-		double *q;	// pointer to the bulk memory
-		double *fq;	// Fourier tansformed q with only the kx >= 0 half
+		void fileIO(const char *path, const char *name, char mode) const;
+		void debug_AsciiOutput(const char *path, const char *name, int j1, int j2, bool ifreal=true) const;
 
 	private:
+		double *q;	// pointer to the bulk memory
+
 		const int nx, ny, nz, nxz;
 		const int nxc, nxr, nxzc, nxzr;
 		fftw_plan *frcs;	// list of fft plans: 2D FFT from real data to complex data, FORWARD (exponent -1) and no normalization
@@ -127,10 +110,9 @@ class Bulk
 class Scla: private Mesh, public Bulk
 {
 	public:
-		Scla(const Mesh &mesh, bool inift=false):
-			Mesh(mesh), Bulk(Nx, Ny+1, Nz, inift) {};
+		Scla(const Mesh &mesh): Mesh(mesh), Bulk(Nx, Ny+1, Nz) {};
 
-		Mesh& meshGet() const { return (Mesh&)(*this); };
+		const Mesh& meshGet() const { return (const Mesh&)(*this); };
 
 		// integration
 		double layerMean(int j=0) const;
@@ -140,14 +122,18 @@ class Scla: private Mesh, public Bulk
 		double bulkMeanV() const;
 
 		// interpolation
-		void layerUG2CC(double *dst, int j);
-		void layerVG2CC(double *dst, int j);
-		void layerWG2CC(double *dst, int j);
+		void layerUG2CC(double *dst, int j) const;
+		void layerVG2CC(double *dst, int j) const;
+		void layerWG2CC(double *dst, int j) const;
+
+		void layerCC2XE(double *dst, int j) const;
+		void layerCC2YE(double *dst, int j) const;
+		void layerCC2ZE(double *dst, int j) const;
+		void CC2EG(double *dst1, double *dst2, double *dst3) const;
 
 		// operators
-		double* gradient(int i, int j, int k);
+		double* gradient(int i, int j, int k) const;
 
-		// double operator | (int j) const { return this->layerMean(j); };
 		double av(int j=0) const { return this->layerMean(j); };
 		double* operator [] (int j) const { return this->lyrGet(j); };
 
@@ -166,29 +152,29 @@ class Scla: private Mesh, public Bulk
 		Scla& operator -=(Scla &src) { this->blkMns(src.blkGet()); return *this; };
 		Scla& operator *=(Scla &src) { this->blkMlt(src.blkGet()); return *this; };
 		Scla& operator /=(Scla &src) { this->blkDvd(src.blkGet()); return *this; };
-
-		// Scla(const Mesh &mesh, const Bulk &bulk): Mesh(mesh), Bulk(bulk) {};
 };
 
 
 class Vctr: private Mesh
 {
 	public:
-		Vctr(const Mesh &mesh): Mesh(mesh), com1(mesh), com2(mesh), com3(mesh)
-		{ u = com1.blkGet(); v = com2.blkGet(); w = com3.blkGet(); };
+		Vctr(const Mesh &mesh): Mesh(mesh), V1(mesh), V2(mesh), V3(mesh) {};
 
-		Scla& operator [] (int i) const { return (Scla&)(i==1 ? com1 : i==2 ? com2 : com3); };
-		// Vctr& operator = (Vctr &src) { com1 = src[1]; com2 = src[2]; com3 = src[3]; return *this; };
-		// Vctr& operator = (double a) { com1 = a; com2 = a; com3 = a; return *this; };
+		const Mesh& meshGet() const { return (const Mesh&)(*this); };
 
-		Mesh& meshGet() const { return (Mesh&)(*this); };
+		Scla& operator [] (int i) const { return (Scla&)(i==1 ? V1 : i==2 ? V2 : V3); };
+
+		void ptrGet(double *&u, double *&v, double *&w) const
+		{ u = V1.blkGet(); v = V2.blkGet(); w = V3.blkGet(); };
+
+		Vctr& reset(double a=0) { V1 = a; V2 = a; V3 = a; return (Vctr&)(*this); };
 
 		// vector interpolation
-		void layer2CC(double *dst1, double *dst2, double *dst3, int j)
+		void layer2CC(double *dst1, double *dst2, double *dst3, int j) const
 		{
-			com1.layerUG2CC(dst1, j);
-			com2.layerVG2CC(dst2, j);
-			com3.layerWG2CC(dst3, j);
+			V1.layerUG2CC(dst1, j);
+			V2.layerVG2CC(dst2, j);
+			V3.layerWG2CC(dst3, j);
 		};
 
 		// vector operators
@@ -198,14 +184,36 @@ class Vctr: private Mesh
 		double* gradient  (int i, int j, int k) const;
 
 	private:
-		Scla com1, com2, com3;
-		double *u, *v, *w;
-		
-		// Vctr(const Mesh &mesh, const Scla &s1, const Scla &s2, const Scla &s3):
-		// 	Mesh(mesh),
-		// 	com1(s1), com2(s2), com3(s3),
-		// 	u(com1.bulkGet()), v(com2.bulkGet()), w(com3.bulkGet()) {};
+		Scla V1, V2, V3;
 };
 
+
+class Feld: private Mesh
+{
+	public:
+		Vctr V;
+		Scla S;
+
+		Feld(const Mesh &mesh): Mesh(mesh), V(mesh), S(mesh) {};
+
+		const Mesh& meshGet() const { return (const Mesh&)(*this); };
+
+		void ptrGet(double *&u, double *&v, double *&w, double *&p) const
+		{ V.ptrGet(u, v, w); p = S.blkGet(); };
+
+		Feld& reset(double a=0) { V.reset(a); S = a; return (Feld&)(*this); };
+		Feld& initrand(double energy);
+		Feld& initfrom(const Feld &feld);
+
+		void CC2EG() { S.CC2EG(V[1].blkGet(), V[2].blkGet(), V[3].blkGet()); };
+
+		// IO functions
+		Feld& writeField(const char *path, int tstep, char *suffix) const;
+		Feld& readField (const char *path, int tstep, char *suffix) const;
+		void writeTecplot(const char *path, int tstep, double time) const;
+
+	private:
+		// Scla& operator [] (int i) const { return (Scla&)(i<4 ? V[i] : S) };
+};
 
 

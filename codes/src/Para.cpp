@@ -1,6 +1,7 @@
 # include <iostream>
 # include <stdio.h>
 # include <string.h>
+# include <sys/stat.h>
 
 # include "Para.h"
 
@@ -8,48 +9,71 @@
 using namespace std;
 
 
-
-Para::Para(char workpath[1024])
+Para::Para(const char *path)
 {
-	/* initiate default parameters */
-
-	// file paths
-	sprintf(fieldpath, "fielddata/");
-	sprintf(probepath, "probedata/");
-	sprintf(statpath, "statdata/");
-	sprintf(postpath, "postdata/");
-	sprintf(inpath, "");
-
-	// computation control
-	bftype = 0;
-	nthrds = 0;
-
-	// physical parameters
-	Re = 100.0;
-	inener = 0.5;
-
-	// grid settings
-	Nx = 4;	// peridoic without overlap
-	Ny = 5;	// from wall to wall
-	Nz = 4;	// peridoic without overlap
-	Lx = 6.2832;
-	Ly = 2.0;
-	Lz = 3.1416;
-	dy_min = 0.2;
-
-	// time evolution control
-	Nt = 1000000;
-	dt = 1e-3;
-
-	// IO control
-	nread = 0;
-	nwrite = 10000;
-	nprint = 1000;
-	nprobe = 0;
-	jprbs[0] = 0;
-
+	XINDAT_modify_time = 0;
+	
+	if (path != NULL) {
 	/* if workpath provided, read the input file */
-	if (workpath != NULL) this->readPara(workpath);
+		strcpy(workpath, path);
+		checkPara();
+	}
+	else {
+	/* initiate default parameters */
+		strcpy(workpath, "");
+
+		// file paths
+		strcpy(fieldpath, "fielddata/");
+		strcpy(probepath, "probedata/");
+		strcpy(statpath,  "statdata/" );
+		strcpy(postpath,  "postdata/" );
+		strcpy(inpath,    ""          );
+
+		// computation control
+		bftype = 0;
+		nthrds = 0;
+
+		// physical parameters
+		Re = 100.0;
+		inener = 0.5;
+
+		// grid settings
+		Nx = 4;	// peridoic without overlap
+		Ny = 5;	// from wall to wall
+		Nz = 4;	// peridoic without overlap
+		Lx = 6.2832;
+		Ly = 2.0;
+		Lz = 3.1416;
+		dy_min = 0.2;
+
+		// time evolution control
+		Nt = 1000000;
+		dt = 1e-3;
+
+		// IO control
+		nread = 0;
+		nwrite = 10000;
+		nprint = 1000;
+		nprobe = 0;
+		jprbs[0] = 0;
+	}
+}
+
+void Para::checkPara(int tstep)
+{
+	char str[1024]; strcat(strcpy(str, workpath), "XINDAT");
+	struct stat buf; if (stat(str, &buf)) return; // get file state and store in buf, return if file not exist
+	time_t tempt = XINDAT_modify_time;
+
+	if (tempt < (XINDAT_modify_time = buf.st_mtime)) {
+
+		readPara();
+
+		if ((int)tempt != 0) {
+			cout << endl << str << " updated at step " << tstep << " as:" << endl;
+			showPara();
+		}
+	}
 }
 
 
@@ -63,7 +87,8 @@ void parseJprbs(int *jprbs, char *str)
 		else { jprbs[0] = j-1; break; }
 	}
 }
-void Para::readPara(char workpath[1024])
+
+void Para::readPara()
 {
 	char str[1024], *s;
 	FILE *fp = fopen(strcat(strcpy(str, workpath), "XINDAT"), "r");
@@ -96,12 +121,15 @@ void Para::readPara(char workpath[1024])
 		if (strstr(str, "jprbs")    ) { parseJprbs(jprbs, str); }
 	}
 
+	fclose(fp);
+
 	// change relative-to-XINDAT paths to be absolute or relative to the executable
 	strcpy(fieldpath, strcat(strcpy(str, workpath), fieldpath));
 	strcpy(probepath, strcat(strcpy(str, workpath), probepath));
-	strcpy(statpath, strcat(strcpy(str, workpath), statpath));
-	strcpy(postpath, strcat(strcpy(str, workpath), postpath));
-	if (inpath[0] != '/' && inpath[0] != '\\') strcpy(inpath, strcat(strcpy(str, workpath), inpath));
+	strcpy(statpath,  strcat(strcpy(str, workpath), statpath));
+	strcpy(postpath,  strcat(strcpy(str, workpath), postpath));
+	if (inpath[0] != '/' && inpath[0] != '\\')
+		strcpy(inpath, strcat(strcpy(str, workpath), inpath));
 }
 
 

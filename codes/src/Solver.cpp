@@ -12,43 +12,12 @@ using namespace std;
 
 
 
-void Solver::getbc()
-/* set boundary conditions UBC (not yet applied to velocity field) */
-{
-	field.UBC[1] = 0.;
-	field.UBC[2] = 0.;
-	field.UBC[3] = 0.;
-}
-
-void Solver::getbc(Vctr &U0)
-{
-	Interp(U0[1], field.UBC[1]).bulkFilter('U');
-	Interp(U0[2], field.UBC[2]).bulkFilter('X');
-	Interp(U0[3], field.UBC[3]).bulkFilter('U');
-}
-
-void Solver::getnu(double Re, int bftype)
-{
-	switch (bftype) {
-		case 2: sgs.smargorinsky(0.18, Re); field.NU += 1./Re; break;
-		case 3: sgs.dynamicsmarg();         field.NU += 1./Re; break;
-		case 4: sgs.dynamicvreman(Re);      field.NU += 1./Re; break;
-		default:                            field.NU  = 1./Re;
-	}
-}
-
-void Solver::getfb()
-{
-	field.FB[1] = 0.;
-	field.FB[2] = 0.;
-	field.FB[3] = 0.;
-}
 
 void Solver::removeSpanMean()
 {
 	int i, j, k, n;
 	double qm, *qsm = new double [mesh.Nx];
-	Bulk *bks[4] = {&field.U[1], &field.U[2], &field.UH[1], &field.UH[2]};
+	Bulk *bks[4] = {&FLD.V[1], &FLD.V[2], &FLDH.V[1], &FLDH.V[2]};
 
 	for (n=0; n<4; n++) {
 	for (j=1; j<mesh.Ny; j++) {
@@ -66,3 +35,44 @@ void Solver::removeSpanMean()
 
 	delete [] qsm;
 }
+
+
+void Solver::debug_Output(int tstep)
+{
+	char path[1024] = "debug/";
+	{
+		char names[4][32] = {"U", "V", "W", "P"};
+		FLD.V[1].debug_AsciiOutput(path, names[0], 0, mesh.Ny+1);
+		FLD.V[2].debug_AsciiOutput(path, names[1], 1, mesh.Ny+1);
+		FLD.V[3].debug_AsciiOutput(path, names[2], 0, mesh.Ny+1);
+		   FLD.S.debug_AsciiOutput(path, names[3], 0, mesh.Ny+1);
+	}{
+		char names[4][32] = {"UH", "VH", "WH", "DP"};
+		FLDH.V[1].debug_AsciiOutput(path, names[0], 0, mesh.Ny+1);
+		FLDH.V[2].debug_AsciiOutput(path, names[1], 1, mesh.Ny+1);
+		FLDH.V[3].debug_AsciiOutput(path, names[2], 0, mesh.Ny+1);
+		   FLDH.S.debug_AsciiOutput(path, names[3], 0, mesh.Ny+1);
+	}{
+		char names[4][32] = {"NUX", "NUY", "NUZ", "NU"};
+		VIS.V[1].debug_AsciiOutput(path, names[0], 0, mesh.Ny+1);
+		VIS.V[2].debug_AsciiOutput(path, names[1], 0, mesh.Ny+1);
+		VIS.V[3].debug_AsciiOutput(path, names[2], 0, mesh.Ny+1);
+		   VIS.S.debug_AsciiOutput(path, names[3], 0, mesh.Ny+1);
+	}{
+		char names[4][32] = {"UBC", "VBC", "WBC", "PBC"};
+		BC.V[1].debug_AsciiOutput(path, names[0], 0, 2);
+		BC.V[2].debug_AsciiOutput(path, names[1], 0, 2);
+		BC.V[3].debug_AsciiOutput(path, names[2], 0, 2);
+		   BC.S.debug_AsciiOutput(path, names[3], 0, 2);
+	}{
+		char names[3][32] = {"FBX", "FBY", "FBZ"};
+		FB[1].debug_AsciiOutput(path, names[0], 0, mesh.Ny+1);
+		FB[2].debug_AsciiOutput(path, names[1], 0, mesh.Ny+1);
+		FB[3].debug_AsciiOutput(path, names[2], 0, mesh.Ny+1);
+	}
+}
+
+
+
+
+

@@ -1,17 +1,27 @@
 # pragma once
 
+# include <ctime>
 
 class Para
 {
-	public:
-		Para(char workpath[1024]); // default workpath is where the executable exists
+	private:
+		char workpath[1024]; // workpath is where XINDAT lies and where data will be saved, relative to the executable, or absolute
+		time_t XINDAT_modify_time; // the last time XINDAT is modified
+		
+		void readPara();
 
+	public:
+		Para(const char *path); // assign default values and try para reading
+
+		void checkPara(int tstep = 0);
+		void showPara();
+		
 		// file paths
 		char fieldpath[1024];
 		char probepath[1024];
 		char statpath[1024];
 		char postpath[1024];
-		char inpath[1024];	// path of the continue computation files
+		char inpath[1024];	// workpath of the computation to be continued
 
 		// computation control
 		int bftype;			// type of body force (0: DNS, 1: MFU, 2: LES)
@@ -41,8 +51,6 @@ class Para
 		int nprobe;			// step interval for writing time serials of probed layers (0 for not outputing)
 		int jprbs[1024];	// layer indexes of layers to be probed (jprbs[0] store the number of layers)
 
-		void readPara(char workpath[1024]);	// if NULL is provided, use the current path and initiate with debug parameters
-		void showPara();
 };
 
 

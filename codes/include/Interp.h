@@ -6,7 +6,7 @@
 class Interp
 {
 	public:
-		Interp(Scla &src, Scla &dst);
+		Interp(const Scla &src, Scla &dst);
 		~Interp();
 		
 		void layerPrdLin(int j0, int j1);
@@ -17,8 +17,9 @@ class Interp
 		void bulkFilter(char stgtyp);	// wall-normal periodic filtering (prior) with wall-normal interpolation
 
 	private:
-		Scla &src, &dst;
-		Mesh &mesh0, &mesh1;
+		Scla &dst;
+		const Scla &src;
+		const Mesh &ms0, &ms1;
 
 		const int Nx0, Ny0, Nz0, Nxz0;
 		const int Nx1, Ny1, Nz1, Nxz1;

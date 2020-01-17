@@ -14,6 +14,8 @@ OUTPUT = idm_whn
 
 CC = icc
 LIBS = -lfftw3 -lm -qopenmp
+# CC = g++-9
+# LIBS = -lfftw3 -lm -fopenmp
 CFLAGS = -I $(IDIR) $(LIBS)
 
 
@@ -48,6 +50,10 @@ dirclean:
 	rm -r $(DATADIR)/postdata
 	make dir
 
+pat:
+	export CPLUS_INCLUDE_PATH=/usr/local/include
+	export LIBRARY_PATH=/usr/local/lib
+	
 .PHONY: remake
 remake:
 	make clean

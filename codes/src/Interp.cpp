@@ -9,18 +9,18 @@
 using namespace std;
 
 
-Interp::Interp(Scla &src, Scla &dst):
-src(src), mesh0(src.meshGet()),
-dst(dst), mesh1(dst.meshGet()),
-Nx0(mesh0.Nx), Nx1(mesh1.Nx),
-Ny0(mesh0.Ny), Ny1(mesh1.Ny),
-Nz0(mesh0.Nz), Nz1(mesh1.Nz),
-Nxz0(mesh0.Nxz),Nxz1(mesh1.Nxz),
-Lx0(mesh0.Lx), Lx1(mesh1.Lx),
-Ly0(mesh0.Ly), Ly1(mesh1.Ly),
-Lz0(mesh0.Lz), Lz1(mesh1.Lz),
-dx0(Lx0/Nx0),  dx1(Lx1/Nx1),
-dz0(Lz0/Nz0),  dz1(Lz1/Nz1),
+Interp::Interp(const Scla &src, Scla &dst):
+src(src), ms0(src.meshGet()),
+dst(dst), ms1(dst.meshGet()),
+Nx0(ms0.Nx), Nx1(ms1.Nx),
+Ny0(ms0.Ny), Ny1(ms1.Ny),
+Nz0(ms0.Nz), Nz1(ms1.Nz),
+Nxz0(ms0.Nxz),Nxz1(ms1.Nxz),
+Lx0(ms0.Lx), Lx1(ms1.Lx),
+Ly0(ms0.Ly), Ly1(ms1.Ly),
+Lz0(ms0.Lz), Lz1(ms1.Lz),
+dx0(Lx0/Nx0),dx1(Lx1/Nx1),
+dz0(Lz0/Nz0),dz1(Lz1/Nz1),
 rscl0(1.0*Nxz1/Nxz0),
 rscl1(Lx0*Lz0/Lx1/Lz1)
 {
@@ -82,24 +82,24 @@ rscl1(Lx0*Lz0/Lx1/Lz1)
 	// if Y1 is out of Y0 range, the value will be linearly extrapolated
 	// yc -> yc
 	for (j1=0; j1<=Ny1; j1++) {
-		y1 = mesh1.yc[j1];
-		if (j1 == 0) y0 = mesh0.yc[j0=1];
-		while (y0 <= y1 && j0 < Ny0) y0 = mesh0.yc[++j0];
+		y1 = ms1.yc[j1];
+		if (j1 == 0) y0 = ms0.yc[j0=1];
+		while (y0 <= y1 && j0 < Ny0) y0 = ms0.yc[++j0];
 		j0u[j1] = j0 - 1;
 	}
 	// y -> y
 	j0v[0] = 0; // note: Y1[0] do not participate in interpolation
 	for (j1=1; j1<=Ny1; j1++) {
-		y1 = mesh1.y[j1];
-		if (j1 == 1) y0 = mesh0.y[j0=2];
-		while (y0 <= y1 && j0 < Ny0) y0 = mesh0.y[++j0];
+		y1 = ms1.y[j1];
+		if (j1 == 1) y0 = ms0.y[j0=2];
+		while (y0 <= y1 && j0 < Ny0) y0 = ms0.y[++j0];
 		j0v[j1] = j0 - 1;
 	}
 	// y -> yc
 	for (j1=0; j1<=Ny1; j1++) {
-		y1 = mesh1.yc[j1];
-		if (j1 == 0) y0 = mesh0.y[j0=2];
-		while (y0 <= y1 && j0 < Ny0) y0 = mesh0.y[++j0];
+		y1 = ms1.yc[j1];
+		if (j1 == 0) y0 = ms0.y[j0=2];
+		while (y0 <= y1 && j0 < Ny0) y0 = ms0.y[++j0];
 		j0x[j1] = j0 - 1;
 	}
 }
@@ -206,8 +206,8 @@ void Interp::layerTriFlt(int j0, int j1)
 	int im, ip, km, kp, imkm, ipkp, imkp, ipkm;
 	double *q0 = src.lyrGet(j0), *q1 = dst.lyrGet(j1);
 
-	for (k=0; k<Nz0; k++) { km0 = mesh0.kma[k]; kp0 = mesh0.kpa[k];
-	for (i=0; i<Nx0; i++) { im0 = mesh0.ima[i]; ip0 = mesh0.ipa[i];
+	for (k=0; k<Nz0; k++) { km0 = ms0.kma[k]; kp0 = ms0.kpa[k];
+	for (i=0; i<Nx0; i++) { im0 = ms0.ima[i]; ip0 = ms0.ipa[i];
 
 		idx = Nx0 * k + i;
 		im = Nx0 * k + im0;
@@ -242,19 +242,19 @@ void Interp::layerY(int j1, char stgtyp)
 
 	if (stgtyp == 'U')
 	{	j0 = j0u[j1];
-		y = mesh1.yc[j1];
-		y1 = mesh0.yc[j0];
-		y2 = mesh0.yc[j0+1];}
+		y = ms1.yc[j1];
+		y1 = ms0.yc[j0];
+		y2 = ms0.yc[j0+1];}
 	else if (stgtyp == 'V')
 	{	j0 = j0v[j1];
-		y = mesh1.y[j1];
-		y1 = mesh0.y[j0];
-		y2 = mesh0.y[j0+1];	}
+		y = ms1.y[j1];
+		y1 = ms0.y[j0];
+		y2 = ms0.y[j0+1];	}
 	else if (stgtyp == 'X')
 	{	j0 = j0x[j1];
-		y = mesh1.yc[j1];
-		y1 = mesh0.y[j0];
-		y2 = mesh0.y[j0+1];	}
+		y = ms1.yc[j1];
+		y1 = ms0.y[j0];
+		y2 = ms0.y[j0+1];	}
 
 	for (k=0; k<Nz1; k++) {
 	for (i=0; i<Nx1; i++) {
@@ -271,8 +271,8 @@ void Interp::bulkInterp(char stgtyp)
 	int j;
 	Mesh ms(Nx1,Ny0,Nz1,Lx1,Ly0,Lz1);
 	for (j=0; j<=Ny0; j++) {
-		ms.y [j] = mesh0.y [j];
-		ms.yc[j] = mesh0.yc[j];
+		ms.y [j] = ms0.y [j];
+		ms.yc[j] = ms0.yc[j];
 	}
 
 	Scla mid(ms);
@@ -288,10 +288,10 @@ void Interp::bulkFilter(char stgtyp)
 /* combination of wall-normal interpolation and planar filter, wall-normal first */
 {
 	int j;
-	Mesh ms(Nx1,Ny0,Nz1,Lx1,Ly0,Lz1);
-	for (j=0; j<=Ny0; j++) {
-		ms.y [j] = mesh0.y [j];
-		ms.yc[j] = mesh0.yc[j];
+	Mesh ms(Nx0,Ny1,Nz0,Lx0,Ly1,Lz0);
+	for (j=0; j<=Ny1; j++) {
+		ms.y [j] = ms1.y [j];
+		ms.yc[j] = ms1.yc[j];
 	}
 
 	Scla mid(ms);
@@ -310,23 +310,23 @@ void Interp::bulkFilter(char stgtyp)
 // /* initiate flow field from given fields, interpolated to the current grid */
 // {
 // 	int i, j, k, idx, j0, *i0 = new int [Nx], *k0 = new int [Nz];
-// 	Mesh &mesh0 = src.meshGet();
-// 	int Nx0 = mesh0.Nx, Ny0 = mesh0.Ny, Nz0 = mesh0.Nz, Nxz0 = mesh0.Nxz;
-// 	double *yc0 = mesh0.yc, rescale = (mesh0.Lx * mesh0.Lz) / (Lx * Lz); // rescale = (alfa * beta) / (alfa0 * beta0)
+// 	Mesh &ms0 = src.meshGet();
+// 	int Nx0 = ms0.Nx, Ny0 = ms0.Ny, Nz0 = ms0.Nz, Nxz0 = ms0.Nxz;
+// 	double *yc0 = ms0.yc, rescale = (ms0.Lx * ms0.Lz) / (Lx * Lz); // rescale = (alfa * beta) / (alfa0 * beta0)
 
 // 	// nearest interpolation for x and z directions in Fourier space
 // 	// find out nearest point for every wavenumber k_z
 // 	for (k=0; k<Nz; k++) {	k0[k] = 0;
 // 	for (int k1=1; k1<Nz0; k1++) {
-// 		if (  fabs(kz(k) - mesh0.kz(k1)   )
-// 			< fabs(kz(k) - mesh0.kz(k0[k]))	)	k0[k] = k1;
+// 		if (  fabs(kz(k) - ms0.kz(k1)   )
+// 			< fabs(kz(k) - ms0.kz(k0[k]))	)	k0[k] = k1;
 
 // 	}}
 // 	// find out nearesr point for every wavenumber k_x
 // 	for (i=0; i<Nx; i++) {	i0[i] = 0;
 // 	for (int i1=1; i1<Nx0; i1++) {
-// 		if (  fabs(kx(i) - mesh0.kx(i1)   )
-// 			< fabs(kx(i) - mesh0.kx(i0[i]))	)	i0[i] = i1;
+// 		if (  fabs(kx(i) - ms0.kx(i1)   )
+// 			< fabs(kx(i) - ms0.kx(i0[i]))	)	i0[i] = i1;
 // 	}}
 
 // 	src.fft();
