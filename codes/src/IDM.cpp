@@ -124,7 +124,7 @@ void IDM::velocBD(Vctr &U, const Vctr &UBC)
 void IDM::urhs1(double *ruh, const Feld &FLD, const Feld &VIS, double *fbx)
 /* compute right hand side R_1 for intermediate velocity at all non-wall grid points */
 {
-	int i, j, k, idx, ip, im, jp, jm, kp, km, imjp, imkp, imjm, imkm, jup, jum;
+	int i, j, k, idx, ip, im, jp, jm, kp, km, imjp, imkp, jup, jum;
 	double vis1, vis2, vis3, vis4, vis5, vis6;
 	double u1, u2, v1, v2, w1, w2;
 	double api, aci, ami, apj, acj, amj, apk, ack, amk, mbcu, mbcd;
@@ -139,7 +139,6 @@ void IDM::urhs1(double *ruh, const Feld &FLD, const Feld &VIS, double *fbx)
 	for (i=0; i<Nx; i++) {
 		idx = IDX(i,j,k);
 		imjp = IDX(ima[i],j+1,k); imkp = IDX(ima[i],j,kpa[k]);
-		imjm = IDX(ima[i],j-1,k); imkm = IDX(ima[i],j,kma[k]);
 		ip = IDX(ipa[i],j,k); jp = IDX(i,j+1,k); kp = IDX(i,j,kpa[k]);
 		im = IDX(ima[i],j,k); jm = IDX(i,j-1,k); km = IDX(i,j,kma[k]);
 
@@ -148,41 +147,41 @@ void IDM::urhs1(double *ruh, const Feld &FLD, const Feld &VIS, double *fbx)
 		vis3 = nuz[idx]; vis4 = nuz[jp];
 		vis5 = nuy[idx]; vis6 = nuy[kp];
 
-		u2 = 0.5 * (u[idx]+ u[ip]);
-		u1 = 0.5 * (u[idx]+ u[im]);
-		v2 = 0.5 * (v[jp] + v[imjp]);
-		v1 = 0.5 * (v[idx]+ v[im]);
-		w2 = 0.5 * (w[kp] + w[imkp]);
-		w1 = 0.5 * (w[idx]+ w[im]);
+		u2 = .5 * (u[idx]+ u[ip]);
+		u1 = .5 * (u[idx]+ u[im]);
+		v2 = .5 * (v[jp] + v[imjp]);
+		v1 = .5 * (v[idx]+ v[im]);
+		w2 = .5 * (w[kp] + w[imkp]);
+		w1 = .5 * (w[idx]+ w[im]);
 
 		// viscous terms
-		api = 1.0/dx2 * vis2;
-		aci =-1.0/dx2 *(vis2+vis1);
-		ami = 1.0/dx2 * vis1;
-		apj = 0.5/dy[j] * vis4/h[j+1];
-		acj =-0.5/dy[j] *(vis4/h[j+1]+vis3/h[j]);
-		amj = 0.5/dy[j] * vis3/h[j];
-		apk = 0.5/dz2 * vis6;
-		ack =-0.5/dz2 *(vis6+vis5);
-		amk = 0.5/dz2 * vis5;
+		api = 1./dx2 * vis2;
+		aci =-1./dx2 *(vis2+vis1);
+		ami = 1./dx2 * vis1;
+		apj = .5/dy[j] * vis4/h[j+1];
+		acj =-.5/dy[j] *(vis4/h[j+1]+vis3/h[j]);
+		amj = .5/dy[j] * vis3/h[j];
+		apk = .5/dz2 * vis6;
+		ack =-.5/dz2 *(vis6+vis5);
+		amk = .5/dz2 * vis5;
 
 		l11un =	api*u[ip] + aci*u[idx] + ami*u[im]
 			+	apj*u[jp] + acj*u[idx] + amj*u[jm]
 			+	apk*u[kp] + ack*u[idx] + amk*u[km];
-		l12vn = ( vis4 * (v[jp]-v[imjp]) - vis3 * (v[idx]-v[im]) ) / (2.0*dx*dy[j]);
-		l13wn = ( vis6 * (w[kp]-w[imkp]) - vis5 * (w[idx]-w[im]) ) / (2.0*dx*dz);
+		l12vn = .5/dx/dy[j] * (vis4 * (v[jp]-v[imjp]) - vis3 * (v[idx]-v[im]));
+		l13wn = .5/dx/dz    * (vis6 * (w[kp]-w[imkp]) - vis5 * (w[idx]-w[im]));
 
 		// non-linear terms
 		// m11un
-		api = 0.5/dx * u2     - api;
-		aci = 0.5/dx *(u2-u1) - aci;
-		ami =-0.5/dx * u1     - ami;
-		apj = 0.25/h[j+1]* v2                                   - apj;
-		acj = 0.25/dy[j] *(v2*dy[j+1]/h[j+1] - v1*dy[j-1]/h[j]) - acj;
-		amj =-0.25/h[j]  * v1                                   - amj;
-		apk = 0.25/dz * w2     - apk;
-		ack = 0.25/dz *(w2-w1) - ack;
-		amk =-0.25/dz * w1     - amk;
+		api = .5/dx * u2     - api;
+		aci = .5/dx *(u2-u1) - aci;
+		ami =-.5/dx * u1     - ami;
+		apj = .25/h[j+1]* v2                                   - apj;
+		acj = .25/dy[j] *(v2*dy[j+1]/h[j+1] - v1*dy[j-1]/h[j]) - acj;
+		amj =-.25/h[j]  * v1                                   - amj;
+		apk = .25/dz * w2     - apk;
+		ack = .25/dz *(w2-w1) - ack;
+		amk =-.25/dz * w1     - amk;
 
 		// mbcd = amj * ubc[IDX(i,0,k)];
 		// mbcu = apj * ubc[IDX(i,1,k)];
@@ -194,20 +193,21 @@ void IDM::urhs1(double *ruh, const Feld &FLD, const Feld &VIS, double *fbx)
 			+	apk*u[kp] + ack*u[idx] + amk*u[km];
 
 		// m12vn
-		u2 = ( u[idx]*dy[j+1] + u[jp]*dy[j] ) / (2.0*h[j+1]);
-		u1 = ( u[idx]*dy[j-1] + u[jm]*dy[j] ) / (2.0*h[j]);
+		u2 = .5/h[j+1] * (u[idx]*dy[j+1] + u[jp]*dy[j]);
+		u1 = .5/h[j]   * (u[idx]*dy[j-1] + u[jm]*dy[j]);
 
 		// mbcd = .5/dy[1]    * (-u1 * (vbc[IDX(i,0,k)]+vbc[IDX(ima[i],0,k)])/2. + vis3 * (vbc[IDX(i,0,k)]-vbc[IDX(ima[i],0,k)])/dx );
 		// mbcu = .5/dy[Ny-1] * ( u2 * (vbc[IDX(i,1,k)]+vbc[IDX(ima[i],1,k)])/2. - vis4 * (vbc[IDX(i,1,k)]-vbc[IDX(ima[i],1,k)])/dx );
 		// mbc += (jum-1) * mbcd + (jup-1) * mbcu;
 		u2 *= jup;	vis4 *= jup;
 		u1 *= jum;	vis3 *= jum;
-		m12vn = .5/dy[j] * ( u2*v2 - u1*v1 - ( vis4 * (v[jp]-v[imjp]) - vis3 * (v[idx]-v[im]) )/dx );
+		m12vn = .5/dy[j]    * (u2*v2 - u1*v1)
+			  - .5/dy[j]/dx * (vis4 * (v[jp]-v[imjp]) - vis3 * (v[idx]-v[im]));
 
 		// m13wn
-		u2 = 0.5 * ( u[idx] + u[kp] );
-		u1 = 0.5 * ( u[idx] + u[km] );
-		m13wn = (u2*w2 - u1*w1) / (2.0*dz) - l13wn;
+		u2 = .5 * (u[idx] + u[kp]);
+		u1 = .5 * (u[idx] + u[km]);
+		m13wn = .5/dz * (u2*w2 - u1*w1) - l13wn;
 
 		// pressure gradient term
 		pressg = (p[idx] - p[im]) / dx;
@@ -234,7 +234,7 @@ void IDM::urhs1(double *ruh, const Feld &FLD, const Feld &VIS, double *fbx)
 void IDM::urhs2(double *rvh, const Feld &FLD, const Feld &VIS, double *fby)
 /* compute right hand side R_2 for intermediate velocity at all non-wall grid points */
 {
-	int i, j, k, idx, ip, im, jp, jm, kp, km, ipjm, jmkp, imjm, jmkm, jup, jum;
+	int i, j, k, idx, ip, im, jp, jm, kp, km, ipjm, jmkp, jup, jum;
 	double vis1, vis2, vis3, vis4, vis5, vis6;
 	double u1, u2, v1, v2, w1, w2;
 	double api, aci, ami, apj, acj, amj, apk, ack, amk, mbcd, mbcu;
@@ -249,7 +249,6 @@ void IDM::urhs2(double *rvh, const Feld &FLD, const Feld &VIS, double *fby)
 	for (i=0; i<Nx; i++) {
 		idx = IDX(i,j,k);
 		ipjm = IDX(ipa[i],j-1,k); jmkp = IDX(i,j-1,kpa[k]);
-		imjm = IDX(ima[i],j-1,k); jmkm = IDX(i,j-1,kma[k]);
 		ip = IDX(ipa[i],j,k); jp = IDX(i,j+1,k); kp = IDX(i,j,kpa[k]);
 		im = IDX(ima[i],j,k); jm = IDX(i,j-1,k); km = IDX(i,j,kma[k]);
 
@@ -258,41 +257,41 @@ void IDM::urhs2(double *rvh, const Feld &FLD, const Feld &VIS, double *fby)
 		vis3 = nu[jm];   vis4 = nu[idx];
 		vis5 = nux[idx]; vis6 = nux[kp];
 
-		u2 = ( u[ip]*dy[j-1] + u[ipjm]*dy[j] ) / (2.0*h[j]);
-		u1 = ( u[idx]*dy[j-1] + u[jm]*dy[j] ) / (2.0*h[j]);
-		v2 = 0.5 * ( v[idx] + v[jp] );
-		v1 = 0.5 * ( v[idx] + v[jm] );
-		w2 = ( w[kp]*dy[j-1] + w[jmkp]*dy[j] ) / (2.0*h[j]);
-		w1 = ( w[idx]*dy[j-1] + w[jm]*dy[j] ) / (2.0*h[j]);
+		u2 = .5/h[j] * (u[ip]*dy[j-1] + u[ipjm]*dy[j]);
+		u1 = .5/h[j] * (u[idx]*dy[j-1] + u[jm]*dy[j]);
+		v2 = .5 * (v[idx] + v[jp]);
+		v1 = .5 * (v[idx] + v[jm]);
+		w2 = .5/h[j] * (w[kp]*dy[j-1] + w[jmkp]*dy[j]);
+		w1 = .5/h[j] * (w[idx]*dy[j-1] + w[jm]*dy[j]);
 
 		// viscous terms
-		api = 0.5/dx2 * vis2;
-		aci =-0.5/dx2 *(vis2+vis1);
-		ami = 0.5/dx2 * vis1;
-		apj = 1.0/h[j] * vis4/dy[j];
-		acj =-1.0/h[j] *(vis4/dy[j]+vis3/dy[j-1]);
-		amj = 1.0/h[j] * vis3/dy[j-1];
-		apk = 0.5/dz2 * vis6;
-		ack =-0.5/dz2 *(vis6+vis5);
-		amk = 0.5/dz2 * vis5;
+		api = .5/dx2 * vis2;
+		aci =-.5/dx2 *(vis2+vis1);
+		ami = .5/dx2 * vis1;
+		apj = 1./h[j] * vis4/dy[j];
+		acj =-1./h[j] *(vis4/dy[j]+vis3/dy[j-1]);
+		amj = 1./h[j] * vis3/dy[j-1];
+		apk = .5/dz2 * vis6;
+		ack =-.5/dz2 *(vis6+vis5);
+		amk = .5/dz2 * vis5;
 
-		l21un = ( vis2 * (u[ip]-u[ipjm]) - vis1 * (u[idx]-u[jm]) ) / (2.0*h[j]*dx);
+		l21un = .5/h[j]/dx * (vis2 * (u[ip]-u[ipjm]) - vis1 * (u[idx]-u[jm]));
 		l22vn =	api*v[ip] + aci*v[idx] + ami*v[im]
 			+	apj*v[jp] + acj*v[idx] + amj*v[jm]
 			+	apk*v[kp] + ack*v[idx] + amk*v[km];
-		l23wn = ( vis6 * (w[kp]-w[jmkp]) - vis5 * (w[idx]-w[jm]) ) / (2.0*h[j]*dz);
+		l23wn = .5/h[j]/dz * (vis6 * (w[kp]-w[jmkp]) - vis5 * (w[idx]-w[jm]));
 
 		// non-linear terms
 		// m22vn
-		api = 0.25/dx * u2     - api;
-		aci = 0.25/dx *(u2-u1) - aci;
-		ami =-0.25/dx * u1     - ami;
-		apj = 0.5/h[j]* v2     - apj;
-		acj = 0.5/h[j]*(v2-v1) - acj;
-		amj =-0.5/h[j]* v1     - amj;
-		apk = 0.25/dz * w2     - apk;
-		ack = 0.25/dz *(w2-w1) - ack;
-		amk =-0.25/dz * w1     - amk;
+		api = .25/dx * u2     - api;
+		aci = .25/dx *(u2-u1) - aci;
+		ami =-.25/dx * u1     - ami;
+		apj = .5/h[j]* v2     - apj;
+		acj = .5/h[j]*(v2-v1) - acj;
+		amj =-.5/h[j]* v1     - amj;
+		apk = .25/dz * w2     - apk;
+		ack = .25/dz *(w2-w1) - ack;
+		amk =-.25/dz * w1     - amk;
 
 		// mbcd = amj * vbc[IDX(i,0,k)];
 		// mbcu = apj * vbc[IDX(i,1,k)];
@@ -304,14 +303,14 @@ void IDM::urhs2(double *rvh, const Feld &FLD, const Feld &VIS, double *fby)
 			+	apk*v[kp] + ack*v[idx] + amk*v[km];
 
 		// m21un
-		v2 = 0.5 * ( v[idx] + v[ip] );
-		v1 = 0.5 * ( v[idx] + v[im] );
-		m21un = (v2*u2 - v1*u1) / (2.0*dx) - l21un;
+		v2 = .5 * (v[idx] + v[ip]);
+		v1 = .5 * (v[idx] + v[im]);
+		m21un = .5/dx * (v2*u2 - v1*u1) - l21un;
 
 		// m23wn
-		v2 = 0.5 * ( v[idx] + v[kp] );
-		v1 = 0.5 * ( v[idx] + v[km] );
-		m23wn = (v2*w2 - v1*w1) / (2.0*dz) - l23wn;
+		v2 = .5 * (v[idx] + v[kp]);
+		v1 = .5 * (v[idx] + v[km]);
+		m23wn = .5/dz * (v2*w2 - v1*w1) - l23wn;
 
 		// pressure gradient term
 		pressg = (p[idx] - p[jm]) / h[j];
@@ -334,7 +333,7 @@ void IDM::urhs2(double *rvh, const Feld &FLD, const Feld &VIS, double *fby)
 void IDM::urhs3(double *rwh, const Feld &FLD, const Feld &VIS, double *fbz)
 /* compute right hand side R_3 for intermediate velocity at all non-wall grid points */
 {
-	int i, j, k, idx, ip, im, jp, jm, kp, km, ipkm, jpkm, imkm, jmkm, jup, jum;
+	int i, j, k, idx, ip, im, jp, jm, kp, km, ipkm, jpkm, jup, jum;
 	double vis1, vis2, vis3, vis4, vis5, vis6;
 	double u1, u2, v1, v2, w1, w2;
 	double api, aci, ami, apj, acj, amj, apk, ack, amk, mbcd, mbcu;
@@ -349,7 +348,6 @@ void IDM::urhs3(double *rwh, const Feld &FLD, const Feld &VIS, double *fbz)
 	for (i=0; i<Nx; i++) {
 		idx = IDX(i,j,k);
 		ipkm = IDX(ipa[i],j,kma[k]); jpkm = IDX(i,j+1,kma[k]);
-		imkm = IDX(ima[i],j,kma[k]); jmkm = IDX(i,j-1,kma[k]);
 		ip = IDX(ipa[i],j,k); jp = IDX(i,j+1,k); kp = IDX(i,j,kpa[k]);
 		im = IDX(ima[i],j,k); jm = IDX(i,j-1,k); km = IDX(i,j,kma[k]);
 
@@ -358,41 +356,41 @@ void IDM::urhs3(double *rwh, const Feld &FLD, const Feld &VIS, double *fbz)
 		vis3 = nux[idx]; vis4 = nux[jp];
 		vis5 = nu[km];   vis6 = nu[idx];
 
-		u2 = 0.5 * (u[ip] + u[ipkm]);
-		u1 = 0.5 * (u[idx]+ u[km]);
-		v2 = 0.5 * (v[jp] + v[jpkm]);
-		v1 = 0.5 * (v[idx]+ v[km]);
-		w2 = 0.5 * (w[idx]+ w[kp]);
-		w1 = 0.5 * (w[idx]+ w[km]);
+		u2 = .5 * (u[ip] + u[ipkm]);
+		u1 = .5 * (u[idx]+ u[km]);
+		v2 = .5 * (v[jp] + v[jpkm]);
+		v1 = .5 * (v[idx]+ v[km]);
+		w2 = .5 * (w[idx]+ w[kp]);
+		w1 = .5 * (w[idx]+ w[km]);
 
 		// viscous terms
-		api = 0.5/dx2 * vis2;
-		aci =-0.5/dx2 *(vis2+vis1);
-		ami = 0.5/dx2 * vis1;
-		apj = 0.5/dy[j] * vis4/h[j+1];
-		acj =-0.5/dy[j] *(vis4/h[j+1]+vis3/h[j]);
-		amj = 0.5/dy[j] * vis3/h[j];
-		apk = 1.0/dz2 * vis6;
-		ack =-1.0/dz2 *(vis6+vis5);
-		amk = 1.0/dz2 * vis5;
+		api = .5/dx2 * vis2;
+		aci =-.5/dx2 *(vis2+vis1);
+		ami = .5/dx2 * vis1;
+		apj = .5/dy[j] * vis4/h[j+1];
+		acj =-.5/dy[j] *(vis4/h[j+1]+vis3/h[j]);
+		amj = .5/dy[j] * vis3/h[j];
+		apk = 1./dz2 * vis6;
+		ack =-1./dz2 *(vis6+vis5);
+		amk = 1./dz2 * vis5;
 
-		l31un = ( vis2 * (u[ip]-u[ipkm]) - vis1 * (u[idx]-u[km]) ) / (2.0*dz*dx);
-		l32vn = ( vis4 * (v[jp]-v[jpkm]) - vis3 * (v[idx]-v[km]) ) / (2.0*dz*dy[j]);
+		l31un = .5/dz/dx    * (vis2 * (u[ip]-u[ipkm]) - vis1 * (u[idx]-u[km]));
+		l32vn = .5/dz/dy[j] * (vis4 * (v[jp]-v[jpkm]) - vis3 * (v[idx]-v[km]));
 		l33wn =	api*w[ip] + aci*w[idx] + ami*w[im]
 			+	apj*w[jp] + acj*w[idx] + amj*w[jm]
 			+	apk*w[kp] + ack*w[idx] + amk*w[km];
 
 		// non-linear terms
 		// m33wn
-		api = 0.25/dx * u2     - api;
-		aci = 0.25/dx *(u2-u1) - aci;
-		ami =-0.25/dx * u1     - ami;
-		apj = 0.25/h[j+1]* v2                                   - apj;
-		acj = 0.25/dy[j] *(v2*dy[j+1]/h[j+1] - v1*dy[j-1]/h[j]) - acj;
-		amj =-0.25/h[j]  * v1                                   - amj;
-		apk = 0.5/dz * w2     - apk;
-		ack = 0.5/dz *(w2-w1) - ack;
-		amk =-0.5/dz * w1     - amk;
+		api = .25/dx * u2     - api;
+		aci = .25/dx *(u2-u1) - aci;
+		ami =-.25/dx * u1     - ami;
+		apj = .25/h[j+1]* v2                                   - apj;
+		acj = .25/dy[j] *(v2*dy[j+1]/h[j+1] - v1*dy[j-1]/h[j]) - acj;
+		amj =-.25/h[j]  * v1                                   - amj;
+		apk = .5/dz * w2     - apk;
+		ack = .5/dz *(w2-w1) - ack;
+		amk =-.5/dz * w1     - amk;
 
 		// mbcd = amj * wbc[IDX(i,0,k)];
 		// mbcu = apj * wbc[IDX(i,1,k)];
@@ -404,20 +402,21 @@ void IDM::urhs3(double *rwh, const Feld &FLD, const Feld &VIS, double *fbz)
 			+	apk*w[kp] + ack*w[idx] + amk*w[km];
 
 		// m32vn
-		w2 = ( w[idx]*dy[j+1] + w[jp]*dy[j] ) / (2.0*h[j+1]);
-		w1 = ( w[idx]*dy[j-1] + w[jm]*dy[j] ) / (2.0*h[j]);
+		w2 = .5/h[j+1] * (w[idx]*dy[j+1] + w[jp]*dy[j]);
+		w1 = .5/h[j]   * (w[idx]*dy[j-1] + w[jm]*dy[j]);
 
 		// mbcd = .5/dy[1]    * (-w1 * (vbc[IDX(i,0,k)]+vbc[IDX(i,0,kma[k])])/2. + vis3 * (vbc[IDX(i,0,k)]-vbc[IDX(i,0,kma[k])])/dz );
 		// mbcu = .5/dy[Ny-1] * ( w2 * (vbc[IDX(i,1,k)]+vbc[IDX(i,1,kma[k])])/2. - vis4 * (vbc[IDX(i,1,k)]-vbc[IDX(i,1,kma[k])])/dz );
 		// mbc += (jum-1) * mbcd + (jup-1) * mbcu;
 		w2 *= jup;	vis4 *= jup;
 		w1 *= jum;	vis3 *= jum;
-		m32vn = .5/dy[j] * ( w2*v2 - w1*v1 - ( vis4 * (v[jp]-v[jpkm]) - vis3 * (v[idx]-v[km]) )/dz ); // = (w2*v2 - w1*v1) / (2.0*dy[j]) - ( vis4 * (v[jp]-v[jpkm]) - vis3 * (v[idx]-v[km]) ) / (2.0*dz*dy[j]);
+		m32vn = .5/dy[j]    * (w2*v2 - w1*v1)
+		      - .5/dy[j]/dz * (vis4 * (v[jp]-v[jpkm]) - vis3 * (v[idx]-v[km]));
 
 		// m31un
-		w2 = 0.5 * ( w[idx] + w[ip] );
-		w1 = 0.5 * ( w[idx] + w[im] );
-		m31un = (w2*u2 - w1*u1) / (2.0*dx) - l31un;
+		w2 = .5 * (w[idx] + w[ip]);
+		w1 = .5 * (w[idx] + w[im]);
+		m31un = .5/dx * (w2*u2 - w1*u1) - l31un;
 
 		// pressure gradient term
 		pressg = (p[idx] - p[km]) / dz;
@@ -985,6 +984,234 @@ void IDM::getfdp(double *fdp, double refp)
 
 
 
+/***** tool functions *****/
+
+void IDM::muh1(double *muh1, const Vctr &UH, const Vctr &U, const Feld &VIS)
+/* compute the 1st line of non-linear operator M operating on UH at all non-wall grid points */
+{
+	int i, j, k, idx, ip, im, jp, jm, kp, km, imjp, imkp, jup, jum;
+	double vis1, vis2, vis3, vis4, vis5, vis6;
+	double u1, u2, v1, v2, w1, w2;
+	double api, aci, ami, apj, acj, amj, apk, ack, amk, mbcu, mbcd;
+	double m11uh, m12vh, m13wh;
+
+	double *u,*v,*w;             U.ptrGet(u,v,w);
+	double *uh,*vh,*wh;         UH.ptrGet(uh,vh,wh);
+	double *nux,*nuy,*nuz,*nu; VIS.ptrGet(nux,nuy,nuz,nu);
+
+	for (j=1; j<Ny; j++) { jup = (j!=Ny-1); jum = (j!=1); // indicate the secondary boundary
+	for (k=0; k<Nz; k++) {
+	for (i=0; i<Nx; i++) {
+		idx = IDX(i,j,k);
+		imjp = IDX(ima[i],j+1,k); imkp = IDX(ima[i],j,kpa[k]);
+		ip = IDX(ipa[i],j,k); jp = IDX(i,j+1,k); kp = IDX(i,j,kpa[k]);
+		im = IDX(ima[i],j,k); jm = IDX(i,j-1,k); km = IDX(i,j,kma[k]);
+
+		// interpolate viscosity and velocity at step n to the position needed
+		vis1 = nu[im];   vis2 = nu[idx];
+		vis3 = nuz[idx]; vis4 = nuz[jp];
+		vis5 = nuy[idx]; vis6 = nuy[kp];
+
+		// m11uh
+		u2 = .5 * (u[idx]+ u[ip]);
+		u1 = .5 * (u[idx]+ u[im]);
+		v2 = .5 * (v[jp] + v[imjp]);
+		v1 = .5 * (v[idx]+ v[im]);
+		w2 = .5 * (w[kp] + w[imkp]);
+		w1 = .5 * (w[idx]+ w[im]);
+
+		api = .5/dx * u2     - 1./dx2 * vis2;
+		aci = .5/dx *(u2-u1) + 1./dx2 *(vis2+vis1);
+		ami =-.5/dx * u1     - 1./dx2 * vis1;
+		apj = .25/h[j+1]* v2                                   - .5/dy[j] * vis4/h[j+1];
+		acj = .25/dy[j] *(v2*dy[j+1]/h[j+1] - v1*dy[j-1]/h[j]) + .5/dy[j] *(vis4/h[j+1]+vis3/h[j]);
+		amj =-.25/h[j]  * v1                                   - .5/dy[j] * vis3/h[j];
+		apk = .25/dz * w2     - .5/dz2 * vis6;
+		ack = .25/dz *(w2-w1) + .5/dz2 *(vis6+vis5);
+		amk =-.25/dz * w1     - .5/dz2 * vis5;
+
+		apj *= jup;
+		amj *= jum;
+		m11uh =	api*uh[ip] + aci*uh[idx] + ami*uh[im]
+			+	apj*uh[jp] + acj*uh[idx] + amj*uh[jm]
+			+	apk*uh[kp] + ack*uh[idx] + amk*uh[km];
+
+		// m12vh
+		u2 = .5/h[j+1] * (u[idx]*dy[j+1] + u[jp]*dy[j]);
+		u1 = .5/h[j]   * (u[idx]*dy[j-1] + u[jm]*dy[j]);
+
+		v2 = .5 * (vh[jp] + vh[imjp]);
+		v1 = .5 * (vh[idx]+ vh[im]);
+
+		u2 *= jup;	vis4 *= jup;
+		u1 *= jum;	vis3 *= jum;
+		m12vh = .5/dz    * (u2*v2 - u1*v1)
+		      - .5/dz/dx * (vis4 * (vh[jp]-vh[imjp]) - vis3 * (vh[idx]-vh[im]));
+
+		// m13wn
+		u2 = .5 * (u[idx] + u[kp]);
+		u1 = .5 * (u[idx] + u[km]);
+
+		w2 = .5 * (wh[kp] + wh[imkp]);
+		w1 = .5 * (wh[idx]+ wh[im]);
+
+		m13wh = .5/dz    * (u2*w2 - u1*w1)
+		      - .5/dz/dx * (vis6 * (wh[kp]-wh[imkp]) - vis5 * (wh[idx]-wh[im]));
+
+		muh1[idx] = m11uh + m12vh + m13wh;
+	}}}
+}
+
+void IDM::muh2(double *muh2, const Vctr &UH, const Vctr &U, const Feld &VIS)
+/* compute the 2nd line of non-linear operator M operating on UH at all non-wall grid points */
+{
+	int i, j, k, idx, ip, im, jp, jm, kp, km, ipjm, jmkp, jup, jum;
+	double vis1, vis2, vis3, vis4, vis5, vis6;
+	double u1, u2, v1, v2, w1, w2;
+	double api, aci, ami, apj, acj, amj, apk, ack, amk, mbcd, mbcu;
+	double m21uh, m22vh, m23wh;
+
+	double *u,*v,*w;             U.ptrGet(u,v,w);
+	double *uh,*vh,*wh;         UH.ptrGet(uh,vh,wh);
+	double *nux,*nuy,*nuz,*nu; VIS.ptrGet(nux,nuy,nuz,nu);
+
+	for (j=2; j<Ny; j++) { jup = (j!=Ny-1); jum = (j!=2);
+	for (k=0; k<Nz; k++) {
+	for (i=0; i<Nx; i++) {
+		idx = IDX(i,j,k);
+		ipjm = IDX(ipa[i],j-1,k); jmkp = IDX(i,j-1,kpa[k]);
+		ip = IDX(ipa[i],j,k); jp = IDX(i,j+1,k); kp = IDX(i,j,kpa[k]);
+		im = IDX(ima[i],j,k); jm = IDX(i,j-1,k); km = IDX(i,j,kma[k]);
+
+		// interpolate viscosity and velocity at step n to the position needed
+		vis1 = nuz[idx]; vis2 = nuz[ip];
+		vis3 = nu[jm];   vis4 = nu[idx];
+		vis5 = nux[idx]; vis6 = nux[kp];
+
+		// m22vh
+		u2 = .5/h[j] * (u[ip]*dy[j-1] + u[ipjm]*dy[j]);
+		u1 = .5/h[j] * (u[idx]*dy[j-1] + u[jm]*dy[j]);
+		v2 = .5 * (v[idx] + v[jp]);
+		v1 = .5 * (v[idx] + v[jm]);
+		w2 = .5/h[j] * (w[kp]*dy[j-1] + w[jmkp]*dy[j]);
+		w1 = .5/h[j] * (w[idx]*dy[j-1] + w[jm]*dy[j]);
+
+		api = .25/dx * u2     - .5/dx2 * vis2;
+		aci = .25/dx *(u2-u1) + .5/dx2 *(vis2+vis1);
+		ami =-.25/dx * u1     - .5/dx2 * vis1;
+		apj = .5/h[j]* v2     - 1./h[j] * vis4/dy[j];
+		acj = .5/h[j]*(v2-v1) + 1./h[j] *(vis4/dy[j]+vis3/dy[j-1]);
+		amj =-.5/h[j]* v1     - 1./h[j] * vis3/dy[j-1];
+		apk = .25/dz * w2     - .5/dz2 * vis6;
+		ack = .25/dz *(w2-w1) + .5/dz2 *(vis6+vis5);
+		amk =-.25/dz * w1     - .5/dz2 * vis5;
+
+		apj *= jup;
+		amj *= jum;
+		m22vh =	api*vh[ip] + aci*vh[idx] + ami*vh[im]
+			+	apj*vh[jp] + acj*vh[idx] + amj*vh[jm]
+			+	apk*vh[kp] + ack*vh[idx] + amk*vh[km];
+
+		// m21uh
+		v2 = .5 * (v[idx] + v[ip]);
+		v1 = .5 * (v[idx] + v[im]);
+
+		u2 = .5/h[j] * (uh[ip]*dy[j-1] + uh[ipjm]*dy[j]);
+		u1 = .5/h[j] * (uh[idx]*dy[j-1] + uh[jm]*dy[j]);
+
+		m21uh = .5/dx      * (v2*u2 - v1*u1)
+		      - .5/dx/h[j] * (vis2 * (uh[ip]-uh[ipjm]) - vis1 * (uh[idx]-uh[jm]));
+
+		// m23wh
+		v2 = .5 * (v[idx] + v[kp]);
+		v1 = .5 * (v[idx] + v[km]);
+
+		w2 = .5/h[j] * (wh[kp]*dy[j-1] + wh[jmkp]*dy[j]);
+		w1 = .5/h[j] * (wh[idx]*dy[j-1] + wh[jm]*dy[j]);
+
+		m23wh = .5/dz      * (v2*w2 - v1*w1)
+		      - .5/dz/h[j] * (vis6 * (wh[kp]-wh[jmkp]) - vis5 * (wh[idx]-wh[jm]));
+
+		muh2[idx] = m21uh + m22vh + m23wh;
+	}}}
+}
+
+
+void IDM::muh3(double *muh3, const Vctr &UH, const Vctr &U, const Feld &VIS)
+/* compute the 3rd line of non-linear operator M operating on UH at all non-wall grid points */
+{
+	int i, j, k, idx, ip, im, jp, jm, kp, km, ipkm, jpkm, jup, jum;
+	double vis1, vis2, vis3, vis4, vis5, vis6;
+	double u1, u2, v1, v2, w1, w2;
+	double api, aci, ami, apj, acj, amj, apk, ack, amk, mbcd, mbcu;
+	double m31uh, m32vh, m33wh;
+
+	double *u,*v,*w;             U.ptrGet(u,v,w);
+	double *uh,*vh,*wh;         UH.ptrGet(uh,vh,wh);
+	double *nux,*nuy,*nuz,*nu; VIS.ptrGet(nux,nuy,nuz,nu);
+
+	for (j=1; j<Ny; j++) { jup = (j!=Ny-1); jum = (j!=1);
+	for (k=0; k<Nz; k++) {
+	for (i=0; i<Nx; i++) {
+		idx = IDX(i,j,k);
+		ipkm = IDX(ipa[i],j,kma[k]); jpkm = IDX(i,j+1,kma[k]);
+		ip = IDX(ipa[i],j,k); jp = IDX(i,j+1,k); kp = IDX(i,j,kpa[k]);
+		im = IDX(ima[i],j,k); jm = IDX(i,j-1,k); km = IDX(i,j,kma[k]);
+
+		// interpolate viscosity and velocity at step n to the position needed
+		vis1 = nuy[idx]; vis2 = nuy[ip];
+		vis3 = nux[idx]; vis4 = nux[jp];
+		vis5 = nu[km];   vis6 = nu[idx];
+
+		// m33wh
+		u2 = .5 * (u[ip] + u[ipkm]);
+		u1 = .5 * (u[idx]+ u[km]);
+		v2 = .5 * (v[jp] + v[jpkm]);
+		v1 = .5 * (v[idx]+ v[km]);
+		w2 = .5 * (w[idx]+ w[kp]);
+		w1 = .5 * (w[idx]+ w[km]);
+
+		api = .25/dx * u2     - .5/dx2 * vis2;
+		aci = .25/dx *(u2-u1) + .5/dx2 *(vis2+vis1);
+		ami =-.25/dx * u1     - .5/dx2 * vis1;
+		apj = .25/h[j+1]* v2                                   - .5/dy[j] * vis4/h[j+1];
+		acj = .25/dy[j] *(v2*dy[j+1]/h[j+1] - v1*dy[j-1]/h[j]) + .5/dy[j] *(vis4/h[j+1]+vis3/h[j]);
+		amj =-.25/h[j]  * v1                                   - .5/dy[j] * vis3/h[j];
+		apk = .5/dz * w2     - 1./dz2 * vis6;
+		ack = .5/dz *(w2-w1) + 1./dz2 *(vis6+vis5);
+		amk =-.5/dz * w1     - 1./dz2 * vis5;
+
+		apj *= jup;
+		amj *= jum;
+		m33wh =	api*wh[ip] + aci*wh[idx] + ami*wh[im]
+			+	apj*wh[jp] + acj*wh[idx] + amj*wh[jm]
+			+	apk*wh[kp] + ack*wh[idx] + amk*wh[km];
+
+		// m32vn
+		w2 = .5/h[j+1] * (w[idx]*dy[j+1] + w[jp]*dy[j]);
+		w1 = .5/h[j]   * (w[idx]*dy[j-1] + w[jm]*dy[j]);
+
+		v2 = .5 * (vh[jp] + vh[jpkm]);
+		v1 = .5 * (vh[idx]+ vh[km]);
+
+		w2 *= jup;	vis4 *= jup;
+		w1 *= jum;	vis3 *= jum;
+		m32vh = .5/dy[j]    * (w2*v2 - w1*v1)
+		      - .5/dy[j]/dz * (vis4 * (vh[jp]-vh[jpkm]) - vis3 * (vh[idx]-vh[km]));
+
+		// m31un
+		w2 = .5 * (w[idx] + w[ip]);
+		w1 = .5 * (w[idx] + w[im]);
+
+		u2 = .5 * (uh[ip] + uh[ipkm]);
+		u1 = .5 * (uh[idx]+ uh[km]);
+
+		m31uh = .5/dx    * (w2*u2 - w1*u1)
+		      - .5/dx/dz * (vis2 * (uh[ip]-uh[ipkm]) - vis1 * (uh[idx]-uh[km]));
+
+		muh3[idx] = m31uh + m32vh + m33wh;
+	}}}
+}
 
 
 

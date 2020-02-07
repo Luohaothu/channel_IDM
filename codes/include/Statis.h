@@ -5,7 +5,7 @@
 class Statis: private Mesh
 {
 	public:
-		Statis(): Mesh(1,0,1,1,0,1) {}; // default constructor, for static function call
+		Statis(): Mesh(1,0,1,1,0,1) { freeall(); }; // default constructor, for static function call
 		Statis(const Mesh &mesh);
 		~Statis();
 

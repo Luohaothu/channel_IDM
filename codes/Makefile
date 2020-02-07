@@ -12,19 +12,19 @@ DATADIR = ../data
 
 OUTPUT = idm_whn
 
-CC = icc
-LIBS = -lfftw3 -lm -qopenmp
-# CC = g++-9
-# LIBS = -lfftw3 -lm -fopenmp
+# CC = icc
+# LIBS = -lfftw3 -lm -qopenmp
+CC = g++-9
+LIBS = -lfftw3 -lm -fopenmp
 CFLAGS = -I $(IDIR) $(LIBS)
 
 
 ##### file lists #####
 
-_DEPS = Basic.h Matrix.h Interp.h IDM.h SGS.h Solver.h Statis.h Para.h
+_DEPS = Basic.h Matrix.h Interp.h IDM.h SGS.h Solver.h Statis.h Para.h Press.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJS = Mesh.o Bulk.o Scla.o Vctr.o Feld.o Matrix.o Interp.o IDM.o SGS.o Solver.o Statis.o Para.o main.o
+_OBJS = Mesh.o Bulk.o Scla.o Vctr.o Feld.o Matrix.o Interp.o IDM.o SGS.o Solver.o Statis.o Para.o Press.o main.o
 OBJS = $(patsubst %,$(ODIR)/%,$(_OBJS))
 
 

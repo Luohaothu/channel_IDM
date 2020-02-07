@@ -43,7 +43,8 @@ void output(Statis &statis, Para &para, Solver &solver, int tstep, double time)
 {
 	if (tstep % para.nwrite == 0) {
 		solver.FLD.writeField(para.fieldpath, tstep, "");
-		// solver.FLDH.writeField(para.fieldpath, tstep, "T");
+		solver.FLDH.writeField(para.fieldpath, tstep, "T");
+		// solver.FLD.writeTecplot(para.fieldpath, tstep, time);
 		cout << "Files successfully written for step " << tstep << endl;
 	}
 	if (tstep % para.nprint == 0) {

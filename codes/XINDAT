@@ -10,11 +10,11 @@ statpath = "statdata/"
 postpath = "postdata/"
 
 // computation control
-bftype = 2		// type of body force (0:DNS, 1:MFU, 2:LES_SM, 3:LES_DSM, 4:LES_DVR)
+bftype = 0		// type of body force (0:DNS, 1:MFU, 2:LES_SM, 3:LES_DSM, 4:LES_DVR)
 nthrds = 8		// number of threads for openmp (0 for automatically choose)
 
 // physical parameters
-Re = 20000.0	// Reynolds number
+Re = 2850.0		// Reynolds number
 dt = 5e-3		// time step length
 
 // time step control
@@ -32,7 +32,7 @@ jprbs = 0		// layer indexes of layers to be probed (jprbs[0] store the number of
 // *************************************
 
 // initial settings
-nread = 2000	// step number of fields to read for continuing computation (0 for not inputing)
+nread = 0		// step number of fields to read for continuing computation (0 for not inputing)
 inpath = ""		// path of the continue computation files (relative paths with respect to XINDAT, or absolute paths)
 inener = 0.5	// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
 
@@ -42,10 +42,10 @@ inener = 0.5	// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
 // ***********************************************************
 
 // grid settings
-Nx = 192		// grid number of streamwise direction
-Ny = 193		// grid number of wall normal direction
-Nz = 96			// grid number of spanwise direction
+Nx = 32			// grid number of streamwise direction
+Ny = 49			// grid number of wall normal direction
+Nz = 32			// grid number of spanwise direction
 Lx = 6.2832		// domain length of streamwise direction
 Ly = 2.0		// channel height. Not adjustable (must be 2.0 if the non-dimensional equation is solved)
 Lz = 3.1416		// domain length of spanwise direction
-dy_min = 0.0005	// y coordinate at first grid off wall
+dy_min = 0.01	// y coordinate at first grid off wall

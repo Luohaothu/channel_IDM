@@ -5,23 +5,24 @@
 class Press
 {
 	public:
-
-		void U2P(Scla &P, Scla &NU, Vctr &U, Vctr &UT, double dt)
+		static void u2p(Feld FLD, const Vctr &UT, const Feld &VIS, double dt)
 		{
-			Vctr V(U.meshGet()); // here V is the old time step and U is the new time step, different to that in rhs()
-			V.com1.bulkCpy(UT.com1).bulkMlt(-dt);
-			V.com2.bulkCpy(UT.com2).bulkMlt(-dt);
-			V.com3.bulkCpy(UT.com3).bulkMlt(-dt);
-
-			for (int j=0; j<=U.meshGet().Ny; j++) {
-				V.com1.layersAdd(U.com1, j, j);
-				V.com2.layersAdd(U.com2, j, j);
-				V.com3.layersAdd(U.com3, j, j);
-			}
-
-			this->rhs(P, NU, V, U, dt);
-			this->poisson(P);
+			Feld RHS(FLD.meshGet());
+			rhs(RHS, FLD.V, UT, VIS, dt);
+			poisson(FLD.S = RHS.S);
 		};
-		void rhs(Scla &R, Scla &NU, Vctr &U, Vctr &V, double dt);
-		void poisson(Scla &P);
+
+		static void rhs(Feld &R, const Vctr &U, const Vctr &UT, const Feld &VIS, double dt);
+		static void poisson(Scla &P);
 };
+
+
+
+
+
+
+
+
+
+
+

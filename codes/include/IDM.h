@@ -86,6 +86,19 @@ class IDM: private Mesh
 		void pressBD(Scla &P, Scla &DP, const Scla &PBC);                  // boundary conditions for pressure
 		void veldtBD(Vctr &UH, const Vctr &U, const Vctr &UBC, double dt); // modify boundary of velocity-time-derivative with given BC
 		void velocBD(Vctr &U, const Vctr &UBC);                            // boundary conditions for velocities
+
+	public:
+		// tool functions
+		void urhs(Vctr &UH, const Feld &FLD, const Feld &VIS, const Feld &BC, const Vctr &FB)
+		{
+			urhs1(UH[1].blkGet(), FLD, VIS, FB[1].blkGet());
+			urhs2(UH[2].blkGet(), FLD, VIS, FB[2].blkGet());
+			urhs3(UH[3].blkGet(), FLD, VIS, FB[3].blkGet());
+			mbc(UH, FLD, VIS, BC);
+		};
+		void muh1(double *muh1, const Vctr &UH, const Vctr &U, const Feld &VIS);
+		void muh2(double *muh2, const Vctr &UH, const Vctr &U, const Feld &VIS);
+		void muh3(double *muh3, const Vctr &UH, const Vctr &U, const Feld &VIS);
 };
 
 
