@@ -12,6 +12,21 @@ using namespace std;
 
 
 
+
+double Vctr::module(int i, int j, int k) const
+/* module of the vector at cell-center (i,j,k) */
+{
+	double *u,*v,*w; this->ptrGet(u,v,w);
+	int idx= IDX(i,j,k);
+	int ip = IDX(ipa[i],j,k);
+	int jp = IDX(i,j+1,k);	// 1 <= j <= Ny-1
+	int kp = IDX(i,j,kpa[k]);
+	return	.5 * sqrt(
+		    pow(u[idx]+u[ip], 2.)
+		+   pow(v[idx]+v[jp], 2.)
+		+   pow(w[idx]+w[kp], 2.) );
+}
+
 double Vctr::divergence(int i, int j, int k) const
 /* compute divergence of a vector field at the center of cell (i,j,k) */
 {
@@ -129,6 +144,41 @@ double* Vctr::gradient(int i, int j, int k) const
 }
 
 
+
+// void Vctr::layerModule(double *dst, int j) const
+// {
+// 	int i, k, idx, ip, jp, kp;
+// 	double *u, *v, *w; ptrGet(u,v,w);
+
+// 	for (k=0; k<Nz; k++) {
+// 	for (i=0; i<Nx; i++) {
+// 		idx= IDX(i,j,k);
+// 		ip = IDX(ipa[i],j,k);
+// 		jp = IDX(i,j+1,k);
+// 		kp = IDX(i,j,kpa[k]);
+// 		dst[idx] = .5 * sqrt(
+// 		    pow(u[idx]+u[ip], 2)
+// 		+   pow(v[idx]+v[jp], 2)
+// 		+   pow(w[idx]+w[kp], 2) );
+
+// 		// interpolate virtual boundary to real boundary
+// 		if (j == 0) {
+// 			int ipjp = IDX(ipa[i],j+1,k), jpkp = IDX(i,j+1,kpa[k]);
+// 			dst[idx] = .5 * sqrt(
+// 				pow(.25/h[j+1] * ( (u[idx]+u[ip]) * dy[j+1] + (u[jp]+u[ipjp]) * dy[j] ), 2)
+// 			+   pow(v[jp], 2)
+// 			+   pow(.25/h[j+1] * ( (w[idx]+w[kp]) * dy[j+1] + (w[jp]+w[jpkp]) * dy[j] ), 2) );
+// 		}
+// 		else if (j == Ny) {
+// 			int ipjm = IDX(ipa[i],j-1,k), jmkp = IDX(i,j-1,kpa[k]);
+// 			dst[idx] = .5 * sqrt(
+// 				pow(.25/h[j] * ( (u[idx]+u[ip]) * dy[j-1] + (u[jm]+u[ipjm]) * dy[j] ), 2)
+// 			+   pow(v[idx], 2)
+// 			+   pow(.25/h[j] * ( (w[idx]+w[kp]) * dy[j-1] + (w[jm]+w[jmkp]) * dy[j] ), 2) );
+// 		}
+// 	}}
+
+// }
 
 
 

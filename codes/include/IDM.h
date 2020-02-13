@@ -32,7 +32,7 @@ class IDM: private Mesh
 				urhs1(UH[1].blkGet(), FLD, VIS, FB[1].blkGet());
 				urhs2(UH[2].blkGet(), FLD, VIS, FB[2].blkGet());
 				urhs3(UH[3].blkGet(), FLD, VIS, FB[3].blkGet());
-				mbc(UH, FLD, VIS, BC);
+				mbc(UH, FLD.V, VIS, BC);
 				getuh1(UH, FLD.V, VIS, dt);
 				getuh2(UH, FLD.V, VIS, dt);
 				getuh3(UH, FLD.V, VIS, dt);
@@ -71,7 +71,7 @@ class IDM: private Mesh
 		void urhs1(double *ruh, const Feld &FLD, const Feld &VIS, double *fbx);
 		void urhs2(double *rvh, const Feld &FLD, const Feld &VIS, double *fby);
 		void urhs3(double *rwh, const Feld &FLD, const Feld &VIS, double *fbz);
-		void mbc  (Vctr &UH, const Feld &FLD, const Feld &VIS, const Feld &BC);
+		void mbc  (Vctr &UH, const Vctr &U, const Feld &VIS, const Feld &BC);
 		// step 2: calculate intermedia velocities (solve TDMAs)
 		void getuh1(Vctr &UH, const Vctr &U, const Feld &VIS, double dt);
 		void getuh2(Vctr &UH, const Vctr &U, const Feld &VIS, double dt);
@@ -94,7 +94,7 @@ class IDM: private Mesh
 			urhs1(UH[1].blkGet(), FLD, VIS, FB[1].blkGet());
 			urhs2(UH[2].blkGet(), FLD, VIS, FB[2].blkGet());
 			urhs3(UH[3].blkGet(), FLD, VIS, FB[3].blkGet());
-			mbc(UH, FLD, VIS, BC);
+			mbc(UH, FLD.V, VIS, BC);
 		};
 		void muh1(double *muh1, const Vctr &UH, const Vctr &U, const Feld &VIS);
 		void muh2(double *muh2, const Vctr &UH, const Vctr &U, const Feld &VIS);

@@ -25,7 +25,7 @@ void initiate(Solver &solver, int &tstep, double &time, const Para &para)
 	}
 	else if (! strcmp(Para(para.inpath).statpath, para.statpath)) {
 		tstep = para.nread;
-		time = Statis().getLogtime(para.statpath, tstep);
+		time = Statis::getLogtime(para.statpath, tstep);
 		solver.FLD.readField(para.fieldpath, tstep, "");
 		cout << endl << "Continue from step " << tstep << ", time " << time << endl;
 	}
@@ -58,9 +58,9 @@ void output(Statis &statis, Para &para, Solver &solver, int tstep, double time)
 }
 
 
-// # define OFW
+# define DATAASM
 
-# ifndef OFW
+# ifndef DATAASM
 
 int main()
 {
@@ -96,16 +96,10 @@ int main()
 
 int main()
 {
-	Para para0("bcgenerator/"), para1("offwall/");
+	Para para0("experiment/"), para1("dataasm/");
 
 	Mesh mesh0(para0.Nx,para0.Ny,para0.Nz, para0.Lx,para0.Ly,para0.Lz, para0.dy_min);
 	Mesh mesh1(para1.Nx,para1.Ny,para1.Nz, para1.Lx,para1.Ly,para1.Lz, para1.dy_min);
-
-	/* FLOWS COMMUNICATION: align OFW boundary yc to the FC yc */
-	int jb = (mesh0.Ny - mesh1.Ny) / 2;
-	mesh1.yc[0]        = mesh0.yc[jb];
-	mesh1.yc[mesh1.Ny] = mesh0.yc[mesh0.Ny-jb];
-	mesh1.initYmesh();
 
 	Mesh bmesh0(mesh0.Nx,2-1,mesh0.Nz, mesh0.Lx,mesh0.Ly,mesh0.Lz);
 	Mesh bmesh1(mesh1.Nx,2-1,mesh1.Nz, mesh1.Lx,mesh1.Ly,mesh1.Lz);
@@ -120,6 +114,8 @@ int main()
 
 	int tstep0 = 0; double time0 = 0;
 	int tstep1 = 0; double time1 = 0;
+
+	DA da(mesh1);
 
 	// computation begins
 	para0.showPara(); mesh0.writeYmesh(para0.statpath);
@@ -141,24 +137,11 @@ int main()
 			output(statis0, para0, solver0, tstep0, time0);
 		}
 
-		/* FLOWS COMMUNICATION: implement off-wall BC */
-		solver1.getbc(solver0.FLD.V);
-
-		solver1.getnu(para1.Re, para1.bftype);
-		solver1.getfb();
-		solver1.getup(para1.dt);
-
-		/* FLOWS COMMUNICATION: keep the OFW pressure gradients equal to FC */
-		if (2. - para1.Ly > 1e-10) {
-			double dmpg1 = solver0.mpg[0] - solver1.mpg[0];
-			double dmpg3 = solver0.mpg[2] - solver1.mpg[2];
-			solver1.mpg[0] += dmpg1;
-			solver1.mpg[2] += dmpg3;
-			for (int j=1; j<para1.Ny; j++) {
-				solver1.FLD.V[1].lyrAdd(- para1.dt * dmpg1, j);
-				solver1.FLD.V[3].lyrAdd(- para1.dt * dmpg3, j);
-			}
-		}
+		/* FLOWS COMMUNICATION: introduce experiment data */
+		if (da.getExp(time1, solver0.FLD.V))
+			solver1.evolve_da(para1.Re, para1.dt, para1.bftype, da);
+		else
+			solver1.evolve   (para1.Re, para1.dt, para1.bftype);
 
 		output(statis1, para1, solver1, tstep1, time1);
 	}

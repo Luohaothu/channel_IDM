@@ -3,7 +3,7 @@
 # include "Basic.h"
 # include "IDM.h"
 # include "SGS.h"
-# include "Interp.h"
+# include "DA.h"
 
 
 class Solver
@@ -23,16 +23,12 @@ class Solver
 			FLD(mesh), FLDH(mesh), VIS(mesh), BC(bmesh),
 			FB(mesh), mpg{0,0,0} {};
 
-		// void initiate(double energy) { FLD.initrand(energy); };
-		// void initiate(const Feld &f) { FLD.initfrom(f); };
+		void config(int n);
+		void debug_Output(int tstep);
 
-		void config(int n)
-		{
-			int tempn = nthrds;
-			if (tempn != (nthrds = idm.ompset(n)))
-				std::cout << "\nnumber of OpenMP threads: " << nthrds << '\n' << std::endl;
-		};
 
+	/***** default cumputation *****/
+	public:
 		void evolve(double Re, double dt, int bftype)
 		{
 			getbc();
@@ -41,62 +37,64 @@ class Solver
 			getup(dt);
 			if (bftype == 1) removeSpanMean(); // for MFU
 		};
+	private:
+		void getbc() { BC.reset(); };		// construct boundary conditions
+		void getnu(double Re, int bftype);	// construct viscosity
+		void getfb();						// construct body forces
+		void getup(double dt)				// evolve velocity and pressure fields by 1 time step
+			{ idm.calc(FLD, FLDH, mpg, VIS, FB, BC, dt); };
+		void removeSpanMean();				// data manipulation
 
-		// construct boundary conditions
-		void getbc() { BC.reset(); };
-		void getbc(const Vctr &U)
+
+	/***** off-wall BC computation *****/
+	public:
+		void evolve_ofw(double Re, double dt, int bftype, const Vctr &U)
 		{
-			const Mesh &ms0 = U.meshGet();
-			int jb = (ms0.Ny - mesh.Ny) / 2;
-
-			Interp(U[1], BC.V[1]).layerPrdLin(jb,        0);
-			Interp(U[1], BC.V[1]).layerPrdLin(ms0.Ny-jb, 1);
-
-			Interp(U[2], BC.V[2]).layerPrdLin(jb+1,      0);
-			Interp(U[2], BC.V[2]).layerPrdLin(ms0.Ny-jb, 1);
-
-			Interp(U[3], BC.V[3]).layerPrdLin(jb,        0);
-			Interp(U[3], BC.V[3]).layerPrdLin(ms0.Ny-jb, 1);
-
-			// Interp(U[1], BC.V[1]).bulkFilter('U');
-			// Interp(U[2], BC.V[2]).bulkFilter('X');
-			// Interp(U[3], BC.V[3]).bulkFilter('U');
+			getbc(U);
+			getnu(Re, bftype);
+			getfb();
+			getup(dt);
 		};
+	private:
+		void getbc(const Vctr &U);
 
-		// construct viscosty
-		void getnu(double Re, int bftype)
+
+	/***** data assimilation computation *****/
+	public:
+		void evolve_da(double Re, double dt, int bftype, DA &da)
 		{
-			Scla &NU = VIS.S; const Vctr &U = FLD.V;
+			getbc();
+			getnu(Re, bftype);
+			getfb();
+			getup(dt);
 
-			switch (bftype) {
-			case 2: sgs.smargorinsky (NU, U, Re, .18); NU += 1./Re; break;
-			case 3: sgs.dynamicsmarg (NU, U);          NU += 1./Re; break;
-			case 4: sgs.dynamicvreman(NU, U, Re);      NU += 1./Re; break;
-			default:                                   NU  = 1./Re;
+			while (da.ifIter(FLD.V, 0.01, 10)) {
+				// compute adjoint state using the new time step fields
+				da.calcAdj(FLD.V, VIS, dt);
+				// apply the assimilating force
+				getfb(da.getForce(0.1));
+				// roll back the flow fields to the old time step
+				FLD.V[1] -= (FLDH.V[1] *= dt);
+				FLD.V[2] -= (FLDH.V[2] *= dt);
+				FLD.V[3] -= (FLDH.V[3] *= dt);
+				FLD.S    -= (FLDH.S    *= dt);
+				// solve the time step again under the new force
+				getup(dt);
 			}
-
-			VIS.CC2EG();
 		};
-
-		// construct body forces
-		void getfb()
-		{
-			FB[1] = - mpg[0];
-			FB[2] = - mpg[1];
-			FB[3] = - mpg[2];
+	private:
+		void getfb(const Vctr &F) {
+			(FB[1] = F[1]) += -mpg[0];
+			(FB[2] = F[2]) += -mpg[1];
+			(FB[3] = F[3]) += -mpg[2];
 		};
-
-		// evolve velocity and pressure fields by 1 time step
-		void getup(double dt)
-		{
-			idm.calc(FLD, FLDH, mpg, VIS, FB, BC, dt);
-		};
-
-		// data manipulation
-		void removeSpanMean();
-		
-
-		void debug_Output(int tstep);
 
 };
+
+
+
+
+		
+
+
 

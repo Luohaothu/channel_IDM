@@ -21,10 +21,10 @@ CFLAGS = -I $(IDIR) $(LIBS)
 
 ##### file lists #####
 
-_DEPS = Basic.h Matrix.h Interp.h IDM.h SGS.h Solver.h Statis.h Para.h Press.h
+_DEPS = Basic.h Matrix.h Interp.h IDM.h SGS.h Solver.h Statis.h Para.h Press.h DA.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJS = Mesh.o Bulk.o Scla.o Vctr.o Feld.o Matrix.o Interp.o IDM.o SGS.o Solver.o Statis.o Para.o Press.o main.o
+_OBJS = Mesh.o Bulk.o Scla.o Vctr.o Feld.o Matrix.o Interp.o IDM.o SGS.o Solver.o Statis.o Para.o Press.o DA.o main.o
 OBJS = $(patsubst %,$(ODIR)/%,$(_OBJS))
 
 
@@ -56,7 +56,7 @@ pat:
 	
 .PHONY: remake
 remake:
-	make clean
+# 	make clean
 	make
 	mv $(OUTPUT) $(DATADIR)/
 

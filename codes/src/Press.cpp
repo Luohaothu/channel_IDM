@@ -121,7 +121,7 @@ int main()
 	UT[2].fileIO("/Users/whn/Desktop/test/data1/fielddata/", "VT00005000", 'r');
 	UT[3].fileIO("/Users/whn/Desktop/test/data1/fielddata/", "WT00005000", 'r');
 
-	Press().u2p(FLD, UT, VIS, dt);
+	Press::u2p(FLD, UT, VIS, dt);
 	FLD.S.debug_AsciiOutput("", "P", 0, 50);
 
 	cout << "P written." << endl;

@@ -96,11 +96,11 @@ void Para::readPara()
 	while ( fgets(str, 1024, fp) ) {
 		if ( (s = strstr(str, "//")) )	{ *s = '\0'; }	// strip the comments
 
-		if (strstr(str, "fieldpath")) { s = strchr(str, '='); s = strchr(++s, '\"'); sscanf(++s, "%[^\"]", fieldpath);}
-		if (strstr(str, "probepath")) { s = strchr(str, '='); s = strchr(++s, '\"'); sscanf(++s, "%[^\"]", probepath);}
-		if (strstr(str, "statpath") ) { s = strchr(str, '='); s = strchr(++s, '\"'); sscanf(++s, "%[^\"]", statpath); }
-		if (strstr(str, "postpath") ) { s = strchr(str, '='); s = strchr(++s, '\"'); sscanf(++s, "%[^\"]", postpath); }
-		if (strstr(str, "inpath")   ) { s = strchr(str, '='); s = strchr(++s, '\"'); sscanf(++s, "%[^\"]", inpath);   }
+		if (strstr(str, "fieldpath")) { s = strchr(str, '='); s = strchr(++s, '\"'); if (! sscanf(++s, "%[^\"]", fieldpath)) fieldpath[0] = '\0'; }
+		if (strstr(str, "probepath")) { s = strchr(str, '='); s = strchr(++s, '\"'); if (! sscanf(++s, "%[^\"]", probepath)) probepath[0] = '\0'; }
+		if (strstr(str, "statpath") ) { s = strchr(str, '='); s = strchr(++s, '\"'); if (! sscanf(++s, "%[^\"]", statpath))  statpath [0] = '\0'; }
+		if (strstr(str, "postpath") ) { s = strchr(str, '='); s = strchr(++s, '\"'); if (! sscanf(++s, "%[^\"]", postpath))  postpath [0] = '\0'; }
+		if (strstr(str, "inpath")   ) { s = strchr(str, '='); s = strchr(++s, '\"'); if (! sscanf(++s, "%[^\"]", inpath))    inpath   [0] = '\0'; }
 		if (strstr(str, "bftype")   ) { s = strchr(str, '='); sscanf(++s, "%i",  & bftype); }
 		if (strstr(str, "nthrds")   ) { s = strchr(str, '='); sscanf(++s, "%i",  & nthrds); }
 		if (strstr(str, "Re")       ) { s = strchr(str, '='); sscanf(++s, "%lf", & Re); }

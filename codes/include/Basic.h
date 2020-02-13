@@ -178,6 +178,7 @@ class Vctr: private Mesh
 		};
 
 		// vector operators
+		double  module    (int i, int j, int k) const;
 		double  divergence(int i, int j, int k) const;
 		double  convection(int i, int j, int k) const;
 		double* strainrate(int i, int j, int k) const;

@@ -13,6 +13,53 @@ using namespace std;
 
 
 
+void Solver::config(int n)
+{
+	int tempn = nthrds;
+	if (tempn != (nthrds = idm.ompset(n)))
+		cout << endl << "number of OpenMP threads: " << nthrds << endl;
+}
+
+void Solver::getbc(const Vctr &U)
+{
+	const Mesh &ms0 = U.meshGet();
+	int jb = (ms0.Ny - mesh.Ny) / 2;
+
+	Interp(U[1], BC.V[1]).layerPrdLin(jb,        0);
+	Interp(U[1], BC.V[1]).layerPrdLin(ms0.Ny-jb, 1);
+
+	Interp(U[2], BC.V[2]).layerPrdLin(jb+1,      0);
+	Interp(U[2], BC.V[2]).layerPrdLin(ms0.Ny-jb, 1);
+
+	Interp(U[3], BC.V[3]).layerPrdLin(jb,        0);
+	Interp(U[3], BC.V[3]).layerPrdLin(ms0.Ny-jb, 1);
+
+	// Interp(U[1], BC.V[1]).bulkFilter('U');
+	// Interp(U[2], BC.V[2]).bulkFilter('X');
+	// Interp(U[3], BC.V[3]).bulkFilter('U');
+}
+
+void Solver::getnu(double Re, int bftype)
+{
+	Scla &NU = VIS.S; const Vctr &U = FLD.V;
+
+	switch (bftype) {
+	case 2: sgs.smargorinsky (NU, U, Re, .18); NU += 1./Re; break;
+	case 3: sgs.dynamicsmarg (NU, U);          NU += 1./Re; break;
+	case 4: sgs.dynamicvreman(NU, U, Re);      NU += 1./Re; break;
+	default:                                   NU  = 1./Re;
+	}
+
+	VIS.CC2EG();
+}
+
+void Solver::getfb()
+{
+	FB[1] = - mpg[0];
+	FB[2] = - mpg[1];
+	FB[3] = - mpg[2];
+}
+
 void Solver::removeSpanMean()
 {
 	int i, j, k, n;

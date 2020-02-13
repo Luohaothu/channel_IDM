@@ -441,14 +441,14 @@ void IDM::urhs3(double *rwh, const Feld &FLD, const Feld &VIS, double *fbz)
 }
 
 
-void IDM::mbc(Vctr &UH, const Feld &FLD, const Feld &VIS, const Feld &BC)
+void IDM::mbc(Vctr &UH, const Vctr &U, const Feld &VIS, const Feld &BC)
 /* boundary modification accounting for the boundary information removed from LHS */
 {
 	int i, k, j0, j1, j2, jm, jn, imj0, imj1, imjn, kmj0, kmj1, kmjn;
 	double u1, u2, ub, v1, v2, vb, w1, w2, wb, vis3, vis4, amj, apj;
 
+	double *u,*v,*w;             U.ptrGet(u,v,w);
 	double *ruh,*rvh,*rwh;      UH.ptrGet(ruh,rvh,rwh);
-	double *u,*v,*w,*p;        FLD.ptrGet(u,v,w,p);
 	double *nux,*nuy,*nuz,*nu; VIS.ptrGet(nux,nuy,nuz,nu);
 	double *ubc,*vbc,*wbc,*pbc; BC.ptrGet(ubc,vbc,wbc,pbc);
 
