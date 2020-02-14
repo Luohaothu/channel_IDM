@@ -68,11 +68,14 @@ class Solver
 			getfb();
 			getup(dt);
 
-			while (da.ifIter(FLD.V, 0.01, 10)) {
+			// DA parameters
+			int n = 100; double e = 1e-4, a = .1;
+
+			while (da.ifIter(FLD.V, e, n)) {
 				// compute adjoint state using the new time step fields
-				da.calcAdj(FLD.V, VIS, dt);
+				da.getAdj(FLD.V, VIS, dt);
 				// apply the assimilating force
-				getfb(da.getForce(0.1));
+				getfb(da.getForce(a));
 				// roll back the flow fields to the old time step
 				FLD.V[1] -= (FLDH.V[1] *= dt);
 				FLD.V[2] -= (FLDH.V[2] *= dt);

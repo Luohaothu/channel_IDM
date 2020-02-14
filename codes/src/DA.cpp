@@ -15,18 +15,23 @@ using namespace std;
 
 bool DA::getExp(double time, const Vctr &UE)
 {
-
-	setMesh(_FLDH.meshGet());
-	for (int j=1; j<Ny; j++) {
-	for (int k=0; k<Nz; k++) {
-	for (int i=0; i<Nx; i++) {
-		_FLDH.S.id(i,j,k) = _F.module(i,j,k);
-	}}}
-	if (_iter) cout << "Iter: " << _iter << ", Mean F: " << _FLDH.S.bulkMeanU() << endl;
-
+	if (_iter) {
+		setMesh(_FLDH.meshGet());
+		for (int j=1; j<Ny; j++) {
+		for (int k=0; k<Nz; k++) {
+		for (int i=0; i<Nx; i++) {
+			_FLDH.S.id(i,j,k) = _F.module(i,j,k);
+		}}}
+		cout << "Time: "     << time
+		     << "\tIter: "   << _iter
+		     << "\tError: "  << _erro
+		     << "\tMean F: " << _FLDH.S.bulkMeanU() << endl;
+	}
 
 	if (_iter) _F.reset(_iter = 0);
-	if (fabs(fmod(time, 5e-2)) < 1e-10) {
+
+	double interval = .5;
+	if (fabs(fmod(time+INFTSM/2., interval)) < INFTSM) {
 		_UE[1] = UE[1];
 		_UE[2] = UE[2];
 		_UE[3] = UE[3];
@@ -38,21 +43,59 @@ bool DA::getExp(double time, const Vctr &UE)
 bool DA::ifIter(const Vctr &U, double e, int n)
 {
 	if (_iter >= n) return false;
-
-	setMesh(U.meshGet());
 	
 	((_FLDH.V[1] = U[1]) -= _UE[1]) *= _MSK[1];
 	((_FLDH.V[2] = U[2]) -= _UE[2]) *= _MSK[2];
 	((_FLDH.V[3] = U[3]) -= _UE[3]) *= _MSK[3];
 
+	setMesh(U.meshGet());
 	for (int j=1; j<Ny; j++) {
 	for (int k=0; k<Nz; k++) {
 	for (int i=0; i<Nx; i++) {
 		_FLDH.S.id(i,j,k) = _FLDH.V.module(i,j,k) / _UE.module(i,j,k);
 	}}}
-
-	return _FLDH.S.bulkMeanU() >= e;
+	return (_erro = _FLDH.S.bulkMeanU() / _vexp) >= e;
 }
+
+const Vctr& DA::getForce(double alpha)
+{
+	double lambda = 0.;
+
+	setMesh(_FLDH.meshGet());
+	for (int j=1; j<Ny; j++) {
+	for (int k=0; k<Nz; k++) {
+	for (int i=0; i<Nx; i++) {
+		lambda = fmax(lambda, _FLDH.V.module(i,j,k));
+	}}}
+
+	lambda = alpha / lambda;
+
+	_F[1] -= (_FLDH.V[1] *= lambda); // NOTE: in Liu's paper, the sign before V should be +
+	_F[2] -= (_FLDH.V[2] *= lambda);
+	_F[3] -= (_FLDH.V[3] *= lambda);
+	_iter ++;
+
+	return _F;
+}
+
+void DA::getAdj(const Vctr &U, const Feld &VIS, double dt)
+{
+	urhs(_FLDH.V, U, _UE, _MSK);
+
+	getuh1(_FLDH.V, U, VIS, dt);
+	getuh2(_FLDH.V, U, VIS, dt);
+	getuh3(_FLDH.V, U, VIS, dt);
+
+	rhsdp(_FLDH.S, _FLDH.V, dt);
+	_FLDH.S.fft();
+	getfdp(_FLDH.S, 0.);
+	_FLDH.S.ifft();
+
+	update(_FLDH.V, _FLDH.S, dt);
+
+	// homogeneous BC applied automatically
+}
+
 
 /***** adjoint velocity computation *****/
 

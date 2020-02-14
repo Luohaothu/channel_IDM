@@ -8,47 +8,22 @@ class DA
 	public:
 		DA(const Mesh &mesh): _F(mesh), _FLDH(mesh), _UE(mesh), _MSK(mesh)
 		{
-			_MSK.reset(1.);
-			_MSK[1].lyrSet(0., 0).lyrSet(0., mesh.Ny);
-			_MSK[2].lyrSet(0., 1).lyrSet(0., mesh.Ny).lyrSet(0., 0);
-			_MSK[3].lyrSet(0., 0).lyrSet(0., mesh.Ny);
+			_iter = _erro = 0; _vexp = setMask(mesh);
+			_F.reset(); _FLDH.reset(); _UE.reset();
 		};
 
 		bool getExp(double time, const Vctr &UE);
 		bool ifIter(const Vctr &U, double e, int n);
-
-		void calcAdj(const Vctr &U, const Feld &VIS, double dt)
-		{
-			urhs(_FLDH.V, U, _UE, _MSK);
-
-			getuh1(_FLDH.V, U, VIS, dt);
-			getuh2(_FLDH.V, U, VIS, dt);
-			getuh3(_FLDH.V, U, VIS, dt);
-
-			rhsdp(_FLDH.S, _FLDH.V, dt);
-			_FLDH.S.fft();
-			getfdp(_FLDH.S, 0.);
-			_FLDH.S.ifft();
-
-			update(_FLDH.V, _FLDH.S, dt);
-
-			// homogeneous BC applied automatically
-		};
-
-		const Vctr& getForce(double lambda)
-		{
-			_F[1] += (_FLDH.V[1] *= lambda);
-			_F[2] += (_FLDH.V[2] *= lambda);
-			_F[3] += (_FLDH.V[3] *= lambda);
-			_iter ++;
-			return _F;
-		};
+		void getAdj(const Vctr &U, const Feld &VIS, double dt);
+		const Vctr& getForce(double alpha);
 
 	private:
 		Vctr _F;        // driving force to assimilate the flow
 		Feld _FLDH;     // adjoint velocities & pressure
 		Vctr _UE, _MSK; // experiment velocity field & the mask function
 		int _iter;      // iteration number
+		double _erro;   // residual of the iteration
+		double _vexp;   // volume of the space where experiment data exits
 
 		int Nx, Ny, Nz, Nxz;
 		double dx, dz, dx2, dz2, *dy, *h;
@@ -61,6 +36,21 @@ class DA
 			dy = ms.dy; h = ms.h;
 			ipa = ms.ipa; ima = ms.ima; kpa = ms.kpa; kma = ms.kma;
 			return ms;
+		};
+
+		double setMask(const Mesh &ms)
+		{
+			_MSK.reset(1.);
+			_MSK[1].lyrSet(0., 0).lyrSet(0., ms.Ny);
+			_MSK[2].lyrSet(0., 1).lyrSet(0., ms.Ny).lyrSet(0., 0);
+			_MSK[3].lyrSet(0., 0).lyrSet(0., ms.Ny);
+
+			for (int j=1; j<ms.Ny; j++) {
+			for (int k=0; k<ms.Nz; k++) {
+			for (int i=0; i<ms.Nx; i++) {
+				_FLDH.S.id(i,j,k) = _MSK.module(i,j,k);
+			}}}
+			return _FLDH.S.bulkMeanU();
 		};
 
 		void urhs  (Vctr &UH, const Vctr &U, const Vctr &UE, const Vctr &MSK);

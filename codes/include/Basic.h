@@ -3,7 +3,7 @@
 # include <fftw3.h>
 
 # define PI 3.1415926535898
-
+# define INFTSM 1e-6
 
 
 

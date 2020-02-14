@@ -175,7 +175,7 @@ void Mesh::getYmesh(char *path)
 	fclose(fp);
 
 	// check
-	if ( fabs((y[Ny]-y[1]) - Ly) > 1e-10 )
+	if ( fabs((y[Ny]-y[1]) - Ly) > INFTSM )
 		{ cout << endl << "No valid Y mesh provided !" << endl; exit(0); }
 
 	// y coordinates

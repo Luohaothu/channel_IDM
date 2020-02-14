@@ -130,7 +130,7 @@ int main()
 	while (tstep1++ < para1.Nt) {
 		time1 += para1.dt;
 
-		while (time1 - time0 > 1e-10) {
+		while (time1 - time0 > INFTSM) {
 			tstep0 ++;
 			time0 += para0.dt;
 			solver0.evolve(para0.Re, para0.dt, para0.bftype);
