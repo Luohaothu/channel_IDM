@@ -69,7 +69,7 @@ class Solver
 			getup(dt);
 
 			// DA parameters
-			int n = 100; double e = 1e-4, a = .1;
+			int n = 10; double e = 1e-4, a = .1;
 
 			while (da.ifIter(FLD.V, e, n)) {
 				// compute adjoint state using the new time step fields

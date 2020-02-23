@@ -30,7 +30,7 @@ bool DA::getExp(double time, const Vctr &UE)
 
 	if (_iter) _F.reset(_iter = 0);
 
-	double interval = .5;
+	double interval = 5e-2;
 	if (fabs(fmod(time+INFTSM/2., interval)) < INFTSM) {
 		_UE[1] = UE[1];
 		_UE[2] = UE[2];
@@ -67,12 +67,12 @@ const Vctr& DA::getForce(double alpha)
 	for (int i=0; i<Nx; i++) {
 		lambda = fmax(lambda, _FLDH.V.module(i,j,k));
 	}}}
-
 	lambda = alpha / lambda;
 
-	_F[1] -= (_FLDH.V[1] *= lambda); // NOTE: in Liu's paper, the sign before V should be +
-	_F[2] -= (_FLDH.V[2] *= lambda);
-	_F[3] -= (_FLDH.V[3] *= lambda);
+	// steepest descent search of F
+	_F[1] += (_FLDH.V[1] *= lambda);
+	_F[2] += (_FLDH.V[2] *= lambda);
+	_F[3] += (_FLDH.V[3] *= lambda);
 	_iter ++;
 
 	return _F;
@@ -102,9 +102,9 @@ void DA::getAdj(const Vctr &U, const Feld &VIS, double dt)
 void DA::urhs(Vctr &UH, const Vctr &U, const Vctr &UE, const Vctr &MSK)
 /* compute the RHS (without mbc) of momentum equation and store in UH */
 {
-	(((UH[1] = U[1]) -= UE[1]) *= MSK[1]) *= 2.;
-	(((UH[2] = U[2]) -= UE[2]) *= MSK[2]) *= 2.;
-	(((UH[3] = U[3]) -= UE[3]) *= MSK[3]) *= 2.;
+	(((UH[1] = U[1]) -= UE[1]) *= MSK[1]) *= -2.;
+	(((UH[2] = U[2]) -= UE[2]) *= MSK[2]) *= -2.;
+	(((UH[3] = U[3]) -= UE[3]) *= MSK[3]) *= -2.;
 
 	// mbc, cbc = 0 for homogeneous BC
 }
@@ -126,7 +126,8 @@ void DA::getuh1(Vctr &UH, const Vctr &U, const Feld &VIS, double dt)
 	Matrix matx(Nx);
 	Matrix maty(Ny-1);
 	Matrix matz(Nz);
-
+	
+	// ( I + dt M_11^2 )
 	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {
 		for (j=1; j<Ny; j++) {
@@ -148,7 +149,7 @@ void DA::getuh1(Vctr &UH, const Vctr &U, const Feld &VIS, double dt)
 		maty.tdma( & amj[1], & acj[1], & apj[1], & R2[1] ); // apj at j=Ny-1 and amj at j=1 are redundant in tdma, thus no need for explicit removal
 		for (j=1; j<Ny; j++) uh[ms.IDX(i,j,k)] = R2[j];
 	}}
-
+	// ( I + dt M_11^1 )
 	for (j=1; j<Ny; j++) {
 	for (k=0; k<Nz; k++) {
 		for (i=0; i<Nx; i++) {
@@ -156,20 +157,19 @@ void DA::getuh1(Vctr &UH, const Vctr &U, const Feld &VIS, double dt)
 			ip = ms.IDX(ipa[i],j,k); jp = ms.IDX(i,j+1,k); kp = ms.IDX(i,j,kpa[k]);
 			im = ms.IDX(ima[i],j,k); jm = ms.IDX(i,j-1,k); km = ms.IDX(i,j,kma[k]);
 
-			a = .5/dx * (u[ip] - u[im]);
 			vis1 = nu[im];
 			vis2 = nu[idx];
 
-			api[i] = ( .5/dx * u[idx] - 2./dx2 * vis2       ) * dt;
-			aci[i] = ( a              + 2./dx2 *(vis2+vis1) ) * dt + 1;
-			ami[i] = (-.5/dx * u[idx] - 2./dx2 * vis1       ) * dt;
+			api[i] = (-1./dx * u[idx] - 2./dx2 * vis2       ) * dt;
+			aci[i] = (                + 2./dx2 *(vis2+vis1) ) * dt + 1;
+			ami[i] = ( 1./dx * u[idx] - 2./dx2 * vis1       ) * dt;
 
 			R1 [i] = uh[idx];
 		}
 		matx.ctdma( ami, aci, api, R1 );
 		for (i=0; i<Nx; i++) uh[ms.IDX(i,j,k)] = R1[i];
 	}}
-
+	// ( I + dt M_11^3 )
 	for (j=1; j<Ny; j++) {
 	for (i=0; i<Nx; i++) {
 		for (k=0; k<Nz; k++) {
@@ -216,6 +216,7 @@ void DA::getuh2(Vctr &UH, const Vctr &U, const Feld &VIS, double dt)
 	Matrix maty(Ny-2);
 	Matrix matz(Nz);
 
+	// ( I + dt M_22^2 )
 	for (k=0; k<Nz; k++) {
 	for (i=0; i<Nx; i++) {
 		for (j=2; j<Ny; j++) {
@@ -224,29 +225,28 @@ void DA::getuh2(Vctr &UH, const Vctr &U, const Feld &VIS, double dt)
 			im = ms.IDX(ima[i],j,k); jm = ms.IDX(i,j-1,k); km = ms.IDX(i,j,kma[k]);
 			ipjm = ms.IDX(ipa[i],j-1,k); imjm = ms.IDX(ima[i],j-1,k);
 
-			a = .5/h[j] * (v[jp] - v[jm]);
 			vis3 = nu[jm];
 			vis4 = nu[idx];
 
-			apj[j] = (-.5/h[j] * v[idx] - 2./h[j] * vis4/dy[j]               ) * dt;
-			acj[j] = ( a                + 2./h[j] *(vis4/dy[j]+vis3/dy[j-1]) ) * dt + 1;
-			amj[j] = ( .5/h[j] * v[idx] - 2./h[j] * vis3/dy[j-1]             ) * dt;
+			apj[j] = (-1./h[j] * v[idx] - 2./h[j] * vis4/dy[j]               ) * dt;
+			acj[j] = (                  + 2./h[j] *(vis4/dy[j]+vis3/dy[j-1]) ) * dt + 1;
+			amj[j] = ( 1./h[j] * v[idx] - 2./h[j] * vis3/dy[j-1]             ) * dt;
 
 			// m21uh
-			a = .5/dx * (v[ip] - v[im]);
+			a = .25/h[j] * ( (u[idx]+u[ip]) * dy[j-1] + (u[jm]+u[ipjm]) * dy[j] );
 			vis1 = nuz[idx];
 			vis2 = nuz[ip];
-			u2 = .5/h[j] * (uh[ip]*dy[j-1] + uh[ipjm]*dy[j]);
-			u1 = .5/h[j] * (uh[idx]*dy[j-1] + uh[jm]*dy[j]);
+			u2 = .5 * (uh[idx]+uh[ip]);
+			u1 = .5 * (uh[jm]+uh[ipjm]);
 
-			m21uh = .5*a * (u1+u2) - 1./dx/h[j] * ( vis2 * (uh[ip]-uh[ipjm]) - vis1 * (uh[idx]-uh[jm]) );
+			m21uh = -a/h[j] * (u2-u1) - 1./dx/h[j] * ( vis2 * (uh[ip]-uh[ipjm]) - vis1 * (uh[idx]-uh[jm]) );
 
 			R2 [j] = dt * ( vh[idx] - m21uh );
 		}
 		maty.tdma( & amj[2], & acj[2], & apj[2], & R2[2] ); // apj at j=Ny-1 and amj at j=1 are redundant in tdma, thus no need for explicit removal
 		for (j=2; j<Ny; j++) vh[ms.IDX(i,j,k)] = R2[j];
 	}}
-
+	// ( I + dt M_22^1 )
 	for (j=2; j<Ny; j++) {
 	for (k=0; k<Nz; k++) {
 		for (i=0; i<Nx; i++) {
@@ -268,7 +268,7 @@ void DA::getuh2(Vctr &UH, const Vctr &U, const Feld &VIS, double dt)
 		matx.ctdma( ami, aci, api, R1 );
 		for (i=0; i<Nx; i++) vh[ms.IDX(i,j,k)] = R1[i];
 	}}
-
+	// ( I + dt M_22^3 )
 	for (j=2; j<Ny; j++) {
 	for (i=0; i<Nx; i++) {
 		for (k=0; k<Nz; k++) {
@@ -337,24 +337,22 @@ void DA::getuh3(Vctr &UH, const Vctr &U, const Feld &VIS, double dt)
 			amj[j] = ( .5/h[j]  * a                                  - 1./dy[j] * vis3/h[j]              ) * dt;
 
 			// m31uh
-			a = .5/dx * (w[ip] - w[im]);
+			a = .25 * (u[idx]+u[ip]+u[km]+u[ipkm]);
 			vis1 = nuy[idx];
 			vis2 = nuy[ip];
-			u2 = .5 * (uh[ip] + uh[ipkm]);
-			u1 = .5 * (uh[idx] + uh[km]);
+			u2 = .5 * (uh[idx]+uh[ip]);
+			u1 = .5 * (uh[km]+uh[ipkm]);
 
-			m31uh = .5*a * (u2+u1) + .1/dx/dz * ( vis2 * (uh[ip]-uh[ipkm]) - vis1 * (uh[idx]-uh[km]) );
+			m31uh = -a/dz * (u2-u1) + .1/dx/dz * ( vis2 * (uh[ip]-uh[ipkm]) - vis1 * (uh[idx]-uh[km]) );
 
 			// m32vh
-			w2 = .5/h[j+1] * (w[idx]*dy[j+1] + w[jp]*dy[j]); //* jup;
-			w1 = .5/h[j]   * (w[idx]*dy[j-1] + w[jm]*dy[j]); //* jum;
-			a = 1./dy[j] * (w2-w1);
+			a = .25 * (v[idx]+v[jp]+v[km]+v[jpkm]);
 			vis3 = nux[idx] * jum;
 			vis4 = nux[jp]  * jup;
-			v2 = .5 * (vh[jp] + vh[jpkm]);
-			v1 = .5 * (vh[idx] + vh[km]);
+			v2 = .5 * (vh[idx] * jum + vh[jp] * jup);
+			v1 = .5 * (vh[km] * jum + vh[jpkm] * jup);
 
-			m32vh = .5*a * (v2+v1) - 1./dy[j]/dz * ( vis4 * (vh[jp]-vh[jpkm]) - vis3 * (vh[idx]-vh[km]) );
+			m32vh = -a/dz * (v2-v1) - 1./dy[j]/dz * ( vis4 * (vh[jp]-vh[jpkm]) - vis3 * (vh[idx]-vh[km]) );
 
 			R2 [j] = dt * ( wh[idx] - m31uh - m32vh );
 		}
@@ -393,13 +391,12 @@ void DA::getuh3(Vctr &UH, const Vctr &U, const Feld &VIS, double dt)
 			ip = ms.IDX(ipa[i],j,k); jp = ms.IDX(i,j+1,k); kp = ms.IDX(i,j,kpa[k]);
 			im = ms.IDX(ima[i],j,k); jm = ms.IDX(i,j-1,k); km = ms.IDX(i,j,kma[k]);
 
-			a = .5/dz * (w[kp]-w[km]);
 			vis5 = nu[km];
 			vis6 = nu[idx];
 
-			apk[k] = (-.5/dz * w[idx] - 2./dz2 * vis6       ) * dt;
-			ack[k] = ( a              + 2./dz2 *(vis6+vis5) ) * dt + 1;
-			amk[k] = ( .5/dz * w[idx] - 2./dz2 * vis5       ) * dt;
+			apk[k] = (-1./dz * w[idx] - 2./dz2 * vis6       ) * dt;
+			ack[k] = (                + 2./dz2 *(vis6+vis5) ) * dt + 1;
+			amk[k] = ( 1./dz * w[idx] - 2./dz2 * vis5       ) * dt;
 
 			R3 [k] = wh[idx];
 		}
@@ -421,13 +418,13 @@ void DA::getuh3(Vctr &UH, const Vctr &U, const Feld &VIS, double dt)
 		jmkp = ms.IDX(i,j-1,kpa[k]); jmkm = ms.IDX(i,j-1,kma[k]);
 
 		// m23wh
-		a = .5/dz * (v[kp]-v[km]);
-		w2 = .5/h[j] * (wh[kp]*dy[j-1] + wh[jmkp]*dy[j]);
-		w1 = .5/h[j] * (wh[idx]*dy[j-1] + wh[jm]*dy[j]);
+		a = .25/h[j] * ( (w[idx]+w[kp]) * dy[j-1] + (w[jm]+w[jmkp]) * dy[j] );
 		vis5 = nux[idx];
 		vis6 = nux[kp];
+		w2 = .5 * (wh[idx]+wh[kp]);
+		w1 = .5 * (wh[jm]+wh[jmkp]);
 
-		m23wh = .5*a * (w2+w1) - 1./dz/h[j] * ( vis6 * (wh[kp]-wh[jmkp]) - vis5 * (wh[idx]-wh[jm]) );
+		m23wh = -a/h[j] * (w2-w1) - 1./dz/h[j] * ( vis6 * (wh[kp]-wh[jmkp]) - vis5 * (wh[idx]-wh[jm]) );
 
 		vh[idx] -= dt * m23wh;
 	}}}
@@ -443,24 +440,22 @@ void DA::getuh3(Vctr &UH, const Vctr &U, const Feld &VIS, double dt)
 		imjm = ms.IDX(ima[i],j-1,k); imkm = ms.IDX(ima[i],j,kma[k]);
 
 		// m12vh
-		u2 = .5/h[j+1] * (u[idx]*dy[j+1] + u[jp]*dy[j]); //* jup;
-		u1 = .5/h[j]   * (u[idx]*dy[j-1] + u[jm]*dy[j]); //* jum;
-		a = 1./dy[j] * (u2-u1);
+		a = .25 * (v[idx]+v[im]+v[jp]+v[imjp]);
 		vis3 = nuz[idx] * jum;
 		vis4 = nuz[jp]  * jup;
-		v2 = .5 * (vh[jp] + vh[imjp]);
-		v1 = .5 * (vh[idx] + vh[im]);
+		v2 = .5 * (vh[idx] * jum + vh[jp] * jup);
+		v1 = .5 * (vh[im] * jum + vh[imjp] * jup);
 
-		m12vh = .5*a * (v2+v1) - 1./dy[j]/dx * ( vis4 * (vh[jp]-vh[imjp]) - vis3 * (vh[idx]-vh[im]) );
+		m12vh = -a/dx * (v2-v1) - 1./dy[j]/dx * ( vis4 * (vh[jp]-vh[imjp]) - vis3 * (vh[idx]-vh[im]) );
 
 		// m13wh
-		a = .5/dz * (u[kp]-u[km]);
-		w2 = .5 * (wh[kp] + wh[imkp]);
-		w1 = .5 * (wh[idx] + wh[im]);
+		a = .25 * (w[idx]+w[im]+w[kp]+w[imkp]);
 		vis5 = nuy[idx];
 		vis6 = nuy[kp];
+		w2 = .5 * (wh[idx] + wh[kp]);
+		w1 = .5 * (wh[im] + wh[imkp]);
 
-		m13wh = .5*a * (w2+w1) - 1./dz/dx * ( vis6 * (wh[kp]-wh[imkp]) - vis5 * (wh[idx]-wh[im]) );
+		m13wh = -a/dx * (w2-w1) - 1./dz/dx * ( vis6 * (wh[kp]-wh[imkp]) - vis5 * (wh[idx]-wh[im]) );
 
 		uh[idx] -= dt * (m12vh + m13wh);
 	}}}
