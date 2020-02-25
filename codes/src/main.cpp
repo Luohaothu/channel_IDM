@@ -58,9 +58,13 @@ void output(Statis &statis, Para &para, Solver &solver, int tstep, double time)
 }
 
 
-# define DATAASM
+// # define DEFAULT
+// # define OFW
+// # define DATAASM
+# define DAOFW
 
-# ifndef DATAASM
+
+# ifdef DEFAULT
 
 int main()
 {
@@ -92,11 +96,75 @@ int main()
 	cout << "\nComputation finished!" << endl;
 }
 
-# else
+# endif
+
+
+# ifdef OFW
 
 int main()
 {
-	Para para0("experiment/"), para1("dataasm/");
+	Para para0("base/"), para1("test/");
+
+	Mesh mesh0(para0.Nx,para0.Ny,para0.Nz, para0.Lx,para0.Ly,para0.Lz, para0.dy_min);
+	Mesh mesh1(para1.Nx,para1.Ny,para1.Nz, para1.Lx,para1.Ly,para1.Lz, para1.dy_min);
+
+	/* FLOWS COMMUNICATION: align OFW boundary yc to the FC yc */
+	int jb = (mesh0.Ny - mesh1.Ny) / 2;
+	mesh1.yc[0]        = mesh0.yc[jb];
+	mesh1.yc[mesh1.Ny] = mesh0.yc[mesh0.Ny-jb];
+	mesh1.initYmesh();
+
+	Mesh bmesh0(mesh0.Nx,2-1,mesh0.Nz, mesh0.Lx,mesh0.Ly,mesh0.Lz);
+	Mesh bmesh1(mesh1.Nx,2-1,mesh1.Nz, mesh1.Lx,mesh1.Ly,mesh1.Lz);
+
+	bmesh0.y[0] = 0; bmesh0.yc[0] = mesh0.y[1];
+	bmesh0.y[1] = 0; bmesh0.yc[1] = mesh0.y[mesh0.Ny];
+	bmesh1.y[0] = 0; bmesh1.yc[0] = mesh1.y[1];
+	bmesh1.y[1] = 0; bmesh1.yc[1] = mesh1.y[mesh1.Ny];
+
+	Solver solver0(mesh0, bmesh0); Statis statis0(mesh0);
+	Solver solver1(mesh1, bmesh1); Statis statis1(mesh1);
+
+	int tstep0 = 0; double time0 = 0;
+	int tstep1 = 0; double time1 = 0;
+
+	// computation begins
+	para0.showPara(); mesh0.writeYmesh(para0.statpath);
+	para1.showPara(); mesh1.writeYmesh(para1.statpath);
+
+	initiate(solver0, tstep0, time0, para0);
+	initiate(solver1, tstep1, time1, para1);
+	if (tstep0 == 0) output(statis0, para0, solver0, tstep0, time0);
+	if (tstep1 == 0) output(statis1, para1, solver1, tstep1, time1);
+
+	// main loop
+	while (tstep1++ < para1.Nt) {
+		time1 += para1.dt;
+
+		while (time1 - time0 > INFTSM) {
+			tstep0 ++;
+			time0 += para0.dt;
+			solver0.evolve(para0.Re, para0.dt, para0.bftype);
+			output(statis0, para0, solver0, tstep0, time0);
+		}
+
+		/* FLOWS COMMUNICATION: implement off-wall BC and mean pressure gradients */
+		solver1.evolve_ofw(para1.Re, para1.dt, para1.bftype, solver0.FLD.V, solver0.mpg);
+
+		output(statis1, para1, solver1, tstep1, time1);
+	}
+
+	cout << "\nComputation finished!" << endl;
+}
+
+# endif
+
+
+# ifdef DATAASM
+
+int main()
+{
+	Para para0("base/"), para1("test/");
 
 	Mesh mesh0(para0.Nx,para0.Ny,para0.Nz, para0.Lx,para0.Ly,para0.Lz, para0.dy_min);
 	Mesh mesh1(para1.Nx,para1.Ny,para1.Nz, para1.Lx,para1.Ly,para1.Lz, para1.dy_min);
@@ -137,11 +205,112 @@ int main()
 			output(statis0, para0, solver0, tstep0, time0);
 		}
 
+		solver1.evolve(para1.Re, para1.dt, para1.bftype);
+
 		/* FLOWS COMMUNICATION: introduce experiment data */
 		if (da.getExp(time1, solver0.FLD.V))
-			solver1.evolve_da(para1.Re, para1.dt, para1.bftype, da);
-		else
-			solver1.evolve   (para1.Re, para1.dt, para1.bftype);
+			solver1.assimilate(para1.dt, da);
+
+		output(statis1, para1, solver1, tstep1, time1);
+	}
+
+	cout << "\nComputation finished!" << endl;
+}
+
+# endif
+
+
+# ifdef DAOFW
+
+int main()
+{
+	Para para0("base/"), para1("test/");
+
+	Mesh mesh0(para0.Nx,para0.Ny,para0.Nz, para0.Lx,para0.Ly,para0.Lz, para0.dy_min);
+	Mesh mesh1(para1.Nx,para1.Ny,para1.Nz, para1.Lx,para1.Ly,para1.Lz, para1.dy_min);
+
+	/* FLOWS COMMUNICATION: align OFW boundary yc to the FC yc */
+	int jb = (mesh0.Ny - mesh1.Ny) / 2;
+	mesh1.yc[0]        = mesh0.yc[jb];
+	mesh1.yc[mesh1.Ny] = mesh0.yc[mesh0.Ny-jb];
+	mesh1.initYmesh();
+
+	Mesh bmesh0(mesh0.Nx,2-1,mesh0.Nz, mesh0.Lx,mesh0.Ly,mesh0.Lz);
+	Mesh bmesh1(mesh1.Nx,2-1,mesh1.Nz, mesh1.Lx,mesh1.Ly,mesh1.Lz);
+
+	bmesh0.y[0] = 0; bmesh0.yc[0] = mesh0.y[1];
+	bmesh0.y[1] = 0; bmesh0.yc[1] = mesh0.y[mesh0.Ny];
+	bmesh1.y[0] = 0; bmesh1.yc[0] = mesh1.y[1];
+	bmesh1.y[1] = 0; bmesh1.yc[1] = mesh1.y[mesh1.Ny];
+
+	Solver solver0(mesh0, bmesh0); Statis statis0(mesh0);
+	Solver solver1(mesh1, bmesh1); Statis statis1(mesh1);
+
+	int tstep0 = 0; double time0 = 0;
+	int tstep1 = 0; double time1 = 0;
+
+	DA da(mesh1);
+
+	// computation begins
+	para0.showPara(); mesh0.writeYmesh(para0.statpath);
+	para1.showPara(); mesh1.writeYmesh(para1.statpath);
+
+	initiate(solver0, tstep0, time0, para0);
+	initiate(solver1, tstep1, time1, para1);
+	if (tstep0 == 0) output(statis0, para0, solver0, tstep0, time0);
+	if (tstep1 == 0) output(statis1, para1, solver1, tstep1, time1);
+
+	// main loop
+	while (tstep1++ < para1.Nt) {
+		time1 += para1.dt;
+
+		while (time1 - time0 > INFTSM) {
+			tstep0 ++;
+			time0 += para0.dt;
+			solver0.evolve(para0.Re, para0.dt, para0.bftype);
+			output(statis0, para0, solver0, tstep0, time0);
+		}
+
+		/* FLOWS COMMUNICATION: implement off-wall BC and mean pressure gradients */
+		solver1.evolve_ofw(para1.Re, para1.dt, para1.bftype, solver0.FLD.V, solver0.mpg);
+
+
+!!!! how to fix mean pressure gradient ???
+		/* FLOWS COMMUNICATION: introduce experiment data */
+		if (da.getExp(time1, solver0.FLD.V)) {
+
+			// DA parameters
+			int n = 10; double e = 1e-6, a = .01;
+
+			while (da.ifIter(solver1.FLD.V, e, n)) {
+				// compute adjoint state using the new time step fields
+				da.getAdj(solver1.FLD.V, solver1.VIS, para1.dt);
+				// apply the assimilating force
+				solver1.getfb(da.getForce(a));
+				// roll back the flow fields to the old time step
+				solver1.FLD.V[1] -= (solver1.FLDH.V[1] *= para1.dt);
+				solver1.FLD.V[2] -= (solver1.FLDH.V[2] *= para1.dt);
+				solver1.FLD.V[3] -= (solver1.FLDH.V[3] *= para1.dt);
+				solver1.FLD.S    -= (solver1.FLDH.S    *= para1.dt);
+				// solve the time step again under the new force
+				solver1.getup(para1.dt);
+
+				/* FLOWS COMMUNICATION: keep the OFW pressure gradients equal to FC */
+				if (2. - para1.Ly > INFTSM) {
+					double dmpg1 = solver0.mpg[0] - solver1.mpg[0];
+					double dmpg3 = solver0.mpg[2] - solver1.mpg[2];
+					solver1.mpg[0] += dmpg1;
+					solver1.mpg[2] += dmpg3;
+					for (int j=1; j<para1.Ny; j++) {
+						solver1.FLD.V[1].lyrAdd(- para1.dt * dmpg1, j);
+						solver1.FLD.V[3].lyrAdd(- para1.dt * dmpg3, j);
+					}
+				}
+			}
+
+		}
+
+
 
 		output(statis1, para1, solver1, tstep1, time1);
 	}

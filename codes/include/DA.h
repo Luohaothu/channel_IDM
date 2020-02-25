@@ -45,6 +45,13 @@ class DA
 			_MSK[2].lyrSet(0., 1).lyrSet(0., ms.Ny).lyrSet(0., 0);
 			_MSK[3].lyrSet(0., 0).lyrSet(0., ms.Ny);
 
+			// _MSK.reset();
+			// for (int j=0; j<2; j++) {
+			// 	_MSK[1].lyrSet(1., j+1).lyrSet(1., ms.Ny-(j+1));
+			// 	_MSK[2].lyrSet(1., j+2).lyrSet(1., ms.Ny-(j+1));
+			// 	_MSK[3].lyrSet(1., j+1).lyrSet(1., ms.Ny-(j+1));
+			// }
+
 			for (int j=1; j<ms.Ny; j++) {
 			for (int k=0; k<ms.Nz; k++) {
 			for (int i=0; i<ms.Nx; i++) {

@@ -60,6 +60,13 @@ void Solver::getfb()
 	FB[3] = - mpg[2];
 }
 
+void Solver::getfb(const Vctr &F)
+{
+	(FB[1] = F[1]) += -mpg[0];
+	(FB[2] = F[2]) += -mpg[1];
+	(FB[3] = F[3]) += -mpg[2];
+}
+		
 void Solver::removeSpanMean()
 {
 	int i, j, k, n;
@@ -83,6 +90,13 @@ void Solver::removeSpanMean()
 	delete [] qsm;
 }
 
+void Solver::rollback(double dt)
+{
+	FLD.V[1] -= (FLDH.V[1] *= dt);
+	FLD.V[2] -= (FLDH.V[2] *= dt);
+	FLD.V[3] -= (FLDH.V[3] *= dt);
+	FLD.S    -= (FLDH.S    *= dt);
+}
 
 void Solver::debug_Output(int tstep)
 {

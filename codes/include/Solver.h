@@ -48,12 +48,22 @@ class Solver
 
 	/***** off-wall BC computation *****/
 	public:
-		void evolve_ofw(double Re, double dt, int bftype, const Vctr &U)
+		void evolve_ofw(double Re, double dt, int bftype, const Vctr &U, const double MPG[3])
 		{
 			getbc(U);
 			getnu(Re, bftype);
 			getfb();
 			getup(dt);
+
+			// keep the OFW mean pressure gradients equal to FC
+			double dmpg1 = MPG[0] - mpg[0];
+			double dmpg3 = MPG[2] - mpg[2];
+			mpg[0] += dmpg1;
+			mpg[2] += dmpg3;
+			for (int j=1; j<mesh.Ny; j++) {
+				FLD.V[1].lyrAdd(- dt * dmpg1, j);
+				FLD.V[3].lyrAdd(- dt * dmpg3, j);
+			}
 		};
 	private:
 		void getbc(const Vctr &U);
@@ -61,36 +71,20 @@ class Solver
 
 	/***** data assimilation computation *****/
 	public:
-		void evolve_da(double Re, double dt, int bftype, DA &da)
+		void assimilate(double dt, DA &da)
 		{
-			getbc();
-			getnu(Re, bftype);
-			getfb();
-			getup(dt);
+			int n = 10; double e = 1e-4, a = .1; // DA parameters
 
-			// DA parameters
-			int n = 10; double e = 1e-4, a = .1;
-
-			while (da.ifIter(FLD.V, e, n)) {
-				// compute adjoint state using the new time step fields
-				da.getAdj(FLD.V, VIS, dt);
-				// apply the assimilating force
-				getfb(da.getForce(a));
-				// roll back the flow fields to the old time step
-				FLD.V[1] -= (FLDH.V[1] *= dt);
-				FLD.V[2] -= (FLDH.V[2] *= dt);
-				FLD.V[3] -= (FLDH.V[3] *= dt);
-				FLD.S    -= (FLDH.S    *= dt);
-				// solve the time step again under the new force
-				getup(dt);
+			while (da.ifIter(FLD.V, e, n)) {     // converged or reached max iterations yet
+				da.getAdj(FLD.V, VIS, dt); // compute adjoint state using the new time step fields
+				getfb(da.getForce(a));     // apply the assimilating force
+				rollback(dt);              // roll back the flow fields to the old time step
+				getup(dt);                 // solve the time step again under the new force
 			}
 		};
 	private:
-		void getfb(const Vctr &F) {
-			(FB[1] = F[1]) += -mpg[0];
-			(FB[2] = F[2]) += -mpg[1];
-			(FB[3] = F[3]) += -mpg[2];
-		};
+		void getfb(const Vctr &F);
+		void rollback(double dt);
 
 };
 
