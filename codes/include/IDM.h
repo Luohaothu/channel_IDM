@@ -13,12 +13,12 @@ class IDM: private Mesh
 		int ompset(int n);
 
 		// computation interface
-		void calc(Feld &FLD, Feld &FLDH, double mpg[3],
+		void calc(Feld &FLD, Feld &FLDH,
 			const Feld &VIS, const Vctr &FB, const Feld &BC, double dt)
 		{
 			uhcalc(FLDH.V, FLD, VIS, BC, FB, dt);
 			dpcalc(FLDH, FLD.S, BC.V, dt);
-			upcalc(FLD, FLDH, mpg, dt);
+			upcalc(FLD, FLDH, dt);
 			applyBC(FLD, FLDH, BC, dt);
 		};
 
@@ -47,10 +47,9 @@ class IDM: private Mesh
 			getfdp(DP.blkGetF(), P.av(1));       // frdp->fdp
 			DP.ifft();                           // fdp->dp
 		};
-		void upcalc(Feld &FLD, Feld &FLDH, double mpg[3], double dt)
+		void upcalc(Feld &FLD, Feld &FLDH, double dt)
 		{
 			update(FLD, FLDH, dt);
-			meanpg(FLD.V, mpg, dt);
 		};
 		void applyBC(Feld &FLD, Feld &FLDH, const Feld &BC, double dt)
 		{
@@ -81,7 +80,6 @@ class IDM: private Mesh
 		void getfdp(double *fdp, double refp);
 		// step 4: update velocity & pressure fields
 		void update(Feld &FLD, Feld &FLDH, double dt);
-		void meanpg(Vctr &U, double mpg[3], double dt);
 		// step 5: update doundaries
 		void pressBD(Scla &P, Scla &DP, const Scla &PBC);                  // boundary conditions for pressure
 		void veldtBD(Vctr &UH, const Vctr &U, const Vctr &UBC, double dt); // modify boundary of velocity-time-derivative with given BC

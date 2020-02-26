@@ -45,17 +45,40 @@ bool DA::ifIter(const Vctr &U, double e, int n)
 {
 	if (_iter >= n) return false;
 	
-	((_FLDH.V[1] = U[1]) -= _UE[1]) *= _MSK[1];
-	((_FLDH.V[2] = U[2]) -= _UE[2]) *= _MSK[2];
-	((_FLDH.V[3] = U[3]) -= _UE[3]) *= _MSK[3];
+	// ((_FLDH.V[1] = U[1]) -= _UE[1]) *= _MSK[1];
+	// ((_FLDH.V[2] = U[2]) -= _UE[2]) *= _MSK[2];
+	// ((_FLDH.V[3] = U[3]) -= _UE[3]) *= _MSK[3];
+
+	urhs(_FLDH.V, U, _UE, _MSK); // urhs is in itself an estimation of error
 
 	setMesh(U.meshGet());
 	for (int j=1; j<Ny; j++) {
 	for (int k=0; k<Nz; k++) {
-	for (int i=0; i<Nx; i++) {
-		_FLDH.S.id(i,j,k) = _FLDH.V.module(i,j,k) / _UE.module(i,j,k);
+	for (int i=0; i<Nx; i++) { // urhs need to be rescaled by 2 to represent therelative error
+		_FLDH.S.id(i,j,k) = _FLDH.V.module(i,j,k) / (2. * _UE.module(i,j,k));
 	}}}
+
 	return (_erro = _FLDH.S.bulkMeanU() / _vexp) >= e;
+}
+
+void DA::getAdj(const Vctr &U, const Feld &VIS, double dt)
+{
+	// urhs was called in ifIter() with U at n+1 step
+	// now U has been rolled back to n step
+	// urhs(_FLDH.V, U, _UE, _MSK);
+
+	getuh1(_FLDH.V, U, VIS, dt);
+	getuh2(_FLDH.V, U, VIS, dt);
+	getuh3(_FLDH.V, U, VIS, dt);
+
+	rhsdp(_FLDH.S, _FLDH.V, dt);
+	_FLDH.S.fft();
+	getfdp(_FLDH.S, 0.);
+	_FLDH.S.ifft();
+
+	update(_FLDH.V, _FLDH.S, dt);
+
+	// homogeneous BC applied automatically
 }
 
 const Vctr& DA::getForce(double alpha)
@@ -79,22 +102,12 @@ const Vctr& DA::getForce(double alpha)
 	return _F;
 }
 
-void DA::getAdj(const Vctr &U, const Feld &VIS, double dt)
+void DA::writeForce(const char *path, int tstep) const
 {
-	urhs(_FLDH.V, U, _UE, _MSK);
-
-	getuh1(_FLDH.V, U, VIS, dt);
-	getuh2(_FLDH.V, U, VIS, dt);
-	getuh3(_FLDH.V, U, VIS, dt);
-
-	rhsdp(_FLDH.S, _FLDH.V, dt);
-	_FLDH.S.fft();
-	getfdp(_FLDH.S, 0.);
-	_FLDH.S.ifft();
-
-	update(_FLDH.V, _FLDH.S, dt);
-
-	// homogeneous BC applied automatically
+	char str[32];
+	sprintf(str, "FDAX%08i", tstep); _F[1].fileIO(path, str, 'w');
+	sprintf(str, "FDAY%08i", tstep); _F[2].fileIO(path, str, 'w');
+	sprintf(str, "FDAZ%08i", tstep); _F[3].fileIO(path, str, 'w');
 }
 
 

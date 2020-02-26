@@ -37,12 +37,12 @@ Statis::~Statis()
 
 double Statis::checkDiv(const Vctr &U)
 {
-	int i, j, k;
-	double divmax = -1.0;
+	int i, j, k; double divmax = -1.;
+	const Mesh &ms = U.meshGet();
 
-	for (j=1; j<Ny; j++) {
-	for (k=0; k<Nz; k++) {
-	for (i=0; i<Nx; i++) {
+	for (j=1; j<ms.Ny; j++) {
+	for (k=0; k<ms.Nz; k++) {
+	for (i=0; i<ms.Nx; i++) {
 		div = fabs(U.divergence(i, j, k));
 		if ( div > divmax || divmax < 0 ) {
 			divmax = div;
@@ -56,13 +56,13 @@ double Statis::checkDiv(const Vctr &U)
 
 double Statis::checkCFL(const Vctr &U, double dt)
 {
-	int i, j, k;
-	double cflmax = -1.0;
+	int i, j, k; double cflmax = -1.;
+	const Mesh &ms = U.meshGet();
 
-	for (j=1; j<Ny; j++) {
-	for (k=0; k<Nz; k++) {
-	for (i=0; i<Nx; i++) {
-		cfl = U.convection(i, j, k) * dt;
+	for (j=1; j<ms.Ny; j++) {
+	for (k=0; k<ms.Nz; k++) {
+	for (i=0; i<ms.Nx; i++) {
+		cfl = U.module(i, j, k) * dt;
 		if ( cfl > cflmax || cflmax < 0 ) {
 			cflmax = cfl;
 			cflpos[0] = i;

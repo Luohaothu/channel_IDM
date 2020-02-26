@@ -20,6 +20,11 @@ void Solver::config(int n)
 		cout << endl << "number of OpenMP threads: " << nthrds << endl;
 }
 
+
+void Solver::getbc()
+{
+	BC.reset();
+}
 void Solver::getbc(const Vctr &U)
 {
 	const Mesh &ms0 = U.meshGet();
@@ -39,6 +44,7 @@ void Solver::getbc(const Vctr &U)
 	// Interp(U[3], BC.V[3]).bulkFilter('U');
 }
 
+
 void Solver::getnu(double Re, int bftype)
 {
 	Scla &NU = VIS.S; const Vctr &U = FLD.V;
@@ -53,20 +59,70 @@ void Solver::getnu(double Re, int bftype)
 	VIS.CC2EG();
 }
 
+
 void Solver::getfb()
 {
 	FB[1] = - mpg[0];
 	FB[2] = - mpg[1];
 	FB[3] = - mpg[2];
 }
-
 void Solver::getfb(const Vctr &F)
 {
 	(FB[1] = F[1]) += -mpg[0];
 	(FB[2] = F[2]) += -mpg[1];
 	(FB[3] = F[3]) += -mpg[2];
 }
-		
+
+
+void Solver::getup(double dt)
+/* evolve velocity and pressure fields by 1 time step */
+{
+	idm.calc(FLD, FLDH, VIS, FB, BC, dt);
+}
+
+
+void Solver::fixfr(double dt)
+/* solve the increment of mean pressure gradient at n+1/2 step, given mass flow rate at n+1 step */
+{
+	Vctr &U = FLD.V, &UH = FLDH.V;
+	// solve mean pressure gradient increment given streamwise flow rate 2.0 and spanwise flow rate 0
+	double dmpg1 =(U[1].bulkMeanU() - 1.) / dt;
+	double dmpg3 = U[3].bulkMeanU()       / dt;
+	// update the mean pressure gradient
+	mpg[0] += dmpg1;
+	mpg[2] += dmpg3;
+	// complement the mean pressure gradient increment that was not included in the velocity update step
+	for (int j=1; j<mesh.Ny; j++) {
+		U[1].lyrAdd(-dt * dmpg1, j); UH[1].lyrAdd(-dmpg1, j);
+		U[3].lyrAdd(-dt * dmpg3, j); UH[3].lyrAdd(-dmpg3, j);
+	}
+}
+void Solver::fixfr(double dt, const double MPG[3])
+/* solve the increment of mean pressure gradient at n+1/2 step, given reference mean pressure gradient at n+1/2 step */
+{
+	Vctr &U = FLD.V, &UH = FLDH.V;
+	// keep the OFW mean pressure gradients equal to FC
+	double dmpg1 = MPG[0] - mpg[0];
+	double dmpg3 = MPG[2] - mpg[2];
+	// update the mean pressure gradient
+	mpg[0] += dmpg1;
+	mpg[2] += dmpg3;
+	// complement the mean pressure gradient increment that was not included in the velocity update step
+	for (int j=1; j<mesh.Ny; j++) {
+		U[1].lyrAdd(-dt * dmpg1, j); UH[1].lyrAdd(-dmpg1, j);
+		U[3].lyrAdd(-dt * dmpg3, j); UH[3].lyrAdd(-dmpg3, j);
+	}
+}
+
+
+void Solver::rollback(double dt)
+{
+	FLD.V[1] -= (FLDH.V[1] *= dt);
+	FLD.V[2] -= (FLDH.V[2] *= dt);
+	FLD.V[3] -= (FLDH.V[3] *= dt);
+	FLD.S    -= (FLDH.S    *= dt);
+}
+
 void Solver::removeSpanMean()
 {
 	int i, j, k, n;
@@ -90,13 +146,6 @@ void Solver::removeSpanMean()
 	delete [] qsm;
 }
 
-void Solver::rollback(double dt)
-{
-	FLD.V[1] -= (FLDH.V[1] *= dt);
-	FLD.V[2] -= (FLDH.V[2] *= dt);
-	FLD.V[3] -= (FLDH.V[3] *= dt);
-	FLD.S    -= (FLDH.S    *= dt);
-}
 
 void Solver::debug_Output(int tstep)
 {

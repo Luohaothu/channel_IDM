@@ -55,23 +55,6 @@ void IDM::update(Feld &FLD, Feld &FLDH, double dt)
 
 	for (j=1; j<Ny; j++) DP.lyrMlt(1./dt, j);
 }
-
-
-void IDM::meanpg(Vctr &U, double mpg[3], double dt)
-/* solve the increment of mean pressure gradient at n+1/2 step, given mass flow rate at n+1 step */
-{
-	// solve mean pressure gradient increment given streamwise flow rate 2.0 and spanwise flow rate 0
-	double dmpg1 = (U[1].bulkMeanU() - 1.) / dt;
-	double dmpg3 =  U[3].bulkMeanU()       / dt;
-	// update the mean pressure gradient
-	mpg[0] += dmpg1; // here mpg is passed in by a copy of its initial address
-	mpg[2] += dmpg3; // changes made to elements will act on the real array
-	// complement the mean pressure gradient increment that was not included in the velocity update step
-	for (int j=1; j<Ny; j++) {
-		U[1].lyrAdd(- dt * dmpg1, j);
-		U[3].lyrAdd(- dt * dmpg3, j);
-	}
-}
  
 
 void IDM::pressBD(Scla &P, Scla &DP, const Scla &PBC)
