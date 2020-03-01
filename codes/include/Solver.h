@@ -51,6 +51,15 @@ class Solver
 		void assimilate(DA &da, double dt)
 		{
 			int n = 10; double e = 1e-6, a = .01; // DA parameters
+			// int n = 10000; double e = 1e-4, a = .1; // DA parameters
+
+			// // store the unassimilated flow field for recovery later
+			// Feld FLD_temp(mesh), FLDH_temp(mesh);
+			// FLD_temp.V[1] = FLD.V[1]; FLDH_temp.V[1] = FLDH.V[1];
+			// FLD_temp.V[2] = FLD.V[2]; FLDH_temp.V[2] = FLDH.V[2];
+			// FLD_temp.V[3] = FLD.V[3]; FLDH_temp.V[3] = FLDH.V[3];
+			// FLD_temp.S    = FLD.S;    FLDH_temp.S    = FLDH.S;
+
 
 			while (da.ifIter(FLD.V, e, n)) {     // converged or reached max iterations yet
 				rollback(dt);              // roll back the flow fields to the old time step
@@ -58,6 +67,12 @@ class Solver
 				getfb(da.getForce(a));     // apply the assimilating force
 				getup(dt);                 // solve the time step again under the new force
 			}
+
+			// // recover the flow field to the unassimilated state
+			// FLD.V[1] = FLD_temp.V[1]; FLDH.V[1] = FLDH_temp.V[1];
+			// FLD.V[2] = FLD_temp.V[2]; FLDH.V[2] = FLDH_temp.V[2];
+			// FLD.V[3] = FLD_temp.V[3]; FLDH.V[3] = FLDH_temp.V[3];
+			// FLD.S    = FLD_temp.S;    FLDH.S    = FLDH_temp.S;
 		};
 
 	private:

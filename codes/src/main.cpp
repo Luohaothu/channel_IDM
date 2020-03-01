@@ -131,7 +131,7 @@ int main()
 # ifdef OFWDA
 	DA da(mesh1);
 # endif
-	
+
 	// computation begins
 	para0.showPara(); mesh0.writeYmesh(para0.statpath);
 	para1.showPara(); mesh1.writeYmesh(para1.statpath);
@@ -160,8 +160,7 @@ int main()
 		if (da.getExp(time1, solver0.FLD.V)) {
 			solver1.assimilate(da, para1.dt);
 
-			if (tstep1 % para1.nwrite == 0)
-				da.writeForce(para1.fieldpath, tstep1);
+			// da.writeForce(para1.fieldpath, tstep1);
 		}
 # endif
 
@@ -225,8 +224,8 @@ int main()
 		if (da.getExp(time1, solver0.FLD.V)) {
 			solver1.assimilate(da, para1.dt);
 
-			if (tstep1 % para1.nwrite == 0)
-				da.writeForce(para1.fieldpath, tstep1);
+			// if (tstep1 % para1.nwrite == 0)
+			// 	da.writeForce(para1.fieldpath, tstep1);
 		}
 
 		output(statis1, para1, solver1, tstep1, time1);

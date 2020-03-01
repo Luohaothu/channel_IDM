@@ -41,13 +41,10 @@ class DA
 
 		double setMask(const Mesh &ms)
 		{
-			// _MSK.reset(1.);
-			// _MSK[1].lyrSet(0., 0).lyrSet(0., ms.Ny);
-			// _MSK[2].lyrSet(0., 1).lyrSet(0., ms.Ny).lyrSet(0., 0);
-			// _MSK[3].lyrSet(0., 0).lyrSet(0., ms.Ny);
+			int nlayers = ms.Ny/2 + 1; // number of layers to be assimilated above boundary (boundaries are never assimilated)
 
 			_MSK.reset();
-			for (int j=0; j<2; j++) {
+			for (int j=0; j<nlayers; j++) {
 				_MSK[1].lyrSet(1., j+1).lyrSet(1., ms.Ny-(j+1));
 				_MSK[2].lyrSet(1., j+2).lyrSet(1., ms.Ny-(j+1));
 				_MSK[3].lyrSet(1., j+1).lyrSet(1., ms.Ny-(j+1));

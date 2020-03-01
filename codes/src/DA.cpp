@@ -31,7 +31,7 @@ bool DA::getExp(double time, const Vctr &UE)
 
 	if (_iter) _F.reset(_iter = 0);
 
-	double interval = 5e-3;//5e-2;
+	double interval = 5e-3;//5.;//
 	if (fabs(fmod(time+INFTSM/2., interval)) < INFTSM) {
 		Interp(UE[1], _UE[1]).bulkInterp('U');
 		Interp(UE[2], _UE[2]).bulkInterp('V');
