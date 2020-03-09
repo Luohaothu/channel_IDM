@@ -1,9 +1,10 @@
 #!/root/Software/anaconda3/bin/python3
 from basic import *
+from budgets import Budgets
 
-para = DataSetInfo("/run/media/student/DATA/whn/channel_OFW/data_DNS180_OFW15_MPG/offwall/")
-feld = Field(para)
-stas = Statis(para, feld)
+para = DataSetInfo("/root/data/whn/channel_DA/refdata/")
+
+stas = Statis(Field(para))
 bgts = Budgets(para)
 
 stas.calc_statis()
@@ -22,19 +23,15 @@ with open(para.postpath+"wallscale.txt", 'w') as fp:
 	fp.write("delta_nu = %.18e\n"%stas.dnu)
 	fp.write("t_nu = %.18e\n"%stas.tnu)
 	fp.write("dy_min_plus = %.18e\n"%((para.y[2]-para.y[1])/stas.dnu))
-	fp.write("dy_max_plus = %.18e\n"%((para.y[int(para.Ny/2+1)]-para.y[int(para.Ny/2)])/stas.dnu))
+	fp.write("dy_max_plus = %.18e\n"%((para.y[para.Ny//2+1]-para.y[para.Ny//2])/stas.dnu))
 
+
+qs = { 'Euu.bin':stas.Euu, 'Evv.bin':stas.Evv, 'Eww.bin':stas.Eww, 'Epp.bin':stas.Epp,
+       'Euv.bin':stas.Euv, 'Evw.bin':stas.Evw, 'Euw.bin':stas.Euw, }
 ##################################################
-qs = (stas.Euu, stas.Evv, stas.Eww, stas.Epp, stas.Euv, stas.Evw, stas.Euw)
-fns= ("Euu.bin","Evv.bin","Eww.bin","Epp.bin","Euv.bin","Evw.bin","Euw.bin")
-for q, fn in zip(qs, fns): write_channel(para.postpath+fn, q)
+for name in qs: write_channel(para.postpath + name, qs[name])
 ########### above: write & below: read ###########
-# stas.Euu = read_channel(para.postpath + "Euu.bin")
-# stas.Evv = read_channel(para.postpath + "Evv.bin")
-# stas.Eww = read_channel(para.postpath + "Eww.bin")
-# stas.Euv = read_channel(para.postpath + "Euv.bin")
-# stas.Evw = read_channel(para.postpath + "Evw.bin")
-# stas.Euw = read_channel(para.postpath + "Euw.bin")
+# for name in qs: read_channel (para.postpath + name)
 ##################################################
 
 
@@ -44,7 +41,7 @@ stas.outer_scale()
 # stas.inner_scale()
 
 casename = para.datapath.split('/')[-2]
-jrange = range(0, int(para.Ny/2+1)) #range(1, para.Ny) #
+jrange = range(1, para.Ny//2+1) #range(1, para.Ny) #
 krange = range(1, para.Nzc)
 irange = range(1, para.Nxc)
 
