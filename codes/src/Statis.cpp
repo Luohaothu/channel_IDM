@@ -88,9 +88,13 @@ double Statis::checkTaub(const Vctr &U, double Re)
 	U.layer2CC(ul3[0], vl3[0], wl3[0], Ny-1);
 	U.layer2CC(ul4[0], vl4[0], wl4[0], Ny);
 
-	sm21 = (ul2.av() - ul1.av()) / dy[1] - (ul4.av() - ul3.av()) / dy[Ny-1]; // d<u>/dy (0.5 compensated by dy)
-	sm22 = (vl2.av() - vl1.av()) / dy[1] + (vl4.av() - vl3.av()) / dy[Ny-1]; // d<v>/dy
-	sm23 = (wl2.av() - wl1.av()) / dy[1] - (wl4.av() - wl3.av()) / dy[Ny-1]; // d<w>/dy
+	sm21 = (ul2.av() - ul1.av()) / h[1] - (ul4.av() - ul3.av()) / h[Ny]; // 2d<u>/dy
+	sm22 = (vl2.av() - vl1.av()) / h[1] + (vl4.av() - vl3.av()) / h[Ny]; // 2d<v>/dy
+	sm23 = (wl2.av() - wl1.av()) / h[1] - (wl4.av() - wl3.av()) / h[Ny]; // 2d<w>/dy
+
+	// sm21 = (ul2.av() - ul1.av()) / dy[1] - (ul4.av() - ul3.av()) / dy[Ny-1]; // d<u>/dy (0.5 compensated by dy)
+	// sm22 = (vl2.av() - vl1.av()) / dy[1] + (vl4.av() - vl3.av()) / dy[Ny-1]; // d<v>/dy
+	// sm23 = (wl2.av() - wl1.av()) / dy[1] - (wl4.av() - wl3.av()) / dy[Ny-1]; // d<w>/dy
 
 	(vl2 = vl1) += -vl1.av(); // v' bottom
 	(vl3 = vl4) += -vl4.av(); // v' top
@@ -98,9 +102,13 @@ double Statis::checkTaub(const Vctr &U, double Re)
 	rm22 = ( (vl1 += -vl1.av()) *= vl2 ).av() + ( (vl4 += -vl4.av()) *= vl3 ).av(); // 2<v'v'>
 	rm23 = ( (wl1 += -wl1.av()) *= vl2 ).av() - ( (wl4 += -wl4.av()) *= vl3 ).av(); // 2<w'v'>
 
-	taub[0] = sm21 / Re - rm21 / 2.;
-	taub[1] = sm22 / Re - rm22 / 2.;
-	taub[2] = sm23 / Re - rm23 / 2.;
+	taub[0] = .5 * (sm21 / Re - rm21);
+	taub[1] = .5 * (sm22 / Re - rm22);
+	taub[2] = .5 * (sm23 / Re - rm23);
+
+	// taub[0] = sm21 / Re - rm21 / 2.;
+	// taub[1] = sm22 / Re - rm22 / 2.;
+	// taub[2] = sm23 / Re - rm23 / 2.;
 
 	ms.freeall();
 	return taub[0];

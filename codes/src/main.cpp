@@ -153,14 +153,20 @@ int main()
 		}
 
 		/* FLOWS COMMUNICATION: implement off-wall BC and mean pressure gradients */
-		solver1.evolve_ofw(para1.Re, para1.dt, para1.bftype, solver0.FLD.V, solver0.mpg);
+		solver1.getbc(solver0.FLD.V);
+		solver1.getnu(para1.Re, para1.bftype);
+		solver1.getfb();
+		solver1.getup(para1.dt);
+		solver1.fixfr(para1.dt, solver0.mpg);
+			
+		// solver1.evolve_ofw(para1.Re, para1.dt, para1.bftype, solver0.FLD.V, solver0.mpg);
 
 # ifdef OFWDA
 		/* FLOWS COMMUNICATION: introduce experiment data */
 		if (da.getExp(time1, solver0.FLD.V)) {
 			solver1.assimilate(da, para1.dt);
 
-			// da.writeForce(para1.fieldpath, tstep1);
+			if (tstep1 % 10 == 0) da.writeForce(para1.fieldpath, tstep1);
 		}
 # endif
 
@@ -173,68 +179,68 @@ int main()
 # endif
 
 
-# ifdef DATAASM
+// # ifdef DATAASM
 
-int main()
-{
-	Para para0("base/"), para1("test/");
+// int main()
+// {
+// 	Para para0("base/"), para1("test/");
 
-	Mesh mesh0(para0.Nx,para0.Ny,para0.Nz, para0.Lx,para0.Ly,para0.Lz, para0.dy_min);
-	Mesh mesh1(para1.Nx,para1.Ny,para1.Nz, para1.Lx,para1.Ly,para1.Lz, para1.dy_min);
+// 	Mesh mesh0(para0.Nx,para0.Ny,para0.Nz, para0.Lx,para0.Ly,para0.Lz, para0.dy_min);
+// 	Mesh mesh1(para1.Nx,para1.Ny,para1.Nz, para1.Lx,para1.Ly,para1.Lz, para1.dy_min);
 
-	Mesh bmesh0(mesh0.Nx,2-1,mesh0.Nz, mesh0.Lx,mesh0.Ly,mesh0.Lz);
-	Mesh bmesh1(mesh1.Nx,2-1,mesh1.Nz, mesh1.Lx,mesh1.Ly,mesh1.Lz);
+// 	Mesh bmesh0(mesh0.Nx,2-1,mesh0.Nz, mesh0.Lx,mesh0.Ly,mesh0.Lz);
+// 	Mesh bmesh1(mesh1.Nx,2-1,mesh1.Nz, mesh1.Lx,mesh1.Ly,mesh1.Lz);
 
-	bmesh0.y[0] = 0; bmesh0.yc[0] = mesh0.y[1];
-	bmesh0.y[1] = 0; bmesh0.yc[1] = mesh0.y[mesh0.Ny];
-	bmesh1.y[0] = 0; bmesh1.yc[0] = mesh1.y[1];
-	bmesh1.y[1] = 0; bmesh1.yc[1] = mesh1.y[mesh1.Ny];
+// 	bmesh0.y[0] = 0; bmesh0.yc[0] = mesh0.y[1];
+// 	bmesh0.y[1] = 0; bmesh0.yc[1] = mesh0.y[mesh0.Ny];
+// 	bmesh1.y[0] = 0; bmesh1.yc[0] = mesh1.y[1];
+// 	bmesh1.y[1] = 0; bmesh1.yc[1] = mesh1.y[mesh1.Ny];
 
-	Solver solver0(mesh0, bmesh0); Statis statis0(mesh0);
-	Solver solver1(mesh1, bmesh1); Statis statis1(mesh1);
+// 	Solver solver0(mesh0, bmesh0); Statis statis0(mesh0);
+// 	Solver solver1(mesh1, bmesh1); Statis statis1(mesh1);
 
-	int tstep0 = 0; double time0 = 0;
-	int tstep1 = 0; double time1 = 0;
+// 	int tstep0 = 0; double time0 = 0;
+// 	int tstep1 = 0; double time1 = 0;
 
-	DA da(mesh1);
+// 	DA da(mesh1);
 
-	// computation begins
-	para0.showPara(); mesh0.writeYmesh(para0.statpath);
-	para1.showPara(); mesh1.writeYmesh(para1.statpath);
+// 	// computation begins
+// 	para0.showPara(); mesh0.writeYmesh(para0.statpath);
+// 	para1.showPara(); mesh1.writeYmesh(para1.statpath);
 
-	initiate(solver0, tstep0, time0, para0);
-	initiate(solver1, tstep1, time1, para1);
-	if (tstep0 == 0) output(statis0, para0, solver0, tstep0, time0);
-	if (tstep1 == 0) output(statis1, para1, solver1, tstep1, time1);
+// 	initiate(solver0, tstep0, time0, para0);
+// 	initiate(solver1, tstep1, time1, para1);
+// 	if (tstep0 == 0) output(statis0, para0, solver0, tstep0, time0);
+// 	if (tstep1 == 0) output(statis1, para1, solver1, tstep1, time1);
 
-	// main loop
-	while (tstep1++ < para1.Nt) {
-		time1 += para1.dt;
+// 	// main loop
+// 	while (tstep1++ < para1.Nt) {
+// 		time1 += para1.dt;
 
-		while (time1 - time0 > INFTSM) {
-			tstep0 ++;
-			time0 += para0.dt;
-			solver0.evolve(para0.Re, para0.dt, para0.bftype);
-			output(statis0, para0, solver0, tstep0, time0);
-		}
+// 		while (time1 - time0 > INFTSM) {
+// 			tstep0 ++;
+// 			time0 += para0.dt;
+// 			solver0.evolve(para0.Re, para0.dt, para0.bftype);
+// 			output(statis0, para0, solver0, tstep0, time0);
+// 		}
 
-		solver1.evolve(para1.Re, para1.dt, para1.bftype);
+// 		solver1.evolve(para1.Re, para1.dt, para1.bftype);
 
-		/* FLOWS COMMUNICATION: introduce experiment data */
-		if (da.getExp(time1, solver0.FLD.V)) {
-			solver1.assimilate(da, para1.dt);
+// 		/* FLOWS COMMUNICATION: introduce experiment data */
+// 		if (da.getExp(time1, solver0.FLD.V)) {
+// 			solver1.assimilate(da, para1.dt);
 
-			// if (tstep1 % para1.nwrite == 0)
-			// 	da.writeForce(para1.fieldpath, tstep1);
-		}
+// 			// if (tstep1 % para1.nwrite == 0)
+// 			// 	da.writeForce(para1.fieldpath, tstep1);
+// 		}
 
-		output(statis1, para1, solver1, tstep1, time1);
-	}
+// 		output(statis1, para1, solver1, tstep1, time1);
+// 	}
 
-	cout << "\nComputation finished!" << endl;
-}
+// 	cout << "\nComputation finished!" << endl;
+// }
 
-# endif
+// # endif
 
 
 

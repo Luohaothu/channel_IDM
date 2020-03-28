@@ -78,7 +78,7 @@ Feld& Feld::initfrom(const Feld &feld)
 
 /***** file IO operations *****/
 
-Feld& Feld::writeField(const char *path, int tstep, char *suffix) const
+Feld& Feld::writeField(const char *path, int tstep, const char *suffix) const
 {
 	char str[32];
 	sprintf(str, "U%s%08i", suffix, tstep); V[1].fileIO(path, str, 'w');
@@ -88,7 +88,7 @@ Feld& Feld::writeField(const char *path, int tstep, char *suffix) const
 	return (Feld&)(*this);
 }
 
-Feld& Feld::readField(const char *path, int tstep, char *suffix) const
+Feld& Feld::readField(const char *path, int tstep, const char *suffix) const
 {
 	char str[32];
 	sprintf(str, "U%s%08i", suffix, tstep); V[1].fileIO(path, str, 'r');
@@ -126,7 +126,7 @@ void Feld::writeTecplot(const char *path, int tstep, double time) const
 		for (i=0; i<Nx; i++) {
 			sprintf(str, "%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\n",
 				dx * (i + 0.5),
-				j==0 ? y[1] : j==Ny ? y[Ny] : yc[j],
+				yc[j],
 				dz * (k + 0.5),
 				ul.id(i,0,k),
 				vl.id(i,0,k),

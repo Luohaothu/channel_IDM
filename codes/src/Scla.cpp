@@ -62,16 +62,16 @@ void Scla::layerUG2CC(double *dst, int j) const
 	for (k=0; k<Nz; k++) { kk = Nx * k;
 	for (i=0; i<Nx; i++) { dst[kk+i] = 0.5 * (ql[kk+i] + ql[kk+ipa[i]]); }}
 	
-	if (j == 0 || j == Ny) { // interpolate virtual boundary to real boundary
-		int ofst = (j==0 ? 1 : -1);
-		double htmp = 0.5 / (j==0 ? h[1] : h[Ny]);
-		ql = lyrGet(j + ofst);
+	// if (j == 0 || j == Ny) { // interpolate virtual boundary to real boundary
+	// 	int ofst = (j==0 ? 1 : -1);
+	// 	double htmp = 0.5 / (j==0 ? h[1] : h[Ny]);
+	// 	ql = lyrGet(j + ofst);
 
-		for (k=0; k<Nz; k++) { kk = Nx * k;
-		for (i=0; i<Nx; i++) {
-			dst[kk+i] = htmp * ( dst[kk+i] * dy[j+ofst] + .5 * (ql[kk+i] + ql[kk+ipa[i]]) * dy[j] );
-		}}
-	}
+	// 	for (k=0; k<Nz; k++) { kk = Nx * k;
+	// 	for (i=0; i<Nx; i++) {
+	// 		dst[kk+i] = htmp * ( dst[kk+i] * dy[j+ofst] + .5 * (ql[kk+i] + ql[kk+ipa[i]]) * dy[j] );
+	// 	}}
+	// }
 }
 
 void Scla::layerWG2CC(double *dst, int j) const
@@ -81,25 +81,38 @@ void Scla::layerWG2CC(double *dst, int j) const
 	for (k=0; k<Nz; k++) { kk = Nx * k; kkf = Nx * kpa[k];
 	for (i=0; i<Nx; i++) { dst[kk+i] = 0.5 * (ql[kk+i] + ql[kkf+i]); }}
 	
-	if (j == 0 || j == Ny) { // interpolate virtual boundary to real boundary
-		int ofst = (j==0 ? 1 : -1);
-		double htmp = 0.5 / (j==0 ? h[1] : h[Ny]);
-		ql = lyrGet(j + ofst);
+	// if (j == 0 || j == Ny) { // interpolate virtual boundary to real boundary
+	// 	int ofst = (j==0 ? 1 : -1);
+	// 	double htmp = 0.5 / (j==0 ? h[1] : h[Ny]);
+	// 	ql = lyrGet(j + ofst);
 
-		for (k=0; k<Nz; k++) { kk = Nx * k; kkf = Nx * kpa[k];
-		for (i=0; i<Nx; i++) {
-			dst[kk+i] = htmp * ( dst[kk+i] * dy[j+ofst] + .5 * (ql[kk+i] + ql[kkf+i]) * dy[j] );
-		}}
-	}
+	// 	for (k=0; k<Nz; k++) { kk = Nx * k; kkf = Nx * kpa[k];
+	// 	for (i=0; i<Nx; i++) {
+	// 		dst[kk+i] = htmp * ( dst[kk+i] * dy[j+ofst] + .5 * (ql[kk+i] + ql[kkf+i]) * dy[j] );
+	// 	}}
+	// }
 }
 
 void Scla::layerVG2CC(double *dst, int j) const
 /* interpolate quantity from V-grid to layer j of cell-center-grid */
 {
 	int i, k, kk;
-	double *ql1 = lyrGet(j==0 ? 1 : j), *ql2 = lyrGet(j==Ny ? Ny : j+1);
+
+	double *ql1 = lyrGet(j==0 ? 2 : j), *ql2 = lyrGet(j==Ny ? Ny-1 : j+1);
+	// double *ql1 = lyrGet(j==0 ? 1 : j), *ql2 = lyrGet(j==Ny ? Ny : j+1);
+
 	for (k=0; k<Nz; k++) { kk = Nx * k;
 	for (i=0; i<Nx; i++) { dst[kk+i] = 0.5 * (ql1[kk+i] + ql2[kk+i]); }}
+
+	// linear exptrapolation to virtual boundaries
+	if (j == 0) {
+		for (k=0; k<Nz; k++) { kk = Nx * k;
+		for (i=0; i<Nx; i++) { dst[kk+i] = h[1]/dy[1] * (ql2[kk+i] - ql1[kk+i]) + .5 * (ql2[kk+i] + ql1[kk+i]); }}
+	}
+	else if (j == Ny) {
+		for (k=0; k<Nz; k++) { kk = Nx * k;
+		for (i=0; i<Nx; i++) { dst[kk+i] = h[Ny]/dy[Ny-1] * (ql1[kk+i] - ql2[kk+i]) + .5 * (ql1[kk+i] + ql2[kk+i]); }}
+	}
 }
 
 

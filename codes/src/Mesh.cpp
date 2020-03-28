@@ -120,7 +120,7 @@ void Mesh::initYmesh()
 	}
 }
 
-void Mesh::writeYmesh(char *path) const
+void Mesh::writeYmesh(const char *path) const
 {
 	char str[1024];
 	FILE *fp = fopen(strcat(strcpy(str, path), "CHANNEL.GRD"), "w");
@@ -165,7 +165,7 @@ target equation: F(gamma) = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, l2) 
 	for (int j=1; j<Ny; j++) yc[j] = 0.5 * ( y[j] + y[j+1] );
 }
 
-void Mesh::getYmesh(char *path)
+void Mesh::getYmesh(const char *path)
 /* read grid from file at specified path */
 {
 	char str[1024];

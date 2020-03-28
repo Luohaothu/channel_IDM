@@ -38,20 +38,20 @@ class Solver
 			fixfr(dt);
 			if (bftype == 1) removeSpanMean(); // for MFU
 		};
-		/***** off-wall BC computation *****/
-		void evolve_ofw(double Re, double dt, int bftype, const Vctr &U, const double MPG[3])
-		{
-			getbc(U);
-			getnu(Re, bftype);
-			getfb();
-			getup(dt);
-			fixfr(dt, MPG);
-		};
+		// /***** off-wall BC computation *****/
+		// void evolve_ofw(double Re, double dt, int bftype, const Vctr &U, const double MPG[3])
+		// {
+		// 	getbc(U);
+		// 	getnu(Re, bftype);
+		// 	getfb();
+		// 	getup(dt);
+		// 	fixfr(dt, MPG);
+		// };
 		/***** data assimilation *****/
 		void assimilate(DA &da, double dt)
 		{
-			int n = 10; double e = 1e-6, a = .01; // DA parameters
-			// int n = 10000; double e = 1e-4, a = .1; // DA parameters
+			// int n = 10; double e = 1e-6, a = .01; // DA parameters
+			int n = 1000; double e = 1e-4, a = .1; // DA parameters
 
 			// // store the unassimilated flow field for recovery later
 			// Feld FLD_temp(mesh), FLDH_temp(mesh);
@@ -75,7 +75,7 @@ class Solver
 			// FLD.S    = FLD_temp.S;    FLDH.S    = FLDH_temp.S;
 		};
 
-	private:
+	// private:
 		// construct boundary conditions
 		void getbc();
 		void getbc(const Vctr &U);

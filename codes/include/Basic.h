@@ -35,11 +35,11 @@ class Mesh
 		double kx(int i) const { return ( i - ( i > (int)(Nx/2) ? Nx : 0 ) ) * (2.*PI/Lx); };
 		double kz(int k) const { return ( k - ( k > (int)(Nz/2) ? Nz : 0 ) ) * (2.*PI/Lz); };
 
-		void writeYmesh(char *path) const;
+		void writeYmesh(const char *path) const;
 
 	private:
 		void getYmesh(double dy_min); // generate hypertan y and infer yc
-		void getYmesh(char *path);    // read existing y and infer yc
+		void getYmesh(const char *path);    // read existing y and infer yc
 };
 
 
@@ -209,8 +209,8 @@ class Feld: private Mesh
 		void CC2EG() { S.CC2EG(V[1].blkGet(), V[2].blkGet(), V[3].blkGet()); };
 
 		// IO functions
-		Feld& writeField(const char *path, int tstep, char *suffix) const;
-		Feld& readField (const char *path, int tstep, char *suffix) const;
+		Feld& writeField(const char *path, int tstep, const char *suffix) const;
+		Feld& readField (const char *path, int tstep, const char *suffix) const;
 		void writeTecplot(const char *path, int tstep, double time) const;
 
 	private:

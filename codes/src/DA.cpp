@@ -16,26 +16,27 @@ using namespace std;
 
 bool DA::getExp(double time, const Vctr &UE)
 {
-	if (_iter) {
-		setMesh(_FLDH.meshGet());
-		for (int j=1; j<Ny; j++) {
-		for (int k=0; k<Nz; k++) {
-		for (int i=0; i<Nx; i++) {
-			_FLDH.S.id(i,j,k) = _F.module(i,j,k);
-		}}}
-		cout << "Time: "     << time
-		     << "\tIter: "   << _iter
-		     << "\tError: "  << _erro
-		     << "\tMean F: " << _FLDH.S.bulkMeanU() << endl;
-	}
+	double interval = 5e-3;
 
-	if (_iter) _F.reset(_iter = 0);
-
-	double interval = 5e-3;//5.;//
 	if (fabs(fmod(time+INFTSM/2., interval)) < INFTSM) {
+
+		{
+			setMesh(_FLDH.meshGet());
+			for (int j=1; j<Ny; j++) {
+			for (int k=0; k<Nz; k++) {
+			for (int i=0; i<Nx; i++) {
+				_FLDH.S.id(i,j,k) = _F.module(i,j,k);
+			}}}
+			cout << "DALOG Time: " << time - interval
+			     << "\tIter: "   << _iter
+			     << "\tError: "  << _erro
+			     << "\tMean F: " << _FLDH.S.bulkMeanU() << endl;
+		}
+
 		Interp(UE[1], _UE[1]).bulkInterp('U');
 		Interp(UE[2], _UE[2]).bulkInterp('V');
 		Interp(UE[3], _UE[3]).bulkInterp('U');
+		if (_iter) _F.reset(_iter = 0); // if _iter==0, _F must be 0
 		return true;
 	}
 	return false; // no experiment data exist
