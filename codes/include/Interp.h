@@ -1,33 +1,49 @@
-# pragma once
+#pragma once
 
-# include "Basic.h"
+#include "Basic.h"
 
 
-class Interp
+namespace Interp
 {
-	public:
-		Interp(const Scla &src, Scla &dst);
-		~Interp();
-		
-		void layerPrdLin(int j0, int j1);
-		void layerPrdFlt(int j0, int j1);
-		void layerTriFlt(int j0, int j1);
-		void layerY(int j1, char stgtyp);
-		void bulkInterp(char stgtyp);	// 3D interpolation, wall-parallel prior
-		void bulkFilter(char stgtyp);	// wall-normal periodic filtering (prior) with wall-normal interpolation
+double Shift(double x, double x0, double x1);
+double BiSearch(double x, const double *xs, int lo, int hi);
 
-	private:
-		Scla &dst;
-		const Scla &src;
-		const Mesh &ms0, &ms1;
+double InterpCell(const Scla &q,
+	double x, double xm, double xp, int im, int ip,
+	double y, double ym, double yp, int jm, int jp,
+	double z, double zm, double zp, int km, int kp );
 
-		const int Nx0, Ny0, Nz0, Nxz0;
-		const int Nx1, Ny1, Nz1, Nxz1;
-		const double Lx0, Ly0, Lz0, dx0, dz0;
-		const double Lx1, Ly1, Lz1, dx1, dz1;
-		const double rscl0, rscl1;
+double InterpNode(double x_, double y_, double z_, const Scla &q, int stgtyp);
+void   InterpBulk(Scla &dst, const Scla &src, int stgtyp);
 
-		int *i0l, *k0l;				// indeces for wall paralell interpolation
-		int *i0f, *k0f, *nif, *nkf;	// indeces for wall paralell filtering
-		int *j0u, *j0v, *j0x;		// indeces for wall normal interpolation
-};
+inline double InterpNodeA(double x, double y, double z, const Scla &q) { return InterpNode(x,y,z,q,0); }
+inline double InterpNodeU(double x, double y, double z, const Scla &q) { return InterpNode(x,y,z,q,1); }
+inline double InterpNodeV(double x, double y, double z, const Scla &q) { return InterpNode(x,y,z,q,2); }
+inline double InterpNodeW(double x, double y, double z, const Scla &q) { return InterpNode(x,y,z,q,3); }
+
+inline void InterpBulkA(Scla &dst, const Scla &src) { InterpBulk(dst, src, 0); }
+inline void InterpBulkU(Scla &dst, const Scla &src) { InterpBulk(dst, src, 1); }
+inline void InterpBulkV(Scla &dst, const Scla &src) { InterpBulk(dst, src, 2); }
+inline void InterpBulkW(Scla &dst, const Scla &src) { InterpBulk(dst, src, 3); }
+
+} // namespace Interp
+
+
+
+// class Interp
+// {
+// public:
+// 	Interp(const Mesh &ms0, const Mesh &ms1);
+// 	~Interp();
+
+// 	void InitIndices();
+
+// 	const Mesh &ms0;
+// 	const Mesh &ms1;
+
+// 	int *isu, *isa;
+// 	int *jsv, *jsa;
+// 	int *ksw, *ksa;
+// };
+
+

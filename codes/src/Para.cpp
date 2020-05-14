@@ -38,9 +38,9 @@ Para::Para(const char *path)
 		inener = 0.5;
 
 		// grid settings
-		Nx = 4;	// peridoic without overlap
+		Nx = 5;	// peridoic without overlap
 		Ny = 5;	// from wall to wall
-		Nz = 4;	// peridoic without overlap
+		Nz = 5;	// peridoic without overlap
 		Lx = 6.2832;
 		Ly = 2.0;
 		Lz = 3.1416;
@@ -175,13 +175,13 @@ void Para::showPara()
 
 
 // # define DEBUG // g++ -I include src/Para.cpp
-# ifdef DEBUG
+#ifdef DEBUG
 int main()
 {
 	class Para *ppara0 = new class Para();
 	class Para *ppara = new class Para("XINDAT");
 }
-# endif
+#endif
 
 
 

@@ -1,253 +1,131 @@
-# include <iostream>
-# include <stdio.h>
-# include <stdlib.h>
-# include <string.h>
-# include <ctime>
+#include <sys/time.h>
+#include <omp.h>
 
-# include "Para.h"
-# include "Statis.h"
-# include "Solver.h"
+#include "Para.h"
+#include "Statis.h"
+#include "Solver.h"
 
 using namespace std;
 
 
+/***** computation mode *****/
+# define AUXIMAIN // DEFAULT //
+
+// #define TIME_TEST
 
 
-void initiate(Solver &solver, int &tstep, double &time, const Para &para)
-{
-	tstep = 0;
-	time = 0;
-	solver.config(para.nthrds);
-
-	if (para.nread == 0) {
-		solver.FLD.initrand(para.inener);
-		cout << endl << "Flow fields initiated from laminar." << endl;
-	}
-	else if (! strcmp(Para(para.inpath).statpath, para.statpath)) {
-		tstep = para.nread;
-		time = Statis::getLogtime(para.statpath, tstep);
-		solver.FLD.readField(para.fieldpath, tstep, "");
-		cout << endl << "Continue from step " << tstep << ", time " << time << endl;
-	}
-	else {
-		Para para0(para.inpath);
-		Mesh mesh0(para0.Nx, para0.Ny, para0.Nz, para0.Lx, para0.Ly, para0.Lz, 0, para0.statpath);
-		solver.FLD.initfrom(Feld(mesh0).readField(para0.fieldpath, para.nread, ""));
-		cout << endl << "Flow fields initiated from existing fields with parameters:" << endl;
-		para0.showPara();
-		mesh0.freeall();
-	}
-}
-
-void output(Statis &statis, Para &para, Solver &solver, int tstep, double time)
-{
-	if (tstep % para.nwrite == 0) {
-		solver.FLD.writeField(para.fieldpath, tstep, "");
-		solver.FLDH.writeField(para.fieldpath, tstep, "T");
-		// solver.FLD.writeTecplot(para.fieldpath, tstep, time);
-		cout << "Files successfully written for step " << tstep << endl;
-	}
-	if (tstep % para.nprint == 0) {
-		statis.check(solver.FLD, solver.VIS.S, para.Re, para.dt);
-		statis.writeProfile(para.statpath);
-		statis.writeLogfile(para.statpath, tstep, time, solver.mpg);
-
-		para.checkPara(tstep);
-		solver.config(para.nthrds);
-	}
-}
+void Config(int n, const Para &para);
+int Initiate(Solver &solver, const Para &para);
+void Output(Para &para, Solver &solver, int tstep);
 
 
-// # define DEFAULT
-// # define DATAASM
-# define OFW
-# define OFWDA
-
-
-# ifdef DEFAULT
+#ifdef DEFAULT
 
 int main()
 {
 	Para para("");
 
-	Mesh mesh(para.Nx,para.Ny,para.Nz, para.Lx,para.Ly,para.Lz, para.dy_min);
-	Mesh bmesh(mesh.Nx,2-1,mesh.Nz, mesh.Lx,mesh.Ly,mesh.Lz);
+	Geometry_prdxz geo(para.Nx,para.Ny,para.Nz, para.Lx,para.Ly,para.Lz);
+	Mesh mesh(geo);
+	Solver solver(mesh);
 
-	bmesh.y[0] = 0; bmesh.yc[0] = mesh.y[1];
-	bmesh.y[1] = 0; bmesh.yc[1] = mesh.y[mesh.Ny];
+	geo.InitMesh(para.dy_min);
+	geo.InitInterval();
+	geo.InitWaveNumber();
+	geo.InitIndices();
 
-	Solver solver(mesh, bmesh); Statis statis(mesh);
-
-	int tstep = 0; double time = 0;
+	para.showPara();
+	geo.WriteMesh(para.statpath);
+	geo.WriteMeshY(para.statpath);
 
 	// computation begins
-	para.showPara(); mesh.writeYmesh(para.statpath);
+	int tstep = Initiate(solver, para);
+	if (tstep == 0) Output(para, solver, tstep);
 
-	initiate(solver, tstep, time, para);
-	if (tstep == 0) output(statis, para, solver, tstep, time);
+
+	#ifdef TIME_TEST
+	struct timeval time0, time1;
+	long duration = 0;
+	gettimeofday(&time0, NULL);
+	#endif
+
 
 	// main loop
 	while (tstep++ < para.Nt) {
-		time += para.dt;
 		solver.evolve(para.Re, para.dt, para.bftype);
-		output(statis, para, solver, tstep, time);
+		Output(para, solver, tstep);
 	}
+
+
+	#ifdef TIME_TEST
+	gettimeofday(&time1, NULL);
+	duration = 1e6 * (time1.tv_sec - time0.tv_sec) + (time1.tv_usec - time0.tv_usec);
+	cout << "Time used: " << duration << " ms" << endl;
+	#endif
+
 
 	cout << "\nComputation finished!" << endl;
 }
 
-# endif
-
-
-# ifdef OFW
+#endif
+#ifdef AUXIMAIN
 
 int main()
 {
-	Para para0("base/"), para1("test/");
+	Para para0("base/");
+	Para para1("test/");
 
-	Mesh mesh0(para0.Nx,para0.Ny,para0.Nz, para0.Lx,para0.Ly,para0.Lz, para0.dy_min);
-	Mesh mesh1(para1.Nx,para1.Ny,para1.Nz, para1.Lx,para1.Ly,para1.Lz, para1.dy_min);
+	Geometry_prdxz geo0(para0.Nx,para0.Ny,para0.Nz, para0.Lx,para0.Ly,para0.Lz);
+	Geometry_prdxz geo1(para1.Nx,para1.Ny,para1.Nz, para1.Lx,para1.Ly,para1.Lz);
+	Mesh mesh0(geo0);
+	Mesh mesh1(geo1);
+	Solver solver0(mesh0);
+	Solver solver1(mesh1);
 
-	/* FLOWS COMMUNICATION: align OFW boundary yc to the FC yc */
-	int jb = (mesh0.Ny - mesh1.Ny) / 2;
-	mesh1.yc[0]        = mesh0.yc[jb];
-	mesh1.yc[mesh1.Ny] = mesh0.yc[mesh0.Ny-jb];
-	mesh1.initYmesh();
+	geo0.InitMesh(para0.dy_min);
+	geo1.InitMesh(para1.dy_min);
 
-	Mesh bmesh0(mesh0.Nx,2-1,mesh0.Nz, mesh0.Lx,mesh0.Ly,mesh0.Lz);
-	Mesh bmesh1(mesh1.Nx,2-1,mesh1.Nz, mesh1.Lx,mesh1.Ly,mesh1.Lz);
+	// geo1.AlignBoundaryYc(geo0);
 
-	bmesh0.y[0] = 0; bmesh0.yc[0] = mesh0.y[1];
-	bmesh0.y[1] = 0; bmesh0.yc[1] = mesh0.y[mesh0.Ny];
-	bmesh1.y[0] = 0; bmesh1.yc[0] = mesh1.y[1];
-	bmesh1.y[1] = 0; bmesh1.yc[1] = mesh1.y[mesh1.Ny];
+	// // align OFW boundary yc to the FC yc
+	// int jb = (geo0.Ny - geo1.Ny) / 2;
+	// geo1.yc[0]       = geo0.yc[jb];
+	// geo1.yc[geo1.Ny] = geo0.yc[geo0.Ny-jb];
 
-	Solver solver0(mesh0, bmesh0); Statis statis0(mesh0);
-	Solver solver1(mesh1, bmesh1); Statis statis1(mesh1);
+	geo0.InitInterval();   geo1.InitInterval();
+	geo0.InitWaveNumber(); geo1.InitWaveNumber();
+	geo0.InitIndices();    geo1.InitIndices();
 
-	int tstep0 = 0; double time0 = 0;
-	int tstep1 = 0; double time1 = 0;
-
-# ifdef OFWDA
-	DA da(mesh1);
-# endif
+	para0.showPara(); geo0.WriteMeshY(para0.statpath); geo0.WriteMesh(para0.statpath);
+	para1.showPara(); geo1.WriteMeshY(para1.statpath); geo1.WriteMesh(para1.statpath);
 
 	// computation begins
-	para0.showPara(); mesh0.writeYmesh(para0.statpath);
-	para1.showPara(); mesh1.writeYmesh(para1.statpath);
-
-	initiate(solver0, tstep0, time0, para0);
-	initiate(solver1, tstep1, time1, para1);
-	if (tstep0 == 0) output(statis0, para0, solver0, tstep0, time0);
-	if (tstep1 == 0) output(statis1, para1, solver1, tstep1, time1);
+	int tstep0 = Initiate(solver0, para0);
+	int tstep1 = Initiate(solver1, para1);
+	if (tstep0 == 0) Output(para0, solver0, tstep0);
+	if (tstep1 == 0) Output(para1, solver1, tstep1);
 
 	// main loop
 	while (tstep1++ < para1.Nt) {
-		time1 += para1.dt;
 
-		while (time1 - time0 > INFTSM) {
+		while (solver1.get_time() - solver0.get_time() > INFTSM) {
 			tstep0 ++;
-			time0 += para0.dt;
 			solver0.evolve(para0.Re, para0.dt, para0.bftype);
-			output(statis0, para0, solver0, tstep0, time0);
+			Output(para0, solver0, tstep0);
 		}
 
-		/* FLOWS COMMUNICATION: implement off-wall BC and mean pressure gradients */
-		solver1.getbc(solver0.FLD.V);
-		solver1.getnu(para1.Re, para1.bftype);
-		solver1.getfb();
-		solver1.getup(para1.dt);
-		solver1.fixfr(para1.dt, solver0.mpg);
-			
-		// solver1.evolve_ofw(para1.Re, para1.dt, para1.bftype, solver0.FLD.V, solver0.mpg);
-
-# ifdef OFWDA
-		/* FLOWS COMMUNICATION: introduce experiment data */
-		if (da.getExp(time1, solver0.FLD.V)) {
-			solver1.assimilate(da, para1.dt);
-
-			if (tstep1 % 10 == 0) da.writeForce(para1.fieldpath, tstep1);
-		}
-# endif
-
-		output(statis1, para1, solver1, tstep1, time1);
+		solver1.evolve(para1.Re, para1.dt, para1.bftype, solver0);
+		Output(para1, solver1, tstep1);
 	}
 
 	cout << "\nComputation finished!" << endl;
 }
 
-# endif
-
-
-// # ifdef DATAASM
-
-// int main()
-// {
-// 	Para para0("base/"), para1("test/");
-
-// 	Mesh mesh0(para0.Nx,para0.Ny,para0.Nz, para0.Lx,para0.Ly,para0.Lz, para0.dy_min);
-// 	Mesh mesh1(para1.Nx,para1.Ny,para1.Nz, para1.Lx,para1.Ly,para1.Lz, para1.dy_min);
-
-// 	Mesh bmesh0(mesh0.Nx,2-1,mesh0.Nz, mesh0.Lx,mesh0.Ly,mesh0.Lz);
-// 	Mesh bmesh1(mesh1.Nx,2-1,mesh1.Nz, mesh1.Lx,mesh1.Ly,mesh1.Lz);
-
-// 	bmesh0.y[0] = 0; bmesh0.yc[0] = mesh0.y[1];
-// 	bmesh0.y[1] = 0; bmesh0.yc[1] = mesh0.y[mesh0.Ny];
-// 	bmesh1.y[0] = 0; bmesh1.yc[0] = mesh1.y[1];
-// 	bmesh1.y[1] = 0; bmesh1.yc[1] = mesh1.y[mesh1.Ny];
-
-// 	Solver solver0(mesh0, bmesh0); Statis statis0(mesh0);
-// 	Solver solver1(mesh1, bmesh1); Statis statis1(mesh1);
-
-// 	int tstep0 = 0; double time0 = 0;
-// 	int tstep1 = 0; double time1 = 0;
-
-// 	DA da(mesh1);
-
-// 	// computation begins
-// 	para0.showPara(); mesh0.writeYmesh(para0.statpath);
-// 	para1.showPara(); mesh1.writeYmesh(para1.statpath);
-
-// 	initiate(solver0, tstep0, time0, para0);
-// 	initiate(solver1, tstep1, time1, para1);
-// 	if (tstep0 == 0) output(statis0, para0, solver0, tstep0, time0);
-// 	if (tstep1 == 0) output(statis1, para1, solver1, tstep1, time1);
-
-// 	// main loop
-// 	while (tstep1++ < para1.Nt) {
-// 		time1 += para1.dt;
-
-// 		while (time1 - time0 > INFTSM) {
-// 			tstep0 ++;
-// 			time0 += para0.dt;
-// 			solver0.evolve(para0.Re, para0.dt, para0.bftype);
-// 			output(statis0, para0, solver0, tstep0, time0);
-// 		}
-
-// 		solver1.evolve(para1.Re, para1.dt, para1.bftype);
-
-// 		/* FLOWS COMMUNICATION: introduce experiment data */
-// 		if (da.getExp(time1, solver0.FLD.V)) {
-// 			solver1.assimilate(da, para1.dt);
-
-// 			// if (tstep1 % para1.nwrite == 0)
-// 			// 	da.writeForce(para1.fieldpath, tstep1);
-// 		}
-
-// 		output(statis1, para1, solver1, tstep1, time1);
-// 	}
-
-// 	cout << "\nComputation finished!" << endl;
-// }
-
-// # endif
-
-
-
+#endif
 
 
 /***** time test example *****/
-// # include <sys/time.h>
+// #include <sys/time.h>
 
 // struct timeval *time0 = new struct timeval;
 // struct timeval *time1 = new struct timeval;
@@ -259,6 +137,85 @@ int main()
 
 // duration = 1e6 * (time1->tv_sec - time0->tv_sec) + (time1->tv_usec - time0->tv_usec);
 /*****************************/
+
+
+int Initiate(Solver &solver, const Para &para)
+{
+	int tstep = 0;
+	Config(para.nthrds, para);
+	solver.set_time(0);
+
+	if (para.nread == 0) {
+		solver.init(para.inener);
+		cout << endl << "Flow fields initiated from laminar." << endl;
+	}
+	else if (! strcmp(Para(para.inpath).statpath, para.statpath)) {
+		tstep = para.nread;
+		solver.set_time(Statis::GetLogtime(para.statpath, tstep));
+		solver.get_fld().ReadField(para.fieldpath, tstep, "");
+		cout << endl << "Continue from step " << tstep << ", time " << solver.get_time() << endl;
+	}
+	else {
+		Para para0(para.inpath);
+		Geometry geo0(para0.Nx, para0.Ny, para0.Nz, para0.Lx, para0.Ly, para0.Lz);
+		geo0.InitMesh(0, para0.statpath);
+		// geo0.InitIndices();
+
+		solver.init(Flow(Mesh(geo0)).ReadField(para0.fieldpath, para.nread, ""));
+
+		cout << endl << "Flow fields initiated from existing fields with parameters:" << endl;
+		para0.showPara();
+	}
+
+	return tstep;
+}
+
+void Output(Para &para, Solver &solver, int tstep)
+{	
+	if (tstep % para.nwrite == 0) {
+		solver.get_fld ().WriteField(para.fieldpath, tstep, "");
+		solver.get_fldh().WriteField(para.fieldpath, tstep, "T");
+		// solver.get_fld().WriteTecplot(para.fieldpath, tstep, solver.getTime());
+		cout << "Files successfully written for step " << tstep << endl;
+	}
+	if (tstep % para.nprint == 0) {
+
+		Statis statis(solver.ms);
+
+		statis.Check(solver.get_fld(), solver.get_vis(), para.Re, para.dt);
+		statis.WriteProfile(para.statpath);
+		statis.WriteLogfile(para.statpath, tstep, solver.get_time(), solver.get_mpg());
+
+		para.checkPara(tstep);
+		
+		Config(para.nthrds, para);
+	}
+}
+
+void Config(int n, const Para &para)
+{
+	static int nthrds = 0;
+
+	int tempn = nthrds;
+	int nprocs = omp_get_num_procs();
+	int N = para.Nx * para.Ny * para.Nz;
+
+	if (n > 0)
+		nthrds = (n > nprocs ? nprocs : n);
+	else {
+		// automatically decide number of OpenMP threads based on grid number
+		nthrds = log2(N) - 16;
+		nthrds = ( nthrds < 1 ? 1 : (
+				   nthrds > 32? 32: (
+				   nthrds > nprocs ? nprocs : nthrds )));
+	}
+	if (tempn != nthrds) {
+		omp_set_num_threads(nthrds);
+		cout << endl << "number of OpenMP threads: " << nthrds << endl;
+	}
+}
+
+
 
 
 

@@ -1,103 +1,34 @@
-# pragma once
+#pragma once
 
-# include <omp.h>
-# include "Basic.h"
+#include "Basic.h"
+#include "Bcond.h"
 
 
-class IDM: private Mesh
+namespace IDM
 {
-	public:
-		IDM(const Mesh &mesh): Mesh(mesh) {};
+void calc(Flow &fld, Flow &fldh,
+	const Flow &vis, const Vctr &fb, const Boundaries &bc, const Boundaries &sbc, double dt);
 
-		// configuration
-		int ompset(int n);
+// subroutines for computation
 
-		// computation interface
-		void calc(Feld &FLD, Feld &FLDH,
-			const Feld &VIS, const Vctr &FB, const Feld &BC, double dt)
-		{
-			uhcalc(FLDH.V, FLD, VIS, BC, FB, dt);
-			dpcalc(FLDH, FLD.S, BC.V, dt);
-			upcalc(FLD, FLDH, dt);
-			applyBC(FLD, FLDH, BC, dt);
-		};
+// step 1: calculate RHS of momentum equation
+void urhs1(Scla &ruh, const Flow &fld, const Flow &vis, const Scla &fbx, const Boundaries &bc, const Boundaries &sbc);
+void urhs2(Scla &rvh, const Flow &fld, const Flow &vis, const Scla &fby, const Boundaries &bc, const Boundaries &sbc);
+void urhs3(Scla &rwh, const Flow &fld, const Flow &vis, const Scla &fbz, const Boundaries &bc, const Boundaries &sbc);
 
-	private:
-		// computations functions
-		void uhcalc(Vctr &UH,
-			const Feld &FLD, const Feld &VIS, const Feld &BC, const Vctr &FB, double dt)
-		{
-			# pragma omp parallel
-			{
-				urhs1(UH[1].blkGet(), FLD, VIS, FB[1].blkGet());
-				urhs2(UH[2].blkGet(), FLD, VIS, FB[2].blkGet());
-				urhs3(UH[3].blkGet(), FLD, VIS, FB[3].blkGet());
-				mbc(UH, FLD.V, VIS, BC);
-				getuh1(UH, FLD.V, VIS, dt);
-				getuh2(UH, FLD.V, VIS, dt);
-				getuh3(UH, FLD.V, VIS, dt);
-			}
-		};
-		void dpcalc(Feld &FLDH,
-			const Scla &P, const Vctr &UBC, double dt)
-		{
-			Scla &DP = FLDH.S;
-			rhsdp(DP.blkGet(), FLDH.V, UBC, dt); // rdp (which shares memory with dp)
-			DP.fft();                            // rdp->frdp
-			getfdp(DP.blkGetF(), P.av(1));       // frdp->fdp
-			DP.ifft();                           // fdp->dp
-		};
-		void upcalc(Feld &FLD, Feld &FLDH, double dt)
-		{
-			update(FLD, FLDH, dt);
-		};
-		void applyBC(Feld &FLD, Feld &FLDH, const Feld &BC, double dt)
-		{
-			// // extrapolate UBC from real boundary to virtual boundary at new time step
-			// UBC[1].lyrMlt(2.*h[1]/dy[0], 0).lyrMns(U[1][1], 0).lyrMlt(dy[0]/dy[1], 0);
-			// UBC[3].lyrMlt(2.*h[1]/dy[0], 0).lyrMns(U[3][1], 0).lyrMlt(dy[0]/dy[1], 0);
-			// UBC[1].lyrMlt(2.*h[Ny]/dy[Ny], 1).lyrMns(U[1][Ny-1], 1).lyrMlt(dy[Ny]/dy[Ny-1], 1);
-			// UBC[3].lyrMlt(2.*h[Ny]/dy[Ny], 1).lyrMns(U[3][Ny-1], 1).lyrMlt(dy[Ny]/dy[Ny-1], 1);
-			
-			// when UBC is aligned to the virtual boundary
-			pressBD(FLD.S, FLDH.S, BC.S);
-			veldtBD(FLDH.V, FLD.V, BC.V, dt);
-			velocBD(FLD.V, BC.V);
-		};
+// step 2: calculate intermedia velocity (solve TDMAs)
+void getuh1(Vctr &velh, const Vctr &vel, const Flow &vis, const Boundaries &sbc, double dt);
+void getuh2(Vctr &velh, const Vctr &vel, const Flow &vis, const Boundaries &sbc, double dt);
+void getuh3(Vctr &velh, const Vctr &vel, const Flow &vis, const Boundaries &sbc, double dt);
 
-		// subroutines for computation
-		// step 1: calculate RHS of momentum equations
-		void urhs1(double *ruh, const Feld &FLD, const Feld &VIS, double *fbx);
-		void urhs2(double *rvh, const Feld &FLD, const Feld &VIS, double *fby);
-		void urhs3(double *rwh, const Feld &FLD, const Feld &VIS, double *fbz);
-		void mbc  (Vctr &UH, const Vctr &U, const Feld &VIS, const Feld &BC);
-		// step 2: calculate intermedia velocities (solve TDMAs)
-		void getuh1(Vctr &UH, const Vctr &U, const Feld &VIS, double dt);
-		void getuh2(Vctr &UH, const Vctr &U, const Feld &VIS, double dt);
-		void getuh3(Vctr &UH, const Vctr &U, const Feld &VIS, double dt);
-		// step 3: calculate projector (perform FFTs)
-		void rhsdp(double *rdp, const Vctr &UH, const Vctr &UBC, double dt);
-		void getfdp(double *fdp, double refp);
-		// step 4: update velocity & pressure fields
-		void update(Feld &FLD, Feld &FLDH, double dt);
-		// step 5: update doundaries
-		void pressBD(Scla &P, Scla &DP, const Scla &PBC);                  // boundary conditions for pressure
-		void veldtBD(Vctr &UH, const Vctr &U, const Vctr &UBC, double dt); // modify boundary of velocity-time-derivative with given BC
-		void velocBD(Vctr &U, const Vctr &UBC);                            // boundary conditions for velocities
+// step 3: calculate projector (solve Poisson equation with FFT)
+void rhsdp(Scla &rdp, const Vctr &velh, const Boundaries &bc, const Boundaries &sbc, double dt);
+void getfdp(Scla &dp, const Boundaries &sbc, double refp);
 
-	public:
-		// tool functions
-		void urhs(Vctr &UH, const Feld &FLD, const Feld &VIS, const Feld &BC, const Vctr &FB)
-		{
-			urhs1(UH[1].blkGet(), FLD, VIS, FB[1].blkGet());
-			urhs2(UH[2].blkGet(), FLD, VIS, FB[2].blkGet());
-			urhs3(UH[3].blkGet(), FLD, VIS, FB[3].blkGet());
-			mbc(UH, FLD.V, VIS, BC);
-		};
-		void muh1(double *muh1, const Vctr &UH, const Vctr &U, const Feld &VIS);
-		void muh2(double *muh2, const Vctr &UH, const Vctr &U, const Feld &VIS);
-		void muh3(double *muh3, const Vctr &UH, const Vctr &U, const Feld &VIS);
-};
+// step 4: update velocity & pressure fields
+void update(Flow &fld, Flow &fldh, double dt);
+
+} // namespace IDM
 
 
 

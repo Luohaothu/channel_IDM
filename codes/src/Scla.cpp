@@ -1,204 +1,519 @@
-# include <iostream>
-# include <stdio.h>
-# include <stdlib.h>
-# include <string.h>
-# include <cmath>
-
-
-# include "Basic.h"
+#include "Basic.h"
 
 using namespace std;
 
+typedef fftw_complex fcmplx;
 
-/********** integration functions **********/
 
-double Scla::yMeanU(int i, int k) const
+
+Scla::Scla(const Mesh &ms):
+ms(ms),
+Nx(ms.Nx),
+Ny(ms.Ny),
+Nz(ms.Nz)
 {
-	int j, ki = Nx * k + i;
-	double *q = blkGet(), integral = 0.0;
-	for (j=1; j<Ny; j++)
-		integral += q[Nxz * j + ki] * dy[j];
-	return integral / Ly;
-}
-double Scla::yMeanV(int i, int k) const
-{
-	int j, ki = Nx * k + i;
-	double *q = blkGet(), integral = 0.0;
-	for (j=1; j<=Ny; j++)
-		integral += q[Nxz * j + ki] * (j==1 ? dy[1]/2 : j==Ny ? dy[Ny-1]/2 : h[j]);
-	return integral / Ly;
-}
-double Scla::layerMean(int j) const
-{
-	int k, i, kk, jj = Nxz * j;
-	double *q = blkGet(), integral = 0.0, dA = dx * dz, A = Lx * Lz;
-	for (k=0; k<Nz; k++) { kk = jj + Nx * k;
-	for (i=0; i<Nx; i++) { integral += q[kk + i] * dA;	}}
-	return integral / A;
-}
-double Scla::bulkMeanU() const // only for U, W
-{
-	double integral = 0.0;
-	for (int j=1; j<Ny; j++)
-		integral += layerMean(j) * dy[j];
-	return integral / Ly;
-}
-double Scla::bulkMeanV() const // only for V
-{
-	double integral = 0.0;
-	for (int j=1; j<=Ny; j++)
-		integral += layerMean(j) * (j==1 ? dy[1]/2 : j==Ny? dy[Ny-1]/2 : h[j]);
-	return integral / Ly;
-}
+	q_ = new double[(Nx+1) * (Ny+1) * (Nz+1)];
 
+	fftz_temp = new double[Ny * ms.Nzr];
 
+	frc_z = new fftw_plan[Ny];
+	fcr_z = new fftw_plan[Ny];
+	frc_xz= new fftw_plan[Ny];
+	fcr_xz= new fftw_plan[Ny];
 
-/********** interpolation functions **********/
+	for (int j=1; j<Ny; j++) {
 
-void Scla::layerUG2CC(double *dst, int j) const
-/* interpolate quantity from U-grid to layer j of cell-center-grid */
-{
-	int i, k, kk; double *ql = lyrGet(j);
-	for (k=0; k<Nz; k++) { kk = Nx * k;
-	for (i=0; i<Nx; i++) { dst[kk+i] = 0.5 * (ql[kk+i] + ql[kk+ipa[i]]); }}
-	
-	// if (j == 0 || j == Ny) { // interpolate virtual boundary to real boundary
-	// 	int ofst = (j==0 ? 1 : -1);
-	// 	double htmp = 0.5 / (j==0 ? h[1] : h[Ny]);
-	// 	ql = lyrGet(j + ofst);
+		double *r = &fftz_temp[j * ms.Nzr];
+		fcmplx *c = (fcmplx*) r;
 
-	// 	for (k=0; k<Nz; k++) { kk = Nx * k;
-	// 	for (i=0; i<Nx; i++) {
-	// 		dst[kk+i] = htmp * ( dst[kk+i] * dy[j+ofst] + .5 * (ql[kk+i] + ql[kk+ipa[i]]) * dy[j] );
-	// 	}}
-	// }
-}
+		frc_z[j] = fftw_plan_dft_r2c_1d(Nz-1, r, c, FFTW_MEASURE);
+		fcr_z[j] = fftw_plan_dft_c2r_1d(Nz-1, c, r, FFTW_MEASURE);
 
-void Scla::layerWG2CC(double *dst, int j) const
-/* interpolate quantity from W-grid to layer j of cell-center-grid */
-{
-	int i, k, kk, kkf; double *ql = lyrGet(j);
-	for (k=0; k<Nz; k++) { kk = Nx * k; kkf = Nx * kpa[k];
-	for (i=0; i<Nx; i++) { dst[kk+i] = 0.5 * (ql[kk+i] + ql[kkf+i]); }}
-	
-	// if (j == 0 || j == Ny) { // interpolate virtual boundary to real boundary
-	// 	int ofst = (j==0 ? 1 : -1);
-	// 	double htmp = 0.5 / (j==0 ? h[1] : h[Ny]);
-	// 	ql = lyrGet(j + ofst);
+		r = &q_[ms.idfxz(0,j,0)];
+		c = (fcmplx*) r;
 
-	// 	for (k=0; k<Nz; k++) { kk = Nx * k; kkf = Nx * kpa[k];
-	// 	for (i=0; i<Nx; i++) {
-	// 		dst[kk+i] = htmp * ( dst[kk+i] * dy[j+ofst] + .5 * (ql[kk+i] + ql[kkf+i]) * dy[j] );
-	// 	}}
-	// }
-}
-
-void Scla::layerVG2CC(double *dst, int j) const
-/* interpolate quantity from V-grid to layer j of cell-center-grid */
-{
-	int i, k, kk;
-
-	double *ql1 = lyrGet(j==0 ? 2 : j), *ql2 = lyrGet(j==Ny ? Ny-1 : j+1);
-	// double *ql1 = lyrGet(j==0 ? 1 : j), *ql2 = lyrGet(j==Ny ? Ny : j+1);
-
-	for (k=0; k<Nz; k++) { kk = Nx * k;
-	for (i=0; i<Nx; i++) { dst[kk+i] = 0.5 * (ql1[kk+i] + ql2[kk+i]); }}
-
-	// linear exptrapolation to virtual boundaries
-	if (j == 0) {
-		for (k=0; k<Nz; k++) { kk = Nx * k;
-		for (i=0; i<Nx; i++) { dst[kk+i] = h[1]/dy[1] * (ql2[kk+i] - ql1[kk+i]) + .5 * (ql2[kk+i] + ql1[kk+i]); }}
-	}
-	else if (j == Ny) {
-		for (k=0; k<Nz; k++) { kk = Nx * k;
-		for (i=0; i<Nx; i++) { dst[kk+i] = h[Ny]/dy[Ny-1] * (ql1[kk+i] - ql2[kk+i]) + .5 * (ql1[kk+i] + ql2[kk+i]); }}
+		frc_xz[j] = fftw_plan_dft_r2c_2d(Nz-1, Nx-1, r, c, FFTW_MEASURE);
+		fcr_xz[j] = fftw_plan_dft_c2r_2d(Nz-1, Nx-1, c, r, FFTW_MEASURE);
 	}
 }
 
-
-
-void Scla::CC2EG(double *dst1, double *dst2, double *dst3) const
+Scla::~Scla()
 {
-	int i, j, k, idx, im, jm, km, imjm, jmkm, imkm; double *q = blkGet();
-	for (j=0; j<=Ny; j++) {
-	for (k=0; k<Nz; k++) {
-	for (i=0; i<Nx; i++) {
-		idx = IDX(i,j,k); im = IDX(ima[i],j,k); jm = IDX(i,j-1,k); km = IDX(i,j,kma[k]);
-		imjm = IDX(ima[i],j-1,k); jmkm = IDX(i,j-1,kma[k]); imkm = IDX(ima[i],j,kma[k]);
+	for (int j=1; j<Ny; j++) { // note: must not destory fft plan that is not created
+		fftw_destroy_plan(frc_z[j]);
+		fftw_destroy_plan(fcr_z[j]);
+		fftw_destroy_plan(frc_xz[j]);
+		fftw_destroy_plan(fcr_xz[j]);
+	}
+	delete[] frc_z;
+	delete[] fcr_z;
+	delete[] frc_xz;
+	delete[] fcr_xz;
+	delete[] fftz_temp;
+	delete[] q_;
+}
 
-		dst2[idx] = .25 * ( q[idx] + q[im] + q[km] + q[imkm] );                        if (j>0)
-		dst1[idx] = .25/h[j] * ( (q[idx]+q[km]) * dy[j-1] + (q[jm]+q[jmkm]) * dy[j] ); if (j>0)
-		dst3[idx] = .25/h[j] * ( (q[idx]+q[im]) * dy[j-1] + (q[jm]+q[imjm]) * dy[j] );
+
+/***** fft *****/
+
+void Scla::fftxz()
+{
+	#pragma omp parallel for
+	for (int j=1; j<Ny; j++) {
+		for (int k=1; k<Nz; k++)
+		for (int i=1; i<Nx; i++)
+			q_[ms.idfxz(i-1,j,k-1)] = q_[ms.idx(i,j,k)];
+		fftw_execute(frc_xz[j]);
+	}
+}
+void Scla::ifftxz()
+{
+	#pragma omp parallel for
+	for (int j=1; j<Ny; j++) {
+		fftw_execute(fcr_xz[j]);
+		for (int k=Nz-1; k>=1; k--)
+		for (int i=Nx-1; i>=1; i--)
+			q_[ms.idx(i,j,k)] = q_[ms.idfxz(i-1,j,k-1)] / (Nx-1)/(Nz-1);
+	}
+}
+
+void Scla::fftz()
+{
+	#pragma omp parallel for
+	for (int j=1; j<Ny; j++) { double *temp = &fftz_temp[j * ms.Nzr];
+	for (int i=1; i<Nx; i++) {
+		for (int k=1; k<Nz; k++)
+			temp[k-1] = q_[ms.idx(i,j,k)];
+		fftw_execute(frc_z[j]);
+		for (int k=0; k<ms.Nzr; k++)
+			q_[ms.idfz(i,j,k)] = temp[k];
+	}}
+}
+void Scla::ifftz()
+{
+	#pragma omp parallel for
+	for (int j=1; j<Ny; j++) { double *temp = &fftz_temp[j * ms.Nzr];
+	for (int i=1; i<Nx; i++) {
+		for (int k=0; k<ms.Nzr; k++)
+			temp[k] = q_[ms.idfz(i,j,k)];
+		fftw_execute(fcr_z[j]);
+		for (int k=1; k<Nz; k++)
+			q_[ms.idx(i,j,k)] = temp[k-1] / (Nz-1);
+	}}
+}
+
+
+/***** convinent operations for whole arrays *****/
+
+void Scla::TraverseLyr(double a, int j, void (*pfun)(double &b, double a))
+{
+	for (int k=0; k<=Nz; k++)
+	for (int i=0; i<=Nx; i++)
+		pfun(q_[ms.idx(i,j,k)], a);
+}
+void Scla::TraverseLyr(const double *src, int j, void (*pfun)(double &b, double a))
+{
+	for (int k=0; k<=Nz; k++)
+	for (int i=0; i<=Nx; i++)
+		pfun(q_[ms.idx(i,j,k)], src[ms.idx(i,0,k)]);
+}
+void Scla::TraverseBlk(double a, void (*pfun)(double&, double))
+{
+	#pragma omp parallel for
+	for (int j=0; j<=Ny; j++)
+	for (int k=0; k<=Nz; k++)
+	for (int i=0; i<=Nx; i++)
+		pfun(q_[ms.idx(i,j,k)], a);
+}
+void Scla::TraverseBlk(const double *src, void (*pfun)(double&, double))
+{
+	#pragma omp parallel for
+	for (int j=0; j<=Ny; j++) {
+	for (int k=0; k<=Nz; k++) {
+	for (int i=0; i<=Nx; i++) {
+		int id = ms.idx(i,j,k);
+		pfun(q_[id], src[id]);
 	}}}
 }
 
 
-void Scla::layerCC2XE(double *dst, int j) const // j = 1 ~ Ny
-/* interpolate quantity from cell-center to layer j of X edge */
+/***** arithmetic mean *****/
+
+double Scla::meanxz(int j) const
 {
-	int i, k, idx, km; double *ql1 = lyrGet(j-1), *ql2 = lyrGet(j);
-	for (k=0; k<Nz; k++) {
-	for (i=0; i<Nx; i++) {
-		idx = Nx * k + i;
-		km = Nx * kma[k] + i;
-		dst[idx] = .25/h[j] * ( (ql2[idx]+ql2[km]) * dy[j-1] + (ql1[idx]+ql1[km]) * dy[j] );
+	double sum = 0;
+	for (int k=1; k<Nz; k++)
+	for (int i=1; i<Nx; i++)
+		sum += q_[ms.idx(i,j,k)];
+	return sum / ((Nx-1)*(Nz-1));
+}
+double Scla::meanz(int i, int j) const
+{
+	double sum = 0;
+	for (int k=1; k<Nz; k++)
+		sum += q_[ms.idx(i,j,k)];
+	return sum / (Nz-1);
+}
+
+
+/***** weighed average *****/
+
+double Scla::MeanUx(int j, int k) const
+{
+	double sum = 0;
+	for (int i=2; i<Nx; i++)
+		sum += q_[ms.idx(i,j,k)] * ms.hx(i);
+	sum += q_[ms.idx(1, j,k)] * (ms.xc(1) - ms.x(1));
+	sum += q_[ms.idx(Nx,j,k)] * (ms.x(Nx) - ms.xc(Nx-1));
+	return sum / ms.Lx;
+}
+double Scla::MeanVy(int i, int k) const
+{
+	double sum = 0;
+	for (int j=2; j<Ny; j++)
+		sum += q_[ms.idx(i,j,k)] * ms.hy(j);
+	sum += q_[ms.idx(i,1, k)] * (ms.yc(1) - ms.y(1));
+	sum += q_[ms.idx(i,Ny,k)] * (ms.y(Ny) - ms.yc(Ny-1));
+	return sum / ms.Ly;
+}
+double Scla::MeanWz(int i, int j) const
+{
+	double sum = 0;
+	for (int k=2; k<Nz; k++)
+		sum += q_[ms.idx(i,j,k)] * ms.hz(k);
+	sum += q_[ms.idx(i,j,1 )] * (ms.zc(1) - ms.z(1));
+	sum += q_[ms.idx(i,j,Nz)] * (ms.z(Nz) - ms.zc(Nz-1));
+	return sum / ms.Lz;
+}
+
+double Scla::MeanAy(int i, int k) const
+{
+	double sum = 0;
+	for (int j=1; j<Ny; j++)
+		sum += q_[ms.idx(i,j,k)] * ms.dy(j);
+	return sum / ms.Ly;
+}
+
+double Scla::MeanAz(int i, int j) const
+{
+	double sum = 0;
+	for (int k=1; k<Nz; k++)
+		sum += q_[ms.idx(i,j,k)] * ms.dz(k);
+	return sum / ms.Lz;
+}
+
+double Scla::MeanUyz(int i) const
+{
+	double sum = 0;
+	for (int j=1; j<Ny; j++)
+	for (int k=1; k<Nz; k++)
+		sum += q_[ms.idx(i,j,k)] * ms.dy(j) * ms.dz(k);
+	return sum / (ms.Ly * ms.Lz);
+}
+double Scla::MeanVxz(int j) const
+{
+	double sum = 0;
+	for (int k=1; k<Nz; k++)
+	for (int i=1; i<Nx; i++)
+		sum += q_[ms.idx(i,j,k)] * ms.dx(i) * ms.dz(k);
+	return sum / (ms.Lx * ms.Lz);
+
+}
+double Scla::MeanWxy(int k) const
+{
+	double sum = 0;
+	for (int j=1; j<Ny; j++)
+	for (int i=1; i<Nx; i++)
+		sum += q_[ms.idx(i,j,k)] * ms.dx(i) * ms.dy(j);
+	return sum / (ms.Lx * ms.Ly);
+}
+
+double Scla::MeanU() const
+{
+	double sum = 0;
+	for (int j=1; j<Ny; j++)
+	for (int k=1; k<Nz; k++)
+		sum += MeanUx(j,k) * ms.dy(j) * ms.dz(k);
+	return sum / (ms.Ly * ms.Lz);
+}
+double Scla::MeanV() const
+{
+	double sum = 0;
+	for (int k=1; k<Nz; k++)
+	for (int i=1; i<Nx; i++)
+		sum += MeanVy(i,k) * ms.dx(i) * ms.dz(k);
+	return sum / (ms.Lx * ms.Lz);
+}
+double Scla::MeanW() const
+{
+	double sum = 0;
+	for (int j=1; j<Ny; j++)
+	for (int i=1; i<Nx; i++)
+		sum += MeanWz(i,j) * ms.dx(i) * ms.dy(j);
+	return sum / (ms.Lx * ms.Ly);
+}
+double Scla::MeanA() const
+{
+	double sum = 0;
+	for (int j=1; j<Ny; j++)
+		sum += MeanVxz(j) * ms.dy(j);
+	return sum / ms.Ly;
+}
+
+
+/***** interpolate from faces to cell-centers *****/
+
+// way to deal with real-to-virtual booundary interpolation:
+// linear extrapolation, without special consideration for periodic scenario
+
+void Scla::Ugrid2CellCenter(Scla &dst) const
+{
+	int id, ip;
+	double c1 = .5 * ms.dx(0) / ms.dx(1);
+	double c2 = .5 * ms.dx(Nx)/ ms.dx(Nx-1);
+
+	for (int j=0; j<=Ny; j++) {
+	for (int k=0; k<=Nz; k++) {
+		for (int i=1; i<Nx; i++) {
+			id = ms.idx(i,j,k);
+			ip = ms.idx(ms.ipa(i),j,k);
+			dst(i,j,k) = .5 * (q_[id] + q_[ip]);
+		}
+		dst(0, j,k) = (1+c1) * q_[ms.idx(1, j,k)] - c1 * q_[ms.idx(2,j,k)];
+		dst(Nx,j,k) = (1+c2) * q_[ms.idx(Nx,j,k)] - c2 * q_[ms.idx(Nx-1,j,k)];
+	}}
+}
+void Scla::Vgrid2CellCenter(Scla &dst) const
+{
+	int id, jp;
+	double c1 = .5 * ms.dy(0) / ms.dy(1);
+	double c2 = .5 * ms.dy(Ny)/ ms.dy(Ny-1);
+
+	for (int i=0; i<=Nx; i++) {
+	for (int k=0; k<=Nz; k++) {
+		for (int j=1; j<Ny; j++) {
+			id = ms.idx(i,j,k);
+			jp = ms.idx(i,ms.jpa(j),k);
+			dst(i,j,k) = .5 * (q_[id] + q_[jp]);
+		}
+		dst(i,0, k) = (1+c1) * q_[ms.idx(i,1, k)] - c1 * q_[ms.idx(i,2,k)];
+		dst(i,Ny,k) = (1+c2) * q_[ms.idx(i,Ny,k)] - c2 * q_[ms.idx(i,Ny-1,k)];
+	}}
+}
+void Scla::Wgrid2CellCenter(Scla &dst) const
+{
+	int id, kp;
+	double c1 = .5 * ms.dz(0) / ms.dz(1);
+	double c2 = .5 * ms.dz(Nz)/ ms.dz(Nz-1);
+
+	for (int i=0; i<=Nx; i++) {
+	for (int j=0; j<=Ny; j++) {
+		for (int k=1; k<Nz; k++) {
+			id = ms.idx(i,j,k);
+			kp = ms.idx(i,j,ms.kpa(k));
+			dst(i,j,k) = .5 * (q_[id] + q_[kp]);
+		}
+		dst(i,j,0 ) = (1+c1) * q_[ms.idx(i,j,1 )] - c1 * q_[ms.idx(i,j,2)];
+		dst(i,j,Nz) = (1+c2) * q_[ms.idx(i,j,Nz)] - c2 * q_[ms.idx(i,j,Nz-1)];
 	}}
 }
 
-void Scla::layerCC2ZE(double *dst, int j) const // j = 1 ~ Ny
-/* interpolate quantity from cell-center to layer j of Z edge */
+
+/***** interpolate from cell-centers to edges *****/
+
+void Scla::CellCenter2EdgeX(Scla &dst) const
 {
-	int i, k, idx, im; double *ql1 = lyrGet(j-1), *ql2 = lyrGet(j);
-	for (k=0; k<Nz; k++) {
-	for (i=0; i<Nx; i++) {
-		idx = Nx * k + i;
-		im = Nx * k + ima[i];
-		dst[idx] = .25/h[j] * ( (ql2[idx]+ql2[im]) * dy[j-1] + (ql1[idx]+ql1[im]) * dy[j] );
-	}}
+	for (int j=1; j<=Ny; j++) {
+	for (int k=1; k<=Nz; k++) {
+	for (int i=0; i<=Nx; i++) {
+
+		int id =              ms.idx(i,j,k);
+		int im, jm, km;       ms.imx(i,j,k,im,jm,km);
+		int imjm, jmkm, imkm; ms.mmx(i,j,k,imjm,jmkm,imkm);
+
+		double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
+		double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
+		double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
+
+		dst[id] = .25/hyc/hzc * (
+			q_[id] * dym * dzm +
+			q_[jm] * dyc * dzm +
+			q_[km] * dym * dzc +
+			q_[jmkm] * dyc * dzc );
+	}}}
+}
+void Scla::CellCenter2EdgeY(Scla &dst) const
+{
+	for (int j=0; j<=Ny; j++) {
+	for (int k=1; k<=Nz; k++) {
+	for (int i=1; i<=Nx; i++) {
+
+		int id =              ms.idx(i,j,k);
+		int im, jm, km;       ms.imx(i,j,k,im,jm,km);
+		int imjm, jmkm, imkm; ms.mmx(i,j,k,imjm,jmkm,imkm);
+
+		double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
+		double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
+		double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
+
+		dst[id] = .25/hxc/hzc * (
+			q_[id] * dxm * dzm +
+			q_[im] * dxc * dzm +
+			q_[km] * dxm * dzc +
+			q_[imkm] * dxc * dzc );
+	}}}
+}
+void Scla::CellCenter2EdgeZ(Scla &dst) const
+{
+	for (int j=1; j<=Ny; j++) {
+	for (int k=0; k<=Nz; k++) {
+	for (int i=1; i<=Nx; i++) {
+
+		int id =              ms.idx(i,j,k);
+		int im, jm, km;       ms.imx(i,j,k,im,jm,km);
+		int imjm, jmkm, imkm; ms.mmx(i,j,k,imjm,jmkm,imkm);
+
+		double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
+		double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
+		double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
+
+		dst[id] = .25/hxc/hyc * (
+			q_[id] * dxm * dym +
+			q_[im] * dxc * dym +
+			q_[jm] * dxm * dyc +
+			q_[imjm] * dxc * dyc );
+	}}}
 }
 
-void Scla::layerCC2YE(double *dst, int j) const // j = 0 ~ Ny
-/* interpolate quantity from cell-center to layer j of Y edge */
+
+/***** differentiation operators *****/
+
+double* Scla::Gradient(int i, int j, int k) const
+/* compute Gradient of a cell-centered scalar field to corresponding U,V,W grids */
+
 {
-	int i, k, idx, im, km, imkm; double *ql = lyrGet(j);
-	for (k=0; k<Nz; k++) {
-	for (i=0; i<Nx; i++) {
-		idx = Nx * k + i;
-		im = Nx * k + ima[i];
-		km = Nx * kma[k] + i;
-		imkm = Nx * kma[k] + ima[i];
-		dst[idx] = .25 * ( ql[idx] + ql[im] + ql[km] + ql[imkm] );
-	}}
+	static double grad[3]; // will be overwritten even called from different objects of this class
+
+	int id =        ms.idx(i,j,k);
+	int im, jm, km; ms.imx(i,j,k,im,jm,km);
+
+	grad[0] = (q_[id] - q_[im]) / ms.hx(i); // [1,Nx], [0,Ny], [0,Nz]
+	grad[1] = (q_[id] - q_[jm]) / ms.hy(j); // [0,Nx], [1,NY], [0,Nz]
+	grad[2] = (q_[id] - q_[km]) / ms.hz(k); // [0,Nx], [0,NY], [1,Nz]
+
+	return grad; // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
+}
+
+
+/***** IO *****/
+
+void Scla::FileIO(const char *path, const char *name, char mode) const
+/* read & write field from & to binary files */
+{
+	FILE *fp;
+	char str[1024];
+
+	sprintf(str, "%s%s.bin", path, name);
+
+	fp = fopen(str, mode=='w' ? "wb" : "rb");
+
+	// write domain information at the beginning
+	int n1 = Nx+1;
+	int n2 = Ny+1;
+	int n3 = Nz+1;
+	if (mode == 'w') {
+		fwrite(&n1, sizeof(int), 1, fp);
+		fwrite(&n2, sizeof(int), 1, fp);
+		fwrite(&n3, sizeof(int), 1, fp);
+	}
+	// data begin after the info section
+	fseek(fp, sizeof(double) * (Nx+1)*(Nz+1), SEEK_SET);
+	if (mode == 'w') fwrite(q_, sizeof(double) * (Nx+1)*(Nz+1), Ny+1, fp);
+	if (mode == 'r') fread (q_, sizeof(double) * (Nx+1)*(Nz+1), Ny+1, fp);
+
+	fclose(fp);
+}
+
+void Scla::debug_AsciiOutput(const char *path, const char *name, int j1, int j2) const
+/* write the fields in ascii files for check */
+{
+	FILE *fp;
+	char str[1024];
+
+	sprintf(str, "%s%s.txt", path, name);
+
+	fp = fopen(str, "w");
+	for (int j=j1;j<j2;  j++) { fputc('\n', fp);
+	for (int k=0; k<=Nz; k++) { fputc('\n', fp);
+	for (int i=0; i<=Nx; i++) {
+		fprintf(fp, "%.6f\t", q_[ms.idx(i,j,k)]);
+	}}}
+	fclose(fp);
 }
 
 
 
-/********** differentiation operators **********/
 
-double* Scla::gradient(int i, int j, int k) const
-/* compute gradient of a scalar field at cell center to grid points corresponding to U,V,W */
-// CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
+
+// #define DEBUG
+
+#ifdef DEBUG
+
+int main()
 {
-	int idx= IDX(i,j,k);
-	int im = IDX(ima[i],j,k);
-	int jm = IDX(i,j-1,k);
-	int km = IDX(i,j,kma[k]);
-	double *q = blkGet();
-	static double grad[3];	// will be overwritten even called from different objects of this class
-	grad[0] = ( q[idx] - q[im] ) / dx;	// 1 <= j <= Ny-1
-	grad[1] = ( q[idx] - q[jm] ) / h[j];// 2 <= j <= Ny-1 (j==1 may not be valid)
-	grad[2] = ( q[idx] - q[km] ) / dz;	// 1 <= j <= Ny-1
-	return grad;
+	Geometry geo(5,3,4, 2*PI,2,PI);
+	Mesh ms(geo);
+	Scla q(ms);
+
+	geo.InitIndices();
+	geo.InitMesh(.2);
+
+	for (int j=1; j<Ny; j++) {
+	for (int k=1; k<Nz; k++) {
+	for (int i=1; i<Nx; i++) {
+		q(i,j,k) = i*j + j*k + k*i;
+	}}}
+
+	q.debug_AsciiOutput("", "0_original", 0, Ny+1);
+	q.fftz();
+	q.debug_AsciiOutput("", "1_fftz", 0, Ny+1);
+	q.ifftz();
+	q.fftxz();
+	q.debug_AsciiOutput("", "2_fftxz", 0, Ny+1);
+	q.ifftxz();
+	q.debug_AsciiOutput("", "3_back", 0, Ny+1);
+
+	return 0;
 }
 
-
-/****************************************/
-
+#endif
 
 
 
+// // sample compiling commands for test on Mac
+// export CPLUS_INCLUDE_PATH=/usr/local/include
+// export LIBRARY_PATH=/usr/local/lib
+// g++-9 -lfftw3 -lm -fopenmp Scla.cpp Mesh.cpp -o test_Scla
 
 
+
+// // sample verifying codes in Python
+// import numpy as np
+// from numpy.fft import fft, fft2
+
+// Nx, Ny, Nz = 5, 3, 4
+
+// q = np.zeros(Ny+1, Nz+1, Nx+1)
+// for j in range(1, Ny):
+// 	for k in range(1, Nz):
+// 		for i in range(1, Nx):
+// 			q[j,k,i] = i*j + j*k + k*i
+
+// for j in range(0, Ny+1):
+// 	print(fft(q[j,1:-1], axis=-2))
+
+// for j in range(0, Ny+1):
+// 	print(fft2(q[j,1:-1,1:-1], axis=(-1,-2)))
 
 
 

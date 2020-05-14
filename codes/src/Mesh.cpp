@@ -1,187 +1,133 @@
-# include <iostream>
-# include <stdio.h>
-# include <stdlib.h>
-# include <string.h>
-# include <cmath>
-
-
-# include "Basic.h"
+#include "Basic.h"
 
 using namespace std;
 
 
+Mesh::Mesh(const Geometry &geo):
+geo(geo),
+Nx(geo.Nx),
+Ny(geo.Ny),
+Nz(geo.Nz),
+Lx(geo.Lx),
+Ly(geo.Ly),
+Lz(geo.Lz),
+Nxc(geo.Nxc),
+Nzc(geo.Nzc),
+Nxr(geo.Nxr),
+Nzr(geo.Nzr)
+{};
 
-Mesh::Mesh(int n1, int n2, int n3, double l1, double l2, double l3, double dy_min, char* path):
-/* allocate memory for pointers */
-Nx(n1), Ny(n2), Nz(n3), Nxz(n1 * n3),
-Lx(l1), Ly(l2), Lz(l3), vol(Lx * Ly * Lz),
-dx((double) Lx / Nx), dx2(dx * dx),
-dz((double) Lz / Nz), dz2(dz * dz)
+
+void Mesh::ipx(int i, int j, int k, int &ip, int &jp, int &kp) const
 {
-	y = new double [Ny+1];	// Ny layers (including 2 walls) + 1 redundant layer (index 0)
-	yc= new double [Ny+1];	// Ny+1 layers (including 2 walls)
-
-	dy= new double [Ny+1];	// Ny-1 boxes + 2 redundant (index 0 and Ny)
-	h = new double [Ny+1];	// Ny layers + 1 redundant layer (index 0)
-
-	dvol = new double [Ny+1];
-
-	hm = new double [Ny];
-	hc = new double [Ny];
-	hp = new double [Ny];
-
-	dym = new double [Ny];
-	dyc = new double [Ny];
-	dyp = new double [Ny];
-
-	pmj = new double [Ny];
-	pcj = new double [Ny];
-	ppj = new double [Ny];
-
-	ak1 = new double [Nx];
-	ak3 = new double [Nz];
-
-	kpa = new int [Nz];
-	kma = new int [Nz];
-
-	ipa = new int [Nx];
-	ima = new int [Nx];
-
-	int i, k;
-	// initiate wavenumbers
-	for (i=0; i<Nx; i++) ak1[i] = 2./dx2 * ( 1. - cos(kx(i) * dx) );
-	for (k=0; k<Nz; k++) ak3[k] = 2./dz2 * ( 1. - cos(kz(k) * dz) );
-	// initiate indexes
-	for (k=0; k<Nz; k++) {
-		kpa[k] = (k+1) % Nz;
-		kma[k] = (k-1+Nz) % Nz;
-	}
-	for (i=0; i<Nx; i++) {
-		ipa[i] = (i+1) % Nx;
-		ima[i] = (i-1+Nx) % Nx;
-	}
-	// initiate y mesh
-	if (dy_min > 0){ this->getYmesh(dy_min);this->initYmesh(); }
-	else if (path) { this->getYmesh(path);  this->initYmesh(); }
+	ip = idx(ipa(i), j, k);
+	jp = idx(i, jpa(j), k);
+	kp = idx(i, j, kpa(k));
 }
-
-void Mesh::freeall()
+void Mesh::imx(int i, int j, int k, int &im, int &jm, int &km) const
 {
-	delete [] y; delete [] yc;                   y = yc = NULL;
-	delete [] dy; delete [] h; delete [] dvol;   dy = h = dvol = NULL;
-	delete [] hm; delete [] hc; delete [] hp;    hm = hc = hp = NULL;
-	delete [] dym; delete [] dyc; delete [] dyp; dym = dyc = dyp = NULL;
-	delete [] pmj; delete [] pcj; delete [] ppj; pmj = pcj = ppj = NULL;
-	delete [] ak1; delete [] ak3;                ak1 = ak3 = NULL;
-	delete [] kpa; delete [] kma;                kpa = kma = NULL;
-	delete [] ipa; delete [] ima;                ipa = ima = NULL;
+	im = idx(ima(i), j, k);
+	jm = idx(i, jma(j), k);
+	km = idx(i, j, kma(k));
+}
+void Mesh::ppx(int i, int j, int k, int &ipjp, int &jpkp, int &ipkp) const
+{
+	int ip = ipa(i);
+	int jp = jpa(j);
+	int kp = kpa(k);
+	ipjp = idx(ip, jp, k);
+	jpkp = idx(i, jp, kp);
+	ipkp = idx(ip, j, kp);
+}
+void Mesh::pmx(int i, int j, int k, int &ipjm, int &jpkm, int &ipkm) const
+{
+	int ip = ipa(i), jp = jpa(j);
+	int jm = jma(j), km = kma(k);
+	ipjm = idx(ip, jm, k);
+	jpkm = idx(i, jp, km);
+	ipkm = idx(ip, j, km);
+}
+void Mesh::mpx(int i, int j, int k, int &imjp, int &jmkp, int &imkp) const
+{
+	int im = ima(i), jm = jma(j);
+	int jp = jpa(j), kp = kpa(k);
+	imjp = idx(im, jp, k);
+	jmkp = idx(i, jm, kp);
+	imkp = idx(im, j, kp);
+}
+void Mesh::mmx(int i, int j, int k, int &imjm, int &jmkm, int &imkm) const
+{
+	int im = ima(i);
+	int jm = jma(j);
+	int km = kma(k);
+	imjm = idx(im, jm, k);
+	jmkm = idx(i, jm, km);
+	imkm = idx(im, j, km);
 }
 
 
-void Mesh::initYmesh()
+void Mesh::dcx(int i, int j, int k, double &dxc, double &dyc, double &dzc) const
 {
-	int j;
-
-	// y intervals
-	h [0] = 0;
-	dy[0] = 2. * (y[1] - yc[0]);
-	dy[Ny]= 2. * (yc[Ny]-y[Ny]);
-	for (j=1; j<Ny; j++)  dy[j] = y[j+1] - y[j];
-	for (j=1; j<=Ny; j++) h[j] = yc[j] - yc[j-1];
-	for (j=0; j<=Ny; j++) dvol[j] = dy[j] * dx * dz;
-
-	// coefficients for wall-normal 2nd-order derivative
-	for (j=1; j<Ny; j++) {	// for U & W in laplacian operator, boundaries not excluded
-		hp[j] = 1.0 / dy[j] / h[j+1];
-		hc[j] = 1.0 / dy[j] * ( 1.0/h[j+1] + 1.0/h[j] );	// need to multiply by -1 in use
-		hm[j] = 1.0 / dy[j] / h[j];
-	}
-	for (j=2; j<Ny; j++) {	// for V in laplacian operator, boundaries not excluded
-		dyp[j] = 1.0 / h[j] / dy[j];
-		dyc[j] = 1.0 / h[j] * ( 1.0/dy[j] + 1.0/dy[j-1] );	// need to multiply by -1 in use
-		dym[j] = 1.0 / h[j] / dy[j-1];
-	}
-	for (j=1; j<Ny; j++) {	// for P in divergence-gradient operator, boundaries excluded
-		if (j>1 && j<Ny-1) {
-			ppj[j] = hp[j];
-			pcj[j] = - hc[j];								// NO need to multiply by -1 in use
-			pmj[j] = hm[j];
-		}
-		else if (j==1) {
-			ppj[j] = hp[1];
-			pcj[j] = - 1.0 / dy[1] / h[2];
-			pmj[j] = 0.0;
-		}
-		else if (j==Ny-1) {
-			ppj[j] = 0.0;
-			pcj[j] = - 1.0 / dy[Ny-1] / h[Ny-1];
-			pmj[j] = hm[Ny-1];
-		}
-	}
+	dxc = dx(i);
+	dyc = dy(j);
+	dzc = dz(k);
 }
-
-void Mesh::writeYmesh(const char *path) const
+void Mesh::dpx(int i, int j, int k, double &dxp, double &dyp, double &dzp) const
 {
-	char str[1024];
-	FILE *fp = fopen(strcat(strcpy(str, path), "CHANNEL.GRD"), "w");
-	for (int j=0; j<=Ny; j++) {
-		sprintf(str, "%.18e\n", y[j]);
-		fputs(str, fp);	}
-	fclose(fp);
-	cout << "\ndy_min = " << y[2]-y[1] << ", dy_max = " << y[Ny/2+1]-y[Ny/2] << endl;
+	dxp = dx(i+1);
+	dyp = dy(j+1);
+	dzp = dz(k+1);
+}
+void Mesh::dmx(int i, int j, int k, double &dxm, double &dym, double &dzm) const
+{
+	dxm = dx(i-1);
+	dym = dy(j-1);
+	dzm = dz(k-1);
+}
+void Mesh::hcx(int i, int j, int k, double &hxc, double &hyc, double &hzc) const
+{
+	hxc = hx(i);
+	hyc = hy(j);
+	hzc = hz(k);
+}
+void Mesh::hpx(int i, int j, int k, double &hxp, double &hyp, double &hzp) const
+{
+	hxp = hx(i+1);
+	hyp = hy(j+1);
+	hzp = hz(k+1);
+}
+void Mesh::hmx(int i, int j, int k, double &hxm, double &hym, double &hzm) const
+{
+	hxm = hx(i-1);
+	hym = hy(j-1);
+	hzm = hz(k-1);
 }
 
 
 
-double hyptan(int j, double gamma, int ny, double ly)
-/* generate y grids with hyperbolic tangent distribution */
-{
-	double delta = ly / 2.0;
-	double ytild = 2.0 * (j-1) / (ny-1) - 1.0;
-	return 1.0 + delta * tanh(gamma * delta * ytild) / tanh(gamma * delta);
-}
-void Mesh::getYmesh(double dy_min)
-/* generate hyperbolic tangent grid (Newton iteration to determine parameter)
-target equation: F(gamma) = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, l2) - dy_min = 0 */
-{
-	double F, gamma = 1.0, dgamma = 0.1, grad;
-	double F0 = hyptan(2, gamma-dgamma, Ny, Ly) - hyptan(1, gamma-dgamma, Ny, Ly) - dy_min;
-	// determine hyperbolic tangent parameter
-	for (int j=0; j<100; j++) {
-		F = hyptan(2, gamma, Ny, Ly) - hyptan(1, gamma, Ny, Ly) - dy_min;
-		grad = (F-F0) / dgamma;	if (! grad) break;
-		dgamma = - F / grad;	if (! dgamma) break;
-		gamma += dgamma;		if (gamma <= 0) { cout << "Mesh error: dy_min too large !" << endl; exit(0); }
-		F0 = F;
-	}
-	// generate grid
-	y[0] = 0;
-	for (int j=1; j<=Ny; j++)
-		y[j] = hyptan(j, gamma, Ny, Ly);
 
-	// yc coordinates for U grid
-	yc[0] = y[1];
-	yc[Ny] = y[Ny];
-	for (int j=1; j<Ny; j++) yc[j] = 0.5 * ( y[j] + y[j+1] );
-}
 
-void Mesh::getYmesh(const char *path)
-/* read grid from file at specified path */
-{
-	char str[1024];
-	FILE *fp = fopen(strcat(strcpy(str, path), "CHANNEL.GRD"), "r");
-	for (int j=0; j<=Ny; j++)
-		sscanf(fgets(str, 1024, fp), "%le", &(y[j]));
-	fclose(fp);
 
-	// check
-	if ( fabs((y[Ny]-y[1]) - Ly) > INFTSM )
-		{ cout << endl << "No valid Y mesh provided !" << endl; exit(0); }
 
-	// y coordinates
-	y[0] = 0;
-	yc[0] = y[1];
-	yc[Ny] = y[Ny];
-	for (int j=1; j<Ny; j++) yc[j] = 0.5 * ( y[j] + y[j+1] );
-}
+
+// often used statements (for copy & paste)
+
+// int id =              ms.idx(i,j,k);
+// int ip, jp, kp;       ms.ipx(i,j,k,ip,jp,kp);
+// int im, jm, km;       ms.imx(i,j,k,im,jm,km);
+// int ipjp, jpkp, ipkp; ms.ppx(i,j,k,ipjp,jpkp,ipkp);
+// int ipjm, jpkm, ipkm; ms.pmx(i,j,k,ipjm,jpkm,ipkm);
+// int imjp, jmkp, imkp; ms.mpx(i,j,k,imjp,jmkp,imkp);
+// int imjm, jmkm, imkm; ms.mmx(i,j,k,imjm,jmkm,imkm);
+
+// double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
+// double dxp, dyp, dzp; ms.dpx(i,j,k,dxp,dyp,dzp);
+// double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
+// double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
+// double hxp, hyp, hzp; ms.hpx(i,j,k,hxp,hyp,hzp);
+// double hxm, hym, hzm; ms.hmx(i,j,k,hxm,hym,hzm);
+
+
+
+
 

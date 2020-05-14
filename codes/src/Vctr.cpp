@@ -1,201 +1,172 @@
-# include <iostream>
-# include <stdio.h>
-# include <stdlib.h>
-# include <string.h>
-# include <cmath>
-
-
-# include "Basic.h"
+#include "Basic.h"
 
 using namespace std;
 
 
+Vctr::Vctr(const Mesh &ms):
+ms(ms),
+v1_(ms),
+v2_(ms),
+v3_(ms)
+{}
 
 
-
-double Vctr::module(int i, int j, int k) const
+double Vctr::Module(int i, int j, int k) const
 /* module of the vector at cell-center (i,j,k) */
 {
-	double *u,*v,*w; this->ptrGet(u,v,w);
-	int idx= IDX(i,j,k);
-	int ip = IDX(ipa[i],j,k);
-	int jp = IDX(i,j+1,k);	// 1 <= j <= Ny-1
-	int kp = IDX(i,j,kpa[k]);
+	int id =        ms.idx(i,j,k);
+	int ip, jp, kp; ms.ipx(i,j,k,ip,jp,kp);
+
+	const Scla &u = v1_;
+	const Scla &v = v2_;
+	const Scla &w = v3_;
+
 	return	.5 * sqrt(
-		    pow(u[idx]+u[ip], 2.)
-		+   pow(v[idx]+v[jp], 2.)
-		+   pow(w[idx]+w[kp], 2.) );
+		    pow(u[id] + u[ip], 2.)
+		+   pow(v[id] + v[jp], 2.)
+		+   pow(w[id] + w[kp], 2.) );
 }
 
-double Vctr::divergence(int i, int j, int k) const
+double Vctr::Divergence(int i, int j, int k) const
 /* compute divergence of a vector field at the center of cell (i,j,k) */
 {
-	double *u,*v,*w; this->ptrGet(u,v,w);
-	int idx= IDX(i,j,k);
-	int ip = IDX(ipa[i],j,k);
-	int jp = IDX(i,j+1,k);	// 1 <= j <= Ny-1
-	int kp = IDX(i,j,kpa[k]);
-	return	( u[ip] - u[idx] ) / dx
-		+	( v[jp] - v[idx] ) / dy[j]
-		+	( w[kp] - w[idx] ) / dz;
+	int id =        ms.idx(i,j,k);
+	int ip, jp, kp; ms.ipx(i,j,k,ip,jp,kp);
+
+	const Scla &u = v1_;
+	const Scla &v = v2_;
+	const Scla &w = v3_;
+
+	return (u[ip] - u[id]) / ms.dx(i)
+		 + (v[jp] - v[id]) / ms.dy(j)
+		 + (w[kp] - w[id]) / ms.dz(k);
 }
 
-double Vctr::convection(int i, int j, int k) const
+double Vctr::Convection(int i, int j, int k) const
 /* compute convection coefficient of a vector field at the center of cell (i,j,k) */
 {
-	double *u,*v,*w; this->ptrGet(u,v,w);
-	int idx= IDX(i,j,k);
-	int ip = IDX(ipa[i],j,k);
-	int jp = IDX(i,j+1,k);	// 1 <= j <= Ny-1
-	int kp = IDX(i,j,kpa[k]);
-	return	0.5 * ( u[ip] + u[idx] ) / dx
-		+	0.5 * ( v[jp] + v[idx] ) / dy[j]
-		+	0.5 * ( w[kp] + w[idx] ) / dz;
+	int id =        ms.idx(i,j,k);
+	int ip, jp, kp; ms.ipx(i,j,k,ip,jp,kp);
+
+	const Scla &u = v1_;
+	const Scla &v = v2_;
+	const Scla &w = v3_;
+
+	return	.5 * fabs(u[ip] + u[id]) / ms.dx(i)
+		+	.5 * fabs(v[jp] + v[id]) / ms.dy(j)
+		+	.5 * fabs(w[kp] + w[id]) / ms.dz(k);
 }
 
-double* Vctr::strainrate(int i, int j, int k) const
+double* Vctr::Strainrate(int i, int j, int k) const
 /* compute the strain rate tensor of a vector field at the center of cell (i,j,k) */
 // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
 {
-	double *u,*v,*w; this->ptrGet(u,v,w);
-	int idx = IDX(i,j,k);	// 1 <= j <= Ny-1
-	int ip = IDX(ipa[i],j,k), jp = IDX(i,j+1,k), kp = IDX(i,j,kpa[k]);
-	int im = IDX(ima[i],j,k), jm = IDX(i,j-1,k), km = IDX(i,j,kma[k]);
-	int ipjp = IDX(ipa[i],j+1,k), jpkp = IDX(i,j+1,kpa[k]), ipkp = IDX(ipa[i],j,kpa[k]);
-	int ipjm = IDX(ipa[i],j-1,k), jpkm = IDX(i,j+1,kma[k]), imkp = IDX(ima[i],j,kpa[k]);
-	int imjp = IDX(ima[i],j+1,k), jmkp = IDX(i,j-1,kpa[k]), ipkm = IDX(ipa[i],j,kma[k]);
+	int id =              ms.idx(i,j,k);
+	int ip, jp, kp;       ms.ipx(i,j,k,ip,jp,kp);
+	int im, jm, km;       ms.imx(i,j,k,im,jm,km);
+	int ipjp, jpkp, ipkp; ms.ppx(i,j,k,ipjp,jpkp,ipkp);
+	int ipjm, jpkm, ipkm; ms.pmx(i,j,k,ipjm,jpkm,ipkm);
+	int imjp, jmkp, imkp; ms.mpx(i,j,k,imjp,jmkp,imkp);
+
+	double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
+	double dxp, dyp, dzp; ms.dpx(i,j,k,dxp,dyp,dzp);
+	double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
+	double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
+	double hxp, hyp, hzp; ms.hpx(i,j,k,hxp,hyp,hzp);
+
 	double u1, u2, v1, v2, w1, w2;
-	static double sr[6];	// will be overwritten even called from different objects of this class
+
+	const Scla &u = v1_;
+	const Scla &v = v2_;
+	const Scla &w = v3_;
+
+	static double sr[6]; // will be overwritten even called from different objects of this class
 
 	// S_ii
-	sr[0] = ( u[ip] - u[idx] ) / dx;
-	sr[1] = ( v[jp] - v[idx] ) / dy[j];
-	sr[2] = ( w[kp] - w[idx] ) / dz;
+	sr[0] = (u[ip] - u[id]) / dxc;
+	sr[1] = (v[jp] - v[id]) / dyc;
+	sr[2] = (w[kp] - w[id]) / dzc;
 	// S_12
-	v2 = 0.25 * ( v[idx] + v[ip] + v[jp] + v[ipjp] );
-	v1 = 0.25 * ( v[idx] + v[im] + v[jp] + v[imjp] );
-	u2 = ( (u[idx]+u[ip]) * dy[j+1] + (u[jp]+u[ipjp]) * dy[j] ) / (4.0*h[j+1]);
-	u1 = ( (u[idx]+u[ip]) * dy[j-1] + (u[jm]+u[ipjm]) * dy[j] ) / (4.0*h[j]);
-	sr[3] = 0.5 * ( (v2-v1) / dx + (u2-u1) / dy[j] );
+	v2 = .25/hxp * ((v[id]+v[jp]) * dxp + (v[ip]+v[ipjp]) * dxc);
+	v1 = .25/hxc * ((v[id]+v[jp]) * dxm + (v[im]+v[imjp]) * dxc);
+	u2 = .25/hyp * ((u[id]+u[ip]) * dyp + (u[jp]+u[ipjp]) * dyc);
+	u1 = .25/hyc * ((u[id]+u[ip]) * dym + (u[jm]+u[ipjm]) * dyc);
+	sr[3] = .5 * ((v2-v1) / dxc + (u2-u1) / dyc);
 	// S_23
-	w2 = ( (w[idx]+w[kp]) * dy[j+1] + (w[jp]+w[jpkp]) * dy[j] ) / (4.0*h[j+1]);
-	w1 = ( (w[idx]+w[kp]) * dy[j-1] + (w[jm]+w[jmkp]) * dy[j] ) / (4.0*h[j]);
-	v2 = 0.25 * ( v[idx] + v[jp] + v[kp] + v[jpkp] );
-	v1 = 0.25 * ( v[idx] + v[jp] + v[km] + v[jpkm] );
-	sr[4] = 0.5 * ( (w2-w1) / dy[j] + (v2-v1) / dz );
+	w2 = .25/hyp * ((w[id]+w[kp]) * dyp + (w[jp]+w[jpkp]) * dyc);
+	w1 = .25/hyc * ((w[id]+w[kp]) * dym + (w[jm]+w[jmkp]) * dyc);
+	v2 = .25/hzp * ((v[id]+v[jp]) * dzp + (v[kp]+v[jpkp]) * dzc);
+	v1 = .25/hzc * ((v[id]+v[jp]) * dzm + (v[km]+v[jpkm]) * dzc);
+	sr[4] = .5 * ((w2-w1) / dyc + (v2-v1) / dzc);
 	// S_13
-	w2 = 0.25 * ( w[idx] + w[ip] + w[kp] + w[ipkp] );
-	w1 = 0.25 * ( w[idx] + w[im] + w[kp] + w[imkp] );
-	u2 = 0.25 * ( u[idx] + u[ip] + u[kp] + u[ipkp] );
-	u1 = 0.25 * ( u[idx] + u[ip] + u[km] + u[ipkm] );
-	sr[5] = 0.5 * ( (w2-w1) / dx + (u2-u1) / dz );
+	w2 = .25/hxp * ((w[id]+w[kp]) * dxp + (w[ip]+w[ipkp]) * dxc);
+	w1 = .25/hxc * ((w[id]+w[kp]) * dxm + (w[im]+w[imkp]) * dxc);
+	u2 = .25/hzp * ((u[id]+u[ip]) * dzp + (u[kp]+u[ipkp]) * dzc);
+	u1 = .25/hzc * ((u[id]+u[ip]) * dzm + (u[km]+u[ipkm]) * dzc);
+	sr[5] = .5 * ((w2-w1) / dxc + (u2-u1) / dzc);
 
 	return sr;
 }
 
-double* Vctr::gradient(int i, int j, int k) const
+double* Vctr::Gradient(int i, int j, int k) const
 /* compute the gradient tensor of a vector field at the center of cell (i,j,k) */
 // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
 {
-	double *u,*v,*w; this->ptrGet(u,v,w);
-	int idx = IDX(i,j,k);
-	int ip = IDX(ipa[i],j,k), jp = IDX(i,j+1,k), kp = IDX(i,j,kpa[k]);
-	int im = IDX(ima[i],j,k), jm = IDX(i,j-1,k), km = IDX(i,j,kma[k]);
-	int ipjp = IDX(ipa[i],j+1,k), jpkp = IDX(i,j+1,kpa[k]), ipkp = IDX(ipa[i],j,kpa[k]);
-	int ipjm = IDX(ipa[i],j-1,k), jpkm = IDX(i,j+1,kma[k]), imkp = IDX(ima[i],j,kpa[k]);
-	int imjp = IDX(ima[i],j+1,k), jmkp = IDX(i,j-1,kpa[k]), ipkm = IDX(ipa[i],j,kma[k]);
-	double u1, u2, v1, v2, w1, w2;
-	static double gr[9];	// will be overwritten even called from different objects of this class
+	int id =              ms.idx(i,j,k);
+	int ip, jp, kp;       ms.ipx(i,j,k,ip,jp,kp);
+	int im, jm, km;       ms.imx(i,j,k,im,jm,km);
+	int ipjp, jpkp, ipkp; ms.ppx(i,j,k,ipjp,jpkp,ipkp);
+	int ipjm, jpkm, ipkm; ms.pmx(i,j,k,ipjm,jpkm,ipkm);
+	int imjp, jmkp, imkp; ms.mpx(i,j,k,imjp,jmkp,imkp);
+	int imjm, jmkm, imkm; ms.mmx(i,j,k,imjm,jmkm,imkm);
 
-	// a11
-	gr[0] = ( u[ip] - u[idx] ) / dx;
-	// a12
-	v2 = 0.25 * ( v[idx] + v[ip] + v[jp] + v[ipjp] );
-	v1 = 0.25 * ( v[idx] + v[im] + v[jp] + v[imjp] );
-	gr[1] = (v2-v1) / dx;
-	// a13
-	w2 = 0.25 * ( w[idx] + w[ip] + w[kp] + w[ipkp] );
-	w1 = 0.25 * ( w[idx] + w[im] + w[kp] + w[imkp] );
-	gr[2] = (w2-w1) / dx;
-
-	// a21
-	u2 = ( (u[idx]+u[ip]) * dy[j+1] + (u[jp]+u[ipjp]) * dy[j] ) / (4.0*h[j+1]);
-	u1 = ( (u[idx]+u[ip]) * dy[j-1] + (u[jm]+u[ipjm]) * dy[j] ) / (4.0*h[j]);
-	gr[3] = (u2-u1) / dy[j];
-	// a22
-	gr[4] = ( v[jp] - v[idx] ) / dy[j];
-	// a23
-	w2 = ( (w[idx]+w[kp]) * dy[j+1] + (w[jp]+w[jpkp]) * dy[j] ) / (4.0*h[j+1]);
-	w1 = ( (w[idx]+w[kp]) * dy[j-1] + (w[jm]+w[jmkp]) * dy[j] ) / (4.0*h[j]);
-	gr[5] = (w2-w1) / dy[j];
+	double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
+	double dxp, dyp, dzp; ms.dpx(i,j,k,dxp,dyp,dzp);
+	double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
+	double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
+	double hxp, hyp, hzp; ms.hpx(i,j,k,hxp,hyp,hzp);
+	double hxm, hym, hzm; ms.hmx(i,j,k,hxm,hym,hzm);
 	
-	// a31
-	u2 = 0.25 * ( u[idx] + u[ip] + u[kp] + u[ipkp] );
-	u1 = 0.25 * ( u[idx] + u[ip] + u[km] + u[ipkm] );
-	gr[6] = (u2-u1) / dz;
-	// a32
-	v2 = 0.25 * ( v[idx] + v[jp] + v[kp] + v[jpkp] );
-	v1 = 0.25 * ( v[idx] + v[jp] + v[km] + v[jpkm] );
-	gr[7] = (v2-v1) / dz;
-	// a33
-	gr[8] = ( w[kp] - w[idx] ) / dz;
+	double u1, u2, v1, v2, w1, w2;
+	
+	const Scla &u = v1_;
+	const Scla &v = v2_;
+	const Scla &w = v3_;
+	
+	static double gr[9]; // will be overwritten even called from different objects of this class
+
+	// a_ii
+	gr[0] = (u[ip] - u[id]) / dxc;	// a11
+	gr[4] = (v[jp] - v[id]) / dyc;	// a22
+	gr[8] = (w[kp] - w[id]) / dzc;	// a33
+
+	// a_1i
+	v2 = .25/hxp * ((v[id]+v[jp]) * dxp + (v[ip]+v[ipjp]) * dxc);
+	v1 = .25/hxc * ((v[id]+v[jp]) * dxm + (v[im]+v[imjp]) * dxc);
+	w2 = .25/hxp * ((w[id]+w[kp]) * dxp + (w[ip]+w[ipkp]) * dxc);
+	w1 = .25/hxc * ((w[id]+w[kp]) * dxm + (w[im]+w[imkp]) * dxc);
+	gr[1] = (v2-v1) / dxc;	// a12
+	gr[2] = (w2-w1) / dxc;	// a13
+
+	// a_2i
+	u2 = .25/hyp * ((u[id]+u[ip]) * dyp + (u[jp]+u[ipjp]) * dyc);
+	u1 = .25/hyc * ((u[id]+u[ip]) * dym + (u[jm]+u[ipjm]) * dyc);
+	w2 = .25/hyp * ((w[id]+w[kp]) * dyp + (w[jp]+w[jpkp]) * dyc);
+	w1 = .25/hyc * ((w[id]+w[kp]) * dym + (w[jm]+w[jmkp]) * dyc);
+	gr[3] = (u2-u1) / dyc;	// a21
+	gr[5] = (w2-w1) / dyc;	// a23
+	
+	// a_3i
+	u2 = .25/hzp * ((u[id]+u[ip]) * dzp + (u[kp]+u[ipkp]) * dzc);
+	u1 = .25/hzc * ((u[id]+u[ip]) * dzm + (u[km]+u[ipkm]) * dzc);
+	v2 = .25/hzp * ((v[id]+v[jp]) * dzp + (v[kp]+v[jpkp]) * dzc);
+	v1 = .25/hzc * ((v[id]+v[jp]) * dzm + (v[km]+v[jpkm]) * dzc);
+	gr[6] = (u2-u1) / dzc;	// a31
+	gr[7] = (v2-v1) / dzc;	// a32
 
 	return gr;
 }
 
 
 
-// void Vctr::layerModule(double *dst, int j) const
-// {
-// 	int i, k, idx, ip, jp, kp;
-// 	double *u, *v, *w; ptrGet(u,v,w);
 
-// 	for (k=0; k<Nz; k++) {
-// 	for (i=0; i<Nx; i++) {
-// 		idx= IDX(i,j,k);
-// 		ip = IDX(ipa[i],j,k);
-// 		jp = IDX(i,j+1,k);
-// 		kp = IDX(i,j,kpa[k]);
-// 		dst[idx] = .5 * sqrt(
-// 		    pow(u[idx]+u[ip], 2)
-// 		+   pow(v[idx]+v[jp], 2)
-// 		+   pow(w[idx]+w[kp], 2) );
-
-// 		// interpolate virtual boundary to real boundary
-// 		if (j == 0) {
-// 			int ipjp = IDX(ipa[i],j+1,k), jpkp = IDX(i,j+1,kpa[k]);
-// 			dst[idx] = .5 * sqrt(
-// 				pow(.25/h[j+1] * ( (u[idx]+u[ip]) * dy[j+1] + (u[jp]+u[ipjp]) * dy[j] ), 2)
-// 			+   pow(v[jp], 2)
-// 			+   pow(.25/h[j+1] * ( (w[idx]+w[kp]) * dy[j+1] + (w[jp]+w[jpkp]) * dy[j] ), 2) );
-// 		}
-// 		else if (j == Ny) {
-// 			int ipjm = IDX(ipa[i],j-1,k), jmkp = IDX(i,j-1,kpa[k]);
-// 			dst[idx] = .5 * sqrt(
-// 				pow(.25/h[j] * ( (u[idx]+u[ip]) * dy[j-1] + (u[jm]+u[ipjm]) * dy[j] ), 2)
-// 			+   pow(v[idx], 2)
-// 			+   pow(.25/h[j] * ( (w[idx]+w[kp]) * dy[j-1] + (w[jm]+w[jmkp]) * dy[j] ), 2) );
-// 		}
-// 	}}
-
-// }
-
-
-
-
-
-// double Vctr::divergence(int i, int j, int k)
-// /* compute divergence of a vector field at the center of cell (i,j,k) */
-// {
-// 	return	(u.id(ipa[i],j,k) - u.id(i,j,k)) / u.dx
-// 		+	(v.id(i,j+1,k)    - v.id(i,j,k)) / v.dy[j]	// 1 <= j <= Ny-1
-// 		+	(w.id(i,j,kpa[k]) - w.id(i,j,k)) / w.dz;
-// }
-
-// double Vctr::convection(int i, int j, int k)
-// /* compute convection coefficient of a vector field at the center of cell (i,j,k) */
-// {
-// 	return	0.5 * (u.id(ipa[i],j,k) + u.id(i,j,k)) / u.dx
-// 		+	0.5 * (v.id(i,j+1,k)    + v.id(i,j,k)) / v.dy[j]	// 1 <= j <= Ny-1
-// 		+	0.5 * (w.id(i,j,kpa[k]) + w.id(i,j,k)) / w.dz;
-// }

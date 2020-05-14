@@ -1,184 +1,388 @@
-# include <iostream>
-# include <stdio.h>
-# include <stdlib.h>
-# include <string.h>
-# include <time.h>
-# include <cmath>
-
-# include "Solver.h"
-# include "Interp.h"
+#include "Solver.h"
+#include "Interp.h"
+#include "Filter.h"
+#include "IDM.h"
+#include "SGS.h"
+#include "DA.h"
 
 using namespace std;
 
 
+Solver::Solver(const Mesh &ms):
+ms   (ms),
+fld_ (ms),
+fldh_(ms),
+vis_ (ms),
+fb_  (ms),
+bc_  (ms),
+sbc_ (ms),
+mpg_ {0},
+time_(0)
+{}
 
 
-void Solver::config(int n)
+
+// ***** initiation ***** //
+
+void Solver::init(double energy)
 {
-	int tempn = nthrds;
-	if (tempn != (nthrds = idm.ompset(n)))
-		cout << endl << "number of OpenMP threads: " << nthrds << endl;
+	InitChannel(fld_, bc_, sbc_, energy);
+}
+
+void Solver::init(const Flow &fld)
+{
+	InitFrom(fld_, fld);
+}
+
+// ***** default cumputation ***** //
+
+void Solver::evolve(double Re, double dt, int sgstyp)
+{
+	set_time(time_+dt);
+
+	CalcVis(vis_, get_vel(), Re, sgstyp);
+	
+	Bcond::ChannelNoSlip(bc_, sbc_, ms);
+
+	CalcFb(fb_, mpg_);
+
+	IDM::calc(fld_, fldh_, vis_, fb_, bc_, sbc_, dt);
+
+	CalcMpg(mpg_, get_vel(), get_velh(), dt);
+
+	Bcond::SetBoundaryY(get_vel(), bc_, sbc_);
+	Bcond::SetBoundaryX(get_vel());
+	Bcond::SetBoundaryZ(get_vel());
+}
+
+// ***** test computation ***** //
+
+void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0)
+{
+	set_time(time_+dt);
+
+	CalcVis(vis_, get_vel(), Re, sgstyp);
+
+	Bcond::ChannelDirichlet(bc_, sbc_, ms, solver0.get_vel());
+
+	CalcFb(fb_, mpg_);
+
+	IDM::calc(fld_, fldh_, vis_, fb_, bc_, sbc_, dt);
+
+	CalcMpg(mpg_, get_vel(), get_velh(), dt, solver0.get_mpg());
+
+	Bcond::SetBoundaryY(get_vel(), bc_, sbc_);
+	Bcond::SetBoundaryX(get_vel());
+	Bcond::SetBoundaryZ(get_vel());
+
+	Assimilate(solver0.get_vel(), dt, 5, .1);
 }
 
 
-void Solver::getbc()
+
+// ***** non API ***** //
+
+void Solver::InitChannel(Flow &fld, Boundaries &bc, Boundaries &sbc, double energy)
+// initiate flow field (U, V, W, P, including all boundaries) from laminar with random fluctions
 {
-	BC.reset();
-}
-void Solver::getbc(const Vctr &U)
-{
-	const Mesh &ms0 = U.meshGet();
-	int jb = (ms0.Ny - mesh.Ny) / 2;
+	const Mesh &ms = fld.ms;
 
-	Interp(U[1], BC.V[1]).layerPrdLin(jb,        0);
-	Interp(U[1], BC.V[1]).layerPrdLin(ms0.Ny-jb, 1);
+	Scla &u = fld.GetVec(1);
+	Scla &v = fld.GetVec(2);
+	Scla &w = fld.GetVec(3);
 
-	Interp(U[2], BC.V[2]).layerPrdLin(jb+1,      0);
-	Interp(U[2], BC.V[2]).layerPrdLin(ms0.Ny-jb, 1);
+	fld.InitRand(energy);
 
-	Interp(U[3], BC.V[3]).layerPrdLin(jb,        0);
-	Interp(U[3], BC.V[3]).layerPrdLin(ms0.Ny-jb, 1);
-
-	// Interp(U[1], BC.V[1]).bulkFilter('U');
-	// Interp(U[2], BC.V[2]).bulkFilter('X');
-	// Interp(U[3], BC.V[3]).bulkFilter('U');
-}
-
-
-void Solver::getnu(double Re, int bftype)
-{
-	Scla &NU = VIS.S; const Vctr &U = FLD.V;
-
-	switch (bftype) {
-	case 2: sgs.smargorinsky (NU, U, Re, .18); NU += 1./Re; break;
-	case 3: sgs.dynamicsmarg (NU, U);          NU += 1./Re; break;
-	case 4: sgs.dynamicvreman(NU, U, Re);      NU += 1./Re; break;
-	default:                                   NU  = 1./Re;
+	// impose parabolic profile from laminar flow
+	for (int j=1; j<ms.Ny; j++) {
+		double ytilde = ms.yc(j) / ms.Ly;
+		u.AddLyr(6 * ytilde * (1. - ytilde), j);
 	}
 
-	VIS.CC2EG();
+	// modify flow rate
+	u /= u.MeanU(); // bulk mean U = 1.0 due to non-dimensionalization
+	w -= w.MeanW(); // note: boundaries are modified through using bulk functions
+
+	Bcond::ChannelNoSlip(bc, sbc, ms);
+	Bcond::SetBoundaryX(fld.GetVec());
+	Bcond::SetBoundaryZ(fld.GetVec());
+	Bcond::SetBoundaryY(fld.GetVec(), bc, sbc);
+}
+
+void Solver::InitFrom(Flow &fld, const Flow &fld0)
+// initiate flow field (U, V, W, P, including all boundaries) from interpolation of existing fields
+{
+	const Mesh &ms = fld.ms;
+	Scla &u = fld.GetVec(1);
+	Scla &v = fld.GetVec(2);
+	Scla &w = fld.GetVec(3);
+	Scla &p = fld.GetScl();
+
+	Interp::InterpBulkU(u, fld0.SeeVec(1));
+	Interp::InterpBulkV(v, fld0.SeeVec(2));
+	Interp::InterpBulkW(w, fld0.SeeVec(3));
+	Interp::InterpBulkA(p, fld0.SeeScl());
+
+	for (int j=0; j<=ms.Ny; j++) {
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+		u(0,j,k) = p(0,j,k) = 0;
+		v(i,0,k) = p(i,0,k) = 0;
+		w(i,j,0) = p(i,j,0) = 0;
+	}}}
 }
 
 
-void Solver::getfb()
+void Solver::CalcVis(Flow &vis, const Vctr &vel, double Re, int sgstyp)
 {
-	FB[1] = - mpg[0];
-	FB[2] = - mpg[1];
-	FB[3] = - mpg[2];
+	Scla &nuc = (vis.GetScl() = 0);
+
+	// if (2 <= sgstyp && sgstyp <= 4) {
+
+	// 	static SGS sgs(vis.ms);
+
+	// 	switch (sgstyp) {
+	// 	case 2: sgs.Smargorinsky (nuc, vel, Re, .18); break;
+	// 	case 3: sgs.DynamicSmarg (nuc, vel         ); break;
+	// 	case 4: sgs.DynamicVreman(nuc, vel, Re     ); break;
+	// 	}
+	// }
+
+	switch (sgstyp) {
+	case 2: SGS::Smargorinsky (nuc, vel, Re, .18); break;
+	case 3: SGS::DynamicSmarg (nuc, vel         ); break;
+	case 4: SGS::DynamicVreman(nuc, vel, Re     ); break;
+	}
+
+	nuc += 1./Re;
+
+	vis.CellCenter2Edge();
 }
-void Solver::getfb(const Vctr &F)
+
+void Solver::ModifyBoundaryVis(Flow &vis, const Vctr &vel, double tau12)
 {
-	(FB[1] = F[1]) += -mpg[0];
-	(FB[2] = F[2]) += -mpg[1];
-	(FB[3] = F[3]) += -mpg[2];
+	const Mesh &ms = vis.ms;
+
+	Scla &nuz = vis.GetVec(3);
+
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+
+	for (int j=1; j<=ms.Ny; j+= ms.Ny-1) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+
+		double s12 = .5 * (
+			1./ms.hx(i) * (v(i,j,k) - v(ms.ima(i),j,k)) +
+			1./ms.hy(j) * (u(i,j,k) - u(i,ms.jma(j),k)) );
+
+		nuz(i,j,k) = fmax(.5*tau12/s12, 0);
+	}}}
+}
+
+// void Solver::ModifyBoundaryVis(Flow &vis, const Vctr &vel, const Flow &vis0, const Vctr &vel0)
+// {
+// 	const Mesh &ms = vis.ms;
+// 	const Mesh &ms0 = vis0.ms;
+
+// 	Scla &nuz = vis.GetVec(3);
+
+// 	const Scla &nuz0 = vis0.SeeVec(3);
+// 	const Scla &u = vel[1], &u0 = vel0[1];
+// 	const Scla &v = vel[2], &v0 = vel0[2];
+
+// 	for (int j=1; j<=ms.Ny; j+= ms.Ny-1) {
+// 	for (int k=1; k<ms.Nz; k++) {
+// 	for (int i=1; i<ms.Nx; i++) {
+
+// 		int j0 = j==1 ? 1 : ms0.Ny;
+
+// 		double s12 = .5 * (
+// 			1./ms.hx(i) * (v(i,j,k) - v(ms.ima(i),j,k)) +
+// 			1./ms.hy(j) * (u(i,j,k) - u(i,ms.jma(j),k)) );
+
+// 		double tau12 = 2. * nuz0(i,j0,k) * .5 * (
+// 			1./ms0.hx(i) * (v0(i,j0,k) - v0(ms0.ima(i),j0,k)) +
+// 			1./ms0.hy(j0) * (u0(i,j0,k) - u0(i,ms0.jma(j0),k)) );
+
+// 		nuz(i,j,k) = fmax(.5*tau12/s12, 0);
+// 	}}}
+// }
+
+
+void Solver::CalcFb(Vctr &fb, const double mpg[3])
+{
+	fb[1] = - mpg[0];
+	fb[2] = - mpg[1];
+	fb[3] = - mpg[2];
+}
+void Solver::AddFb(Vctr &fb, const Vctr &f)
+{
+	fb[1] += f[1];
+	fb[2] += f[2];
+	fb[3] += f[3];
 }
 
 
-void Solver::getup(double dt)
-/* evolve velocity and pressure fields by 1 time step */
+void Solver::CalcMpg(double mpg[3], Vctr &vel, Vctr &velh, double dt, const double mpgref[3])
+// solve the increment of mean pressure gradient at n+1/2 step
+// given reference MFR at n+1 step or MPG at n+1/2 step
 {
-	idm.calc(FLD, FLDH, VIS, FB, BC, dt);
-}
+	const Mesh &ms = vel.ms;
+	Scla &u = vel[1], &uh = velh[1];
+	Scla &w = vel[3], &wh = velh[3];
 
+	// solve mpg increment with streamwise flowrate 2.0 and spanwise 0
+	double dmpg1 = mpgref ? mpgref[0]-mpg[0] : (u.MeanU()-1)/dt;
+	double dmpg3 = mpgref ? mpgref[2]-mpg[2] :  w.MeanW()   /dt;
 
-void Solver::fixfr(double dt)
-/* solve the increment of mean pressure gradient at n+1/2 step, given mass flow rate at n+1 step */
-{
-	Vctr &U = FLD.V, &UH = FLDH.V;
-	// solve mean pressure gradient increment given streamwise flow rate 2.0 and spanwise flow rate 0
-	double dmpg1 =(U[1].bulkMeanU() - 1.) / dt;
-	double dmpg3 = U[3].bulkMeanU()       / dt;
-	// update the mean pressure gradient
+	// update mpg
 	mpg[0] += dmpg1;
 	mpg[2] += dmpg3;
-	// complement the mean pressure gradient increment that was not included in the velocity update step
-	for (int j=1; j<mesh.Ny; j++) {
-		U[1].lyrAdd(-dt * dmpg1, j); UH[1].lyrAdd(-dmpg1, j);
-		U[3].lyrAdd(-dt * dmpg3, j); UH[3].lyrAdd(-dmpg3, j);
-	}
-}
-void Solver::fixfr(double dt, const double MPG[3])
-/* solve the increment of mean pressure gradient at n+1/2 step, given reference mean pressure gradient at n+1/2 step */
-{
-	Vctr &U = FLD.V, &UH = FLDH.V;
-	// keep the OFW mean pressure gradients equal to FC
-	double dmpg1 = MPG[0] - mpg[0];
-	double dmpg3 = MPG[2] - mpg[2];
-	// update the mean pressure gradient
-	mpg[0] += dmpg1;
-	mpg[2] += dmpg3;
-	// complement the mean pressure gradient increment that was not included in the velocity update step
-	for (int j=1; j<mesh.Ny; j++) {
-		U[1].lyrAdd(-dt * dmpg1, j); UH[1].lyrAdd(-dmpg1, j);
-		U[3].lyrAdd(-dt * dmpg3, j); UH[3].lyrAdd(-dmpg3, j);
+
+	// complement mpg increment that was not included in the velocity update step
+	for (int j=1; j<ms.Ny; j++) {
+
+		u.MnsLyr(dt*dmpg1, j);
+		w.MnsLyr(dt*dmpg3, j);
+
+		uh.MnsLyr(dmpg1, j);
+		wh.MnsLyr(dmpg3, j);
 	}
 }
 
 
-void Solver::rollback(double dt)
+void Solver::RollBack(Flow &fld, const Flow &fldh, double dt)
 {
-	FLD.V[1] -= (FLDH.V[1] *= dt);
-	FLD.V[2] -= (FLDH.V[2] *= dt);
-	FLD.V[3] -= (FLDH.V[3] *= dt);
-	FLD.S    -= (FLDH.S    *= dt);
-}
+	Scla &u = fld.GetVec(1);
+	Scla &v = fld.GetVec(2);
+	Scla &w = fld.GetVec(3);
+	Scla &p = fld.GetScl();
 
-void Solver::removeSpanMean()
-{
-	int i, j, k, n;
-	double qm, *qsm = new double [mesh.Nx];
-	Bulk *bks[4] = {&FLD.V[1], &FLD.V[2], &FLDH.V[1], &FLDH.V[2]};
+	const Scla &uh = fldh.SeeVec(1);
+	const Scla &vh = fldh.SeeVec(2);
+	const Scla &wh = fldh.SeeVec(3);
+	const Scla &dp = fldh.SeeScl();
 
-	for (n=0; n<4; n++) {
-	for (j=1; j<mesh.Ny; j++) {
-		if (j==1 && (n==1 || n==3)) continue; // j==1 layer for V & VH is boundary, skip
-
-		for (i=0; i<mesh.Nx; i++) { qsm[i] = 0.0;
-		for (k=0; k<mesh.Nz; k++) { qsm[i] += bks[n]->id(i,j,k) / mesh.Nz; }}
-
-		qm = 0.0;
-		for (i=0; i<mesh.Nx; i++)   qm += qsm[i] / mesh.Nx;
-
-		for (k=0; k<mesh.Nz; k++) {
-		for (i=0; i<mesh.Nx; i++) { bks[n]->id(i,j,k) -= qsm[i] - qm; }}
-	}}
-
-	delete [] qsm;
+	( (u /= dt) -= uh ) *= dt;
+	( (v /= dt) -= vh ) *= dt;
+	( (w /= dt) -= wh ) *= dt;
+	( (p /= dt) -= dp ) *= dt;
 }
 
 
-void Solver::debug_Output(int tstep)
+void Solver::RemoveSpanMean(Vctr &vel)
 {
-	char path[1024] = "debug/";
+	const Mesh &ms = vel.ms;
+	Scla &u = vel[1];
+	Scla &v = vel[2];
+
+	double um, *usm = new double[ms.Nx+1];
+	double vm, *vsm = new double[ms.Nx+1];
+
+	for (int j=1; j<ms.Ny; j++) {
+		um = 0;
+		for (int i=1; i<ms.Nx; i++)
+			um += (usm[i]=u.MeanAz(i,j)) / (ms.Nx-1);
+
+		usm[ms.Nx] = u.MeanAz(ms.Nz,j);
+
+		for (int k=0; k<=ms.Nz; k++)
+		for (int i=1; i<=ms.Nx; i++)
+			u(i,j,k) -= usm[i] - um;
+	}
+
+	for (int j=2; j<ms.Ny; j++) {
+		vm = 0;
+		for (int i=1; i<ms.Nx; i++)
+			vm += (vsm[i]=v.MeanAz(i,j)) / (ms.Nx-1);
+
+		vsm[0]     = v.MeanAz(0,j);
+		vsm[ms.Nx] = v.MeanAz(ms.Nx,j);
+
+		for (int k=0; k<=ms.Nz; k++)
+		for (int i=0; i<=ms.Nx; i++)
+			v(i,j,k) -= vsm[i] - vm;
+	}
+
+	delete[] usm;
+	delete[] vsm;
+}
+
+
+/***** data assimilation *****/
+
+void Solver::Assimilate(const Vctr &velexp, double dt, double en, double a)
+{
+	static DA assimilator(ms);
+
+	const Vctr &vel = fld_.SeeVec();
+	
+	if (assimilator.GetExp(time_, velexp)) {
+
+		assimilator.Reset();
+
+		// // store the unassimilated flow field for recovery later
+		// Flow FLD_temp(mesh), FLDH_temp(mesh);
+		// FLD_temp.V[1] = FLD.V[1]; FLDH_temp.V[1] = FLDH.V[1];
+		// FLD_temp.V[2] = FLD.V[2]; FLDH_temp.V[2] = FLDH.V[2];
+		// FLD_temp.V[3] = FLD.V[3]; FLDH_temp.V[3] = FLDH.V[3];
+		// FLD_temp.S    = FLD.S;    FLDH_temp.S    = FLDH.S;
+
+
+		while (assimilator.IfIter(en, vel)) { // converged or reached max iterations yet
+			
+			RollBack(fld_, fldh_, dt);        // roll back the flow fields to the old time step
+			CalcFb(fb_, mpg_);                // MPG cannot be rolled back, but it should not matter
+
+			AddFb(fb_, assimilator.GetAsmForce(vel, vis_, dt, a)); // compute adjoint state and apply assimilating force
+			
+			IDM::calc(fld_, fldh_, vis_, fb_, bc_, sbc_, dt); // solve the time step again under the new force
+		}
+
+		assimilator.WriteLog(time_);
+		// assimilator.writeForce("", round(time/dt));
+
+		// // recover the flow field to the unassimilated state
+		// FLD.V[1] = FLD_temp.V[1]; FLDH.V[1] = FLDH_temp.V[1];
+		// FLD.V[2] = FLD_temp.V[2]; FLDH.V[2] = FLDH_temp.V[2];
+		// FLD.V[3] = FLD_temp.V[3]; FLDH.V[3] = FLDH_temp.V[3];
+		// FLD.S    = FLD_temp.S;    FLDH.S    = FLDH_temp.S;
+	}
+}
+
+
+void Solver::debug_Output(const char path[]) const
+{
+	int Ny = ms.Ny;
+
+	// char path[1024] = "debug/";
 	{
 		char names[4][32] = {"U", "V", "W", "P"};
-		FLD.V[1].debug_AsciiOutput(path, names[0], 0, mesh.Ny+1);
-		FLD.V[2].debug_AsciiOutput(path, names[1], 1, mesh.Ny+1);
-		FLD.V[3].debug_AsciiOutput(path, names[2], 0, mesh.Ny+1);
-		   FLD.S.debug_AsciiOutput(path, names[3], 0, mesh.Ny+1);
-	}{
+		fld_.SeeVec(1).debug_AsciiOutput(path, names[0], 0, Ny+1);
+		fld_.SeeVec(2).debug_AsciiOutput(path, names[1], 1, Ny+1);
+		fld_.SeeVec(3).debug_AsciiOutput(path, names[2], 0, Ny+1);
+		fld_.SeeScl( ).debug_AsciiOutput(path, names[3], 0, Ny+1);
+	}
+	{
 		char names[4][32] = {"UH", "VH", "WH", "DP"};
-		FLDH.V[1].debug_AsciiOutput(path, names[0], 0, mesh.Ny+1);
-		FLDH.V[2].debug_AsciiOutput(path, names[1], 1, mesh.Ny+1);
-		FLDH.V[3].debug_AsciiOutput(path, names[2], 0, mesh.Ny+1);
-		   FLDH.S.debug_AsciiOutput(path, names[3], 0, mesh.Ny+1);
-	}{
-		char names[4][32] = {"NUX", "NUY", "NUZ", "NU"};
-		VIS.V[1].debug_AsciiOutput(path, names[0], 0, mesh.Ny+1);
-		VIS.V[2].debug_AsciiOutput(path, names[1], 0, mesh.Ny+1);
-		VIS.V[3].debug_AsciiOutput(path, names[2], 0, mesh.Ny+1);
-		   VIS.S.debug_AsciiOutput(path, names[3], 0, mesh.Ny+1);
-	}{
-		char names[4][32] = {"UBC", "VBC", "WBC", "PBC"};
-		BC.V[1].debug_AsciiOutput(path, names[0], 0, 2);
-		BC.V[2].debug_AsciiOutput(path, names[1], 0, 2);
-		BC.V[3].debug_AsciiOutput(path, names[2], 0, 2);
-		   BC.S.debug_AsciiOutput(path, names[3], 0, 2);
-	}{
+		fldh_.SeeVec(1).debug_AsciiOutput(path, names[0], 0, Ny+1);
+		fldh_.SeeVec(2).debug_AsciiOutput(path, names[1], 1, Ny+1);
+		fldh_.SeeVec(3).debug_AsciiOutput(path, names[2], 0, Ny+1);
+		fldh_.SeeScl( ).debug_AsciiOutput(path, names[3], 0, Ny+1);
+	}
+	{
+		char names[4][32] = {"NUX", "NUY", "NUZ", "NUC"};
+		vis_.SeeVec(1).debug_AsciiOutput(path, names[0], 1, Ny+1);
+		vis_.SeeVec(2).debug_AsciiOutput(path, names[1], 0, Ny+1);
+		vis_.SeeVec(3).debug_AsciiOutput(path, names[2], 1, Ny+1);
+		vis_.SeeScl( ).debug_AsciiOutput(path, names[3], 0, Ny+1);
+	}
+	{
 		char names[3][32] = {"FBX", "FBY", "FBZ"};
-		FB[1].debug_AsciiOutput(path, names[0], 0, mesh.Ny+1);
-		FB[2].debug_AsciiOutput(path, names[1], 0, mesh.Ny+1);
-		FB[3].debug_AsciiOutput(path, names[2], 0, mesh.Ny+1);
+		fb_[1].debug_AsciiOutput(path, names[0], 0, Ny+1);
+		fb_[2].debug_AsciiOutput(path, names[1], 1, Ny+1);
+		fb_[3].debug_AsciiOutput(path, names[2], 0, Ny+1);
 	}
 }
 

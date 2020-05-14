@@ -7,213 +7,253 @@
 using namespace std;
 
 
-Statis::Statis(const Mesh &mesh): Mesh(mesh)
+Statis::Statis(const Mesh &ms):
+ms(ms)
 {	
-	Um = new double [Ny+1];
-	Vm = new double [Ny+1];
-	Wm = new double [Ny+1];
-	Pm = new double [Ny+1];
-	R11= new double [Ny+1];
-	R22= new double [Ny+1];
-	R33= new double [Ny+1];
-	R12= new double [Ny+1];
-	R23= new double [Ny+1];
-	R13= new double [Ny+1];
-	Rpu= new double [Ny+1];
-	Rpv= new double [Ny+1];
-	Rpw= new double [Ny+1];
-	Rpp= new double [Ny+1];
-	Num= new double [Ny+1];
+	um_ = new double[ms.Ny+1];
+	vm_ = new double[ms.Ny+1];
+	wm_ = new double[ms.Ny+1];
+	pm_ = new double[ms.Ny+1];
+	r11_= new double[ms.Ny+1];
+	r22_= new double[ms.Ny+1];
+	r33_= new double[ms.Ny+1];
+	r12_= new double[ms.Ny+1];
+	r23_= new double[ms.Ny+1];
+	r13_= new double[ms.Ny+1];
+	rpu_= new double[ms.Ny+1];
+	rpv_= new double[ms.Ny+1];
+	rpw_= new double[ms.Ny+1];
+	rpp_= new double[ms.Ny+1];
+	num_= new double[ms.Ny+1];
 }
 
 Statis::~Statis()
 {
-	delete [] Um; delete [] Vm; delete [] Wm; delete [] Pm;
-	delete [] R11;delete [] R22;delete [] R33;
-	delete [] R12;delete [] R23;delete [] R13;
-	delete [] Rpu;delete [] Rpv;delete [] Rpw;delete [] Rpp;
-	delete [] Num;
+	delete[] um_;  delete[] vm_;  delete[] wm_;
+	delete[] r11_; delete[] r22_; delete[] r33_;
+	delete[] r12_; delete[] r23_; delete[] r13_;
+	delete[] rpu_; delete[] rpv_; delete[] rpw_;
+	delete[] pm_;  delete[] rpp_; delete[] num_;
 }
 
-double Statis::checkDiv(const Vctr &U)
-{
-	int i, j, k; double divmax = -1.;
-	const Mesh &ms = U.meshGet();
 
-	for (j=1; j<ms.Ny; j++) {
-	for (k=0; k<ms.Nz; k++) {
-	for (i=0; i<ms.Nx; i++) {
-		div = fabs(U.divergence(i, j, k));
-		if ( div > divmax || divmax < 0 ) {
+void Statis::Check(const Flow &fld, const Flow &vis, double Re, double dt)
+{
+	div_ = CheckDiv (fld.SeeVec(), divpos_);
+	cfl_ = CheckCfl (fld.SeeVec(), dt, cflpos_);
+	CheckTaub(fld.SeeVec(), vis, taub_);
+	ener_ = CheckProf(fld, vis, velm_);
+}
+
+
+double Statis::CheckDiv(const Vctr &vel, int pos[3])
+{
+	const Mesh &ms = vel.ms;
+
+	double div, divmax = 0;
+
+	for (int j=1; j<ms.Ny; j++) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+
+		if (divmax < (div = fabs(vel.Divergence(i,j,k)))) {
+
 			divmax = div;
-			divpos[0] = i;
-			divpos[1] = j;
-			divpos[2] = k;
+			pos[0] = i;
+			pos[1] = j;
+			pos[2] = k;
 		}
 	}}}
-	return ( div = divmax );
+	return divmax;
 }
 
-double Statis::checkCFL(const Vctr &U, double dt)
+double Statis::CheckCfl(const Vctr &vel, double dt, int pos[3])
 {
-	int i, j, k; double cflmax = -1.;
-	const Mesh &ms = U.meshGet();
+	const Mesh &ms = vel.ms;
 
-	for (j=1; j<ms.Ny; j++) {
-	for (k=0; k<ms.Nz; k++) {
-	for (i=0; i<ms.Nx; i++) {
-		cfl = U.module(i, j, k) * dt;
-		if ( cfl > cflmax || cflmax < 0 ) {
+	double cfl, cflmax = 0;
+
+	for (int j=1; j<ms.Ny; j++) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+
+		if (cflmax < (cfl = vel.Convection(i,j,k) * dt)) {
+
 			cflmax = cfl;
-			cflpos[0] = i;
-			cflpos[1] = j;
-			cflpos[2] = k;
+			pos[0] = i;
+			pos[1] = j;
+			pos[2] = k;
 		}
 	}}}
-	return ( cfl = cflmax );
+	return cflmax;
 }
 
-double Statis::checkTaub(const Vctr &U, double Re)
-/* calculate 3 components of total stress acting on the boundary: tau_2i = nu d<u_i>/dy - <v'u_i'> */
-/* tau_2i = 2 nu S_2i - <v'u_i'>; 2*S_2i = du_i/dy + dv/dx_i = d<u_i>/dy (applying mass conservation) */
+void Statis::CheckTaub(const Vctr &vel, const Flow &vis, double taub[3])
+/* calculate 3 components of total stress acting on real boundary:
+   tau_2i = 2 * nu < du_i/dy + dv/dx_i > - <v'u_i'> */
 {
-	Mesh ms(Nx,0,Nz,Lx,0,Lz);
-	Scla ul1(ms), ul2(ms), ul3(ms), ul4(ms),
-	     vl1(ms), vl2(ms), vl3(ms), vl4(ms),
-	     wl1(ms), wl2(ms), wl3(ms), wl4(ms);
-	double sm21, sm22, sm23, rm21, rm22, rm23;
+	const Mesh &ms = vel.ms;
 
-	U.layer2CC(ul1[0], vl1[0], wl1[0], 0);
-	U.layer2CC(ul2[0], vl2[0], wl2[0], 1);
-	U.layer2CC(ul3[0], vl3[0], wl3[0], Ny-1);
-	U.layer2CC(ul4[0], vl4[0], wl4[0], Ny);
+	const Scla &u = vel[1], &nuz = vis.SeeVec(3);
+	const Scla &v = vel[2], &nuc = vis.SeeScl();
+	const Scla &w = vel[3], &nux = vis.SeeVec(1);
 
-	sm21 = (ul2.av() - ul1.av()) / h[1] - (ul4.av() - ul3.av()) / h[Ny]; // 2d<u>/dy
-	sm22 = (vl2.av() - vl1.av()) / h[1] + (vl4.av() - vl3.av()) / h[Ny]; // 2d<v>/dy
-	sm23 = (wl2.av() - wl1.av()) / h[1] - (wl4.av() - wl3.av()) / h[Ny]; // 2d<w>/dy
+	double tau21 = 0;
+	double tau22 = 0;
+	double tau23 = 0;
 
-	// sm21 = (ul2.av() - ul1.av()) / dy[1] - (ul4.av() - ul3.av()) / dy[Ny-1]; // d<u>/dy (0.5 compensated by dy)
-	// sm22 = (vl2.av() - vl1.av()) / dy[1] + (vl4.av() - vl3.av()) / dy[Ny-1]; // d<v>/dy
-	// sm23 = (wl2.av() - wl1.av()) / dy[1] - (wl4.av() - wl3.av()) / dy[Ny-1]; // d<w>/dy
+	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
 
-	(vl2 = vl1) += -vl1.av(); // v' bottom
-	(vl3 = vl4) += -vl4.av(); // v' top
-	rm21 = ( (ul1 += -ul1.av()) *= vl2 ).av() - ( (ul4 += -ul4.av()) *= vl3 ).av(); // 2<u'v'>
-	rm22 = ( (vl1 += -vl1.av()) *= vl2 ).av() + ( (vl4 += -vl4.av()) *= vl3 ).av(); // 2<v'v'>
-	rm23 = ( (wl1 += -wl1.av()) *= vl2 ).av() - ( (wl4 += -wl4.av()) *= vl3 ).av(); // 2<w'v'>
+		// mean velocity on real boundary
+		double um = .5/ms.hy(j) * (u.meanxz(j) * ms.dy(j-1) + u.meanxz(ms.jma(j)) * ms.dy(j));
+		double wm = .5/ms.hy(j) * (w.meanxz(j) * ms.dy(j-1) + w.meanxz(ms.jma(j)) * ms.dy(j));
+		double vm = v.meanxz(j);
 
-	taub[0] = .5 * (sm21 / Re - rm21);
-	taub[1] = .5 * (sm22 / Re - rm22);
-	taub[2] = .5 * (sm23 / Re - rm23);
+		for (int k=1; k<ms.Nz; k++) {
+		for (int i=1; i<ms.Nx; i++) {
 
-	// taub[0] = sm21 / Re - rm21 / 2.;
-	// taub[1] = sm22 / Re - rm22 / 2.;
-	// taub[2] = sm23 / Re - rm23 / 2.;
+			int id =              ms.idx(i,j,k);
+			int ip, jp, kp;       ms.ipx(i,j,k,ip,jp,kp);
+			int im, jm, km;       ms.imx(i,j,k,im,jm,km);
+			double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
+			double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
+			double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
 
-	ms.freeall();
-	return taub[0];
+			double s21 = .5 * ((u[id]-u[jm]) / hyc + (v[id]-v[im]) / hxc);
+			double s23 = .5 * ((w[id]-w[jm]) / hyc + (v[id]-v[km]) / hzc);
+			double s22 = j==1? (v[jp]-v[id]) / dyc : (v[id]-v[jm]) / dym;
 
-	// taub[0] = taub[1] = taub[2] = 0;
-	// double u1, u2, u3, u4, v1, v2, v3, v4, w1, w2, w3, w4;
-	// double um1 = ul1.layerMean(), um4 = ul4.layerMean();
-	// double vm1 = vl1.layerMean(), vm4 = vl4.layerMean();
-	// double wm1 = wl1.layerMean(), wm4 = wl4.layerMean();
-	// for (k=0; k<Nz; k++) {
-	// for (i=0; i<Nx; i++) {
-	// 	u1 = ul1.id(i,0,k); u2 = ul2.id(i,0,k); u3 = ul3.id(i,0,k); u4 = ul4.id(i,0,k);
-	// 	v1 = vl1.id(i,0,k); v2 = vl2.id(i,0,k); v3 = vl3.id(i,0,k); v4 = vl4.id(i,0,k);
-	// 	w1 = wl1.id(i,0,k); w2 = wl2.id(i,0,k); w3 = wl3.id(i,0,k); w4 = wl4.id(i,0,k);
+			double r21 = (.5/hyc * (u[id]*dym + u[jm]*dyc) - um)
+			           * (.5/hxc * (v[id]*dxm + v[im]*dxc) - vm);
+			double r23 = (.5/hyc * (w[id]*dym + w[jm]*dyc) - wm)
+			           * (.5/hzc * (v[id]*dzm + v[km]*dzc) - vm);
+			double r22 = pow(v[id] - vm, 2.);
 
-	// 	taub[0] += ( 1./Re * ( (u2-u1)/dy[1] - (u4-u3)/dy[Ny-1] ) - .5 * ( (u1-um1)*(v1-vm1) - (u4-um4)*(v4-vm4) ) ) / Nxz;
-	// 	taub[1] += ( 1./Re * ( (v2-v1)/dy[1] + (v4-v3)/dy[Ny-1] ) - .5 * ( (v1-vm1)*(v1-vm1) + (v4-vm4)*(v4-vm4) ) ) / Nxz;
-	// 	taub[2] += ( 1./Re * ( (w2-w1)/dy[1] - (w4-w3)/dy[Ny-1] ) - .5 * ( (w1-wm1)*(v1-vm1) - (w4-wm4)*(v4-vm4) ) ) / Nxz;
-	// }}
+			tau21 += (j==1 ? 1 : -1) * (2.*nuz[id] * s21 - r21);
+			tau23 += (j==1 ? 1 : -1) * (2.*nux[id] * s23 - r23);
+			tau22 += 1./hyc * (nuc[id]*dym + nuc[jm]*dyc) * s22 - r22;
+		}}
+	}
+
+	taub[0] = .5/((ms.Nx-1)*(ms.Nz-1)) * tau21;
+	taub[1] = .5/((ms.Nx-1)*(ms.Nz-1)) * tau22;
+	taub[2] = .5/((ms.Nx-1)*(ms.Nz-1)) * tau23;
 }
 
-double Statis::checkEner(const Vctr &U, const Scla &P, const Scla &NU)
-/* calculate Reynolds stresses, pressure-velocity correlations, and the total fluctuation energy */
+double Statis::CheckProf(const Flow &fld, const Flow &vis, double velm[3])
+/* calculate mean frofiles, Reynolds stresses and pressure-velocity correlations,
+   aa well as bulk velocity and total fluctuation energy, at cell centers */
 {
-	Mesh ms(Nx,0,Nz,Lx,0,Lz);
-	Scla ql(ms), ul(ms), vl(ms), wl(ms), pl(ms);
+	const Mesh &ms = fld.ms;
+
+	Scla u(ms);
+	Scla v(ms);
+	Scla w(ms);
+	Scla p(ms);
+	Scla nuc(ms);
+
+	// interpolate to cell-centered points
+	fld.SeeVec(1).Ugrid2CellCenter(u);
+	fld.SeeVec(2).Vgrid2CellCenter(v);
+	fld.SeeVec(3).Wgrid2CellCenter(w);
+	
+	p = fld.SeeScl();
+	p.SetLyr(p.SeeLyr(1), 0);
+	p.SetLyr(p.SeeLyr(ms.Ny-1), ms.Ny);
+
+	nuc = vis.SeeScl();
+
+	// reset accumulators
+	double ener = 0;
 
 	velm[0] = 0;
 	velm[1] = 0;
 	velm[2] = 0;
-	ener = 0;
 
-	for (int j=0; j<=Ny; j++) {
-		// interpolate to cell centers or real boundaries
-		U.layer2CC(ul[0], vl[0], wl[0], j);
-		pl = P[j==0 ? 1 : j==Ny ? Ny-1 : j];
-
-		// calculate means and fluctuations at cell centers
-		ul += -(Um[j] = ul.av());
-		vl += -(Vm[j] = vl.av());
-		wl += -(Wm[j] = wl.av());
-		pl += -(Pm[j] = pl.av());
-		       Num[j] = NU.av(j);
-
-		// calculate Reynolds stress and cross correlations at cell centers
-		R11[j] = ( (ql = ul) *= ul ).av();
-		R22[j] = ( (ql = vl) *= vl ).av();
-		R33[j] = ( (ql = wl) *= wl ).av();
-		R12[j] = ( (ql = ul) *= vl ).av();
-		R23[j] = ( (ql = vl) *= wl ).av();
-		R13[j] = ( (ql = wl) *= ul ).av();
-		Rpu[j] = ( (ql = pl) *= ul ).av();
-		Rpv[j] = ( (ql = pl) *= vl ).av();
-		Rpw[j] = ( (ql = pl) *= wl ).av();
-		Rpp[j] = ( (ql = pl) *= pl ).av();
-
-		// wall-normal integration for bulk velocities and turbulent energy
-		if (0 < j && j < Ny) {
-			double weight = dy[j] / Ly;
-			velm[0] += Um[j] * weight;
-			velm[1] += Vm[j] * weight;
-			velm[2] += Wm[j] * weight;
-			ener += .5 * (R11[j] + R22[j] + R33[j]) * weight;
-		}
+	for (int j=0; j<=ms.Ny; j++) {
+		r11_[j]=0; r22_[j]=0; r33_[j]=0;
+		r12_[j]=0; r23_[j]=0; r13_[j]=0;
+		rpu_[j]=0; rpv_[j]=0; rpw_[j]=0;
+		rpp_[j]=0;	
 	}
 
-	ms.freeall();
+	// calculate statistics at cell centers
+	for (int j=0; j<=ms.Ny; j++) {
+
+		// calculate means & fluctuations
+		u.MnsLyr( um_[j] = u.meanxz(j), j );
+		v.MnsLyr( vm_[j] = v.meanxz(j), j );
+		w.MnsLyr( wm_[j] = w.meanxz(j), j );
+		p.MnsLyr( pm_[j] = p.meanxz(j), j );
+
+		num_[j] = nuc.meanxz(j);
+
+		// calculate Reynolds stress & cross correlations
+		for (int k=1; k<ms.Nz; k++) {
+		for (int i=1; i<ms.Nx; i++) {
+
+			int id = ms.idx(i,j,k);
+			double weight = 1. / (ms.Nx-1) / (ms.Nz-1);
+			
+			r11_[j] += u[id] * u[id] * weight;
+			r22_[j] += v[id] * v[id] * weight;
+			r33_[j] += w[id] * w[id] * weight;
+			r12_[j] += u[id] * v[id] * weight;
+			r23_[j] += v[id] * w[id] * weight;
+			r13_[j] += u[id] * w[id] * weight;
+			rpu_[j] += p[id] * u[id] * weight;
+			rpv_[j] += p[id] * v[id] * weight;
+			rpw_[j] += p[id] * w[id] * weight;
+			rpp_[j] += p[id] * p[id] * weight;
+		}}
+
+		// calculate bulk velocity & turbulent energy (wall-normal integration)
+		double weight = (0<j && j<ms.Ny) ? ms.dy(j)/ms.Ly : 0;
+
+		velm[0] += um_[j] * weight;
+		velm[1] += vm_[j] * weight;
+		velm[2] += wm_[j] * weight;
+
+		ener += .5*weight * (r11_[j] + r22_[j] + r33_[j]);
+	}
+
 	return ener;
 }
 
 
-void Statis::writeProfile(const char *path, int tstep) const
+void Statis::WriteProfile(const char *path, int tstep) const
 {
-	FILE *fp;
 	char str[1024];
 
-	if (tstep < 0)	sprintf(str, "%sPROF.dat", path?path:"");
+	if (tstep < 0)	sprintf(str, "%sPROF.dat",     path?path:"");
 	else			sprintf(str, "%sPROF%08i.dat", path?path:"", tstep);
 
-	fp = fopen(str, "w");
+	FILE *fp = fopen(str, "w");
 
-		fputs("Title = \"Instantaneous profile\"\n", fp);
-		fputs("variables = \"y\", \"U\", \"V\", \"W\", \"P\", \"R11\", \"R22\", \"R33\", \"R12\", \"R23\", \"R13\", \"Rpu\", \"Rpv\", \"Rpw\", \"Rpp\", \"NU\"\n", fp);
-		sprintf(str, "zone t = \"%i\", i = %i\n", tstep, Ny+1);
-		fputs(str, fp);
+	fputs("Title = \"Instantaneous profile\"\n", fp);
+	fputs("variables = \"y\", \"U\", \"V\", \"W\", \"P\", \"R11\", \"R22\", \"R33\", \"R12\", \"R23\", \"R13\", \"Rpu\", \"Rpv\", \"Rpw\", \"Rpp\", \"NU\"\n", fp);
+	fprintf(fp, "zone t = \"%i\", i = %i\n", tstep, ms.Ny+1);
 
-		for (int j=0; j<=Ny; j++) {
-			sprintf(str, "%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\n",
-				j==0 ? y[1] : j==Ny ? y[Ny] : yc[j],
-				Um[j], Vm[j], Wm[j], Pm[j],
-				R11[j], R22[j], R33[j], R12[j], R23[j], R13[j],
-				Rpu[j], Rpv[j], Rpw[j], Rpp[j],
-				Num[j]	);
-			fputs(str, fp);
-		}
+	for (int j=0; j<=ms.Ny; j++) {
+		fprintf(fp, "%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\n",
+			ms.yc(j),
+			um_[j], vm_[j], wm_[j], pm_[j],
+			r11_[j], r22_[j], r33_[j],
+			r12_[j], r23_[j], r13_[j],
+			rpu_[j], rpv_[j], rpw_[j],
+			rpp_[j],
+			num_[j]	);
+	}
 
 	fclose(fp);
 }
 
 
-void Statis::writeLogfile(const char *path, int tstep, double time, const double mpg[3]) const
+void Statis::WriteLogfile(const char *path, int tstep, double time, const double mpg[3]) const
 {
 	FILE *fp;
 	char str[1024];
-	long int pos = this->getLogpos(path, tstep);
+	long int pos = GetLogpos(path, tstep);
 
 	sprintf(str, "%sLOG.dat", path?path:"");
 
@@ -227,7 +267,7 @@ void Statis::writeLogfile(const char *path, int tstep, double time, const double
 			fclose(fp);
 			fp = fopen(str, "w");
 			fwrite(buf, pos, 1, fp);
-			delete [] buf;
+			delete[] buf;
 		}
 	}
 	else {
@@ -237,20 +277,19 @@ void Statis::writeLogfile(const char *path, int tstep, double time, const double
 		fputs("zone t = \"statis\"\n", fp);
 	}
 
-	sprintf(str, "%i\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%i\t%i\t%i\t%.18e\t%i\t%i\t%i\n",
-		tstep, time, ener,
-		taub[0], taub[1], taub[2],
-		mpg [0], mpg [1], mpg [2],
-		velm[0], velm[1], velm[2],
-		div, divpos[0], divpos[1], divpos[2],
-		cfl, cflpos[0], cflpos[1], cflpos[2]	);
-	fputs(str, fp);
+	fprintf(fp, "%i\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%.18e\t%i\t%i\t%i\t%.18e\t%i\t%i\t%i\n",
+		tstep, time, ener_,
+		taub_[0], taub_[1], taub_[2],
+		mpg  [0], mpg  [1], mpg  [2],
+		velm_[0], velm_[1], velm_[2],
+		div_, divpos_[0], divpos_[1], divpos_[2],
+		cfl_, cflpos_[0], cflpos_[1], cflpos_[2]	);
 
 	fclose(fp);
 }
 
 
-long int Statis::getLogpos(const char *path, int tstep)
+long int Statis::GetLogpos(const char *path, int tstep)
 /* find the first line whose time step >= tstep, return the beginning position and record the time of this line */
 {
 	FILE *fp;
@@ -277,11 +316,11 @@ long int Statis::getLogpos(const char *path, int tstep)
 	return pos;
 }
 
-double Statis::getLogtime(const char *path, int tstep)
+double Statis::GetLogtime(const char *path, int tstep)
 {
 	FILE *fp;
 	char str[1024];
-	long int pos = getLogpos(path, tstep);
+	long int pos = GetLogpos(path, tstep);
 	int n = 0;
 	double t = 0.0;
 

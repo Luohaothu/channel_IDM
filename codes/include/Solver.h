@@ -1,97 +1,86 @@
-# pragma once
+#pragma once
 
-# include "Basic.h"
-# include "IDM.h"
-# include "SGS.h"
-# include "DA.h"
+#include "Basic.h"
+#include "Bcond.h"
 
 
 class Solver
 {
-	private:
-		const Mesh &mesh;
-		IDM idm;
-		SGS sgs;
-		int nthrds;
+public:
+	const Mesh &ms;
 
-	public:
-		Feld FLD, FLDH, VIS, BC;
-		Vctr FB; double mpg[3];
+	Solver(const Mesh &ms);
 
+	// ***** initiation ***** //
+	void init(double energy);
+	void init(const Flow &fld);
 
-	public:
-		Solver(const Mesh &mesh, const Mesh &bmesh):
-			mesh(mesh), idm(mesh), sgs(mesh),
-			FLD(mesh), FLDH(mesh), VIS(mesh), BC(bmesh),
-			FB(mesh), mpg{0,0,0} {};
+	// ***** default cumputation ***** //
+	void evolve(double Re, double dt, int sgstyp);
 
-		void config(int n);
-		void debug_Output(int tstep);
-
-		/***** default cumputation *****/
-		void evolve(double Re, double dt, int bftype)
-		{
-			getbc();
-			getnu(Re, bftype);
-			getfb();
-			getup(dt);
-			fixfr(dt);
-			if (bftype == 1) removeSpanMean(); // for MFU
-		};
-		// /***** off-wall BC computation *****/
-		// void evolve_ofw(double Re, double dt, int bftype, const Vctr &U, const double MPG[3])
-		// {
-		// 	getbc(U);
-		// 	getnu(Re, bftype);
-		// 	getfb();
-		// 	getup(dt);
-		// 	fixfr(dt, MPG);
-		// };
-		/***** data assimilation *****/
-		void assimilate(DA &da, double dt)
-		{
-			// int n = 10; double e = 1e-6, a = .01; // DA parameters
-			int n = 1000; double e = 1e-4, a = .1; // DA parameters
-
-			// // store the unassimilated flow field for recovery later
-			// Feld FLD_temp(mesh), FLDH_temp(mesh);
-			// FLD_temp.V[1] = FLD.V[1]; FLDH_temp.V[1] = FLDH.V[1];
-			// FLD_temp.V[2] = FLD.V[2]; FLDH_temp.V[2] = FLDH.V[2];
-			// FLD_temp.V[3] = FLD.V[3]; FLDH_temp.V[3] = FLDH.V[3];
-			// FLD_temp.S    = FLD.S;    FLDH_temp.S    = FLDH.S;
+	// ***** test computation ***** //
+	void evolve(double Re, double dt, int sgstyp, Solver &solver0);
 
 
-			while (da.ifIter(FLD.V, e, n)) {     // converged or reached max iterations yet
-				rollback(dt);              // roll back the flow fields to the old time step
-				da.getAdj(FLD.V, VIS, dt); // compute adjoint state using the new time step fields
-				getfb(da.getForce(a));     // apply the assimilating force
-				getup(dt);                 // solve the time step again under the new force
-			}
+	double get_time()   const { return time_; };
+	double set_time(double t) { return time_ = t; };
 
-			// // recover the flow field to the unassimilated state
-			// FLD.V[1] = FLD_temp.V[1]; FLDH.V[1] = FLDH_temp.V[1];
-			// FLD.V[2] = FLD_temp.V[2]; FLDH.V[2] = FLDH_temp.V[2];
-			// FLD.V[3] = FLD_temp.V[3]; FLDH.V[3] = FLDH_temp.V[3];
-			// FLD.S    = FLD_temp.S;    FLDH.S    = FLDH_temp.S;
-		};
+	Flow& get_fld () { return fld_; };
+	Flow& get_fldh() { return fldh_; };
+	Flow& get_vis () { return vis_; };
+	Vctr& get_fb  () { return fb_; };
+	Vctr& get_vel () { return fld_.GetVec(); };
+	Vctr& get_velh() { return fldh_.GetVec(); };
+	double* get_mpg() { return mpg_; };
 
-	// private:
-		// construct boundary conditions
-		void getbc();
-		void getbc(const Vctr &U);
-		// construct viscosity
-		void getnu(double Re, int bftype);
-		// construct body forces
-		void getfb();
-		void getfb(const Vctr &F);
-		// evolve velocity and pressure fields by 1 time step
-		void getup(double dt);
-		// modify flow rates by adjusting mean pressure gradients
-		void fixfr(double dt);
-		void fixfr(double dt, const double MPG[3]);
-		// data manipulation
-		void rollback(double dt);
-		void removeSpanMean();
+	void debug_Output(const char path[]) const;
+
+private:
+	Flow fld_;       // solution field: Velocity & Pressure
+	Flow fldh_;      // time derivative of solution field, also serve as intermediate fields
+	Flow vis_;       // viscous field: deployed on cell-centers and edges
+	Vctr fb_;        // body force
+	Boundaries bc_;  // boundary field specifying BCs at n+1 step
+	Boundaries sbc_; // secondary boundary coefficients determined by the type of BC used
+	double mpg_[3];  // mean pressure gradient acting as drving force
+	double time_;
+
+	// ***** initiation ***** //
+	static void InitFrom(Flow &fld, const Flow &fld0);
+	static void InitChannel(Flow &fld, Boundaries &bc, Boundaries &sbc, double energy);
+
+	// ***** construct viscosity ***** //
+	static void CalcVis(Flow &vis, const Vctr &vel, double Re, int sgstyp);
+	static void ModifyBoundaryVis(Flow &vis, const Vctr &vel, double tau12);
+
+	// ***** construct body forces ***** //
+	static void CalcFb(Vctr &fb, const double mpg[3]);
+	static void AddFb(Vctr &fb, const Vctr &f);
+
+	// ***** adjusting mean pressure gradient ***** //
+	static void CalcMpg(double mpg[3], Vctr &vel, Vctr &velh, double dt, const double mpgref[3] = NULL);
+	
+	// ***** data manipulation ***** //
+	static void RollBack(Flow &fld, const Flow &fldh, double dt);
+	static void RemoveSpanMean(Vctr &vel);
+	
+	void Assimilate(const Vctr &velexp, double dt, double en, double a);
+
+	// ***** construct boundary conditions ***** //
+
+	// Bcond::ChannelNoSlip(bc_, sbc_, ms);
+	// Bcond::ChannelDirichlet(bc_, sbc_, ms, solver0.get_fld().SeeVec());
+	// Bcond::ChannelRobin(bc_, sbc_, ms, solver0.get_fld().SeeVec());
+	// Bcond::TblCycling(bc_, sbc_, ms, double ufree);
+
+	// ***** apply boundary conditions ***** //
+
+	// non-periodic
+	// Bcond::SetBoundaryX(fld_.GetVec(), bc_, sbc_);
+	// Bcond::SetBoundaryY(fld_.GetVec(), bc_, sbc_);
+	// periodic
+	// Bcond::SetBoundaryX(fld_.GetVec());
+	// Bcond::SetBoundaryZ(fld_.GetVec());
 
 };
 

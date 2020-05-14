@@ -1,364 +1,353 @@
-# include <iostream>
-# include <stdio.h>
-# include <stdlib.h>
-# include <string.h>
-# include <cmath>
+#include "SGS.h"
+#include "Bcond.h"
+#include "Filter.h"
 
-# include "Interp.h"
-# include "SGS.h"
+using namespace std;
 
 
-// # define SGSDEBUG
+// SGS::SGS(const Mesh &ms):
+// s11(ms), s22(ms), s33(ms), s12(ms), s23(ms), s13(ms),
+// m11(ms), m22(ms), m33(ms), m12(ms), m23(ms), m13(ms),
+// l11(ms), l22(ms), l33(ms), l12(ms), l23(ms), l13(ms)
+// {}
+
+// note: MUST NOT filter and assign values to an array in the same transverse
 
 
-
-void SGS::smargorinsky(Scla &EV, const Vctr &U, double Re, double Cs)
+void SGS::Smargorinsky(Scla &nut, const Vctr &vel, double Re, double Cs)
 {
-	int i, j, k;
-	double *sr, sra, dlt, dmp;
+	const Mesh &ms = nut.ms;
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
 
 	// calculate delta_nu. NOTE: this only applys when boundary is on the wall
-	double tauw = (0.5/Re) * (
-		( U[1].av(1) - U[1].av(0)    ) / h[1]
-	  - ( U[1].av(Ny)- U[1].av(Ny-1) ) / h[Ny] );
-	double Ret = Re * sqrt(tauw);	// Ly is taken for 2.0 as default
+	double tauw = 0;
+
+	for (int j=1; j<=ms.Ny; j+= ms.Ny-1) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+
+		double s12 = .5 * (
+			1./ms.hx(i) * (v(i,j,k) - v(ms.ima(i),j,k)) +
+			1./ms.hy(j) * (u(i,j,k) - u(i,ms.jma(j),k)) );
+
+		double weight = (j==1 ? .5 : -.5) / (ms.Nx-1) / (ms.Nz-1);
+
+		tauw += 2./Re * s12 * weight;
+	}}}
+
+	double Ret = Re * sqrt(tauw); // Ly is taken for 2.0 as default
 
 	// calculate eddy viscosity at cell centers
-	for (j=1; j<Ny; j++) {
+	for (int j=1; j<ms.Ny; j++) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
 
-		dlt = pow( dvol[j], 1.0/3.0 ); // filter size
-		dmp = 1.0 - exp( (fabs(1.-yc[j]) - 1.) * Ret / 25.0 ); // Van Driest damping: 1-exp(-y^+/A^+), with A^+ = 25
+		double dlt = pow(ms.dx(i)*ms.dy(j)*ms.dz(k), 1./3); // filter size
+		double dmp = 1 - exp( (fabs(1-ms.yc(j)) - 1) * Ret / 25. ); // Van Driest damping: 1-exp(-y^+/A^+), with A^+ = 25
 
-		for (k=0; k<Nz; k++) {
-		for (i=0; i<Nx; i++) {
-			sr = U.strainrate(i,j,k);
-			sra = sqrt( 2.0 * (
-					sr[0]*sr[0] + sr[1]*sr[1] + sr[2]*sr[2]
-				+ 2.0 * ( sr[3]*sr[3] + sr[4]*sr[4] + sr[5]*sr[5] )
-			) );
+		const double *sr = vel.Strainrate(i,j,k);
 
-			EV.id(i,j,k) = pow(Cs * dlt * dmp, 2.0) * sra;
-		}}
-	}
-	// equate the boundary eddy viscosity to the first layer off wall
-	EV.lyrSet(EV[1], 0).lyrSet(EV[Ny-1], Ny);
+		double sra = sqrt(
+			2. * ( sr[0]*sr[0] + sr[1]*sr[1] + sr[2]*sr[2] +
+			2. * ( sr[3]*sr[3] + sr[4]*sr[4] + sr[5]*sr[5] )));
+
+		nut(i,j,k) = pow(Cs * dlt * dmp, 2.) * sra;
+	}}}
+
+	// set boundary eddy viscosity
+	Bcond::SetBoundaryY(nut, 1); // homogeneous Neumann
+	Bcond::SetBoundaryX(nut, 3); // periodic
+	Bcond::SetBoundaryZ(nut, 3); // periodic
 }
 
-
-void SGS::dynamicsmarg(Scla &EV, const Vctr &U)
+void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 {
-	int i, j, k;
-	double *sr, sra, dlt1, dlt2, u, v, w;
+	const Mesh &ms = nut.ms;
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
 
-# ifdef SGSDEBUG
-	FILE *fp = fopen("Cd.dat", "w");
-	char str[64];
-# endif
+	Scla s11(ms), s22(ms), s33(ms), s12(ms), s23(ms), s13(ms);
+	Scla m11(ms), m22(ms), m33(ms), m12(ms), m23(ms), m13(ms);
+	Scla l11(ms), l22(ms), l33(ms), l12(ms), l23(ms), l13(ms);
+	Scla &uf=l11, &vf=l22, &wf=l33, &uc=l12, &vc=l23, &wc=l13;
 
-	Mesh ms(Nx,0,Nz,Lx,0,Lz);
-	Scla S11(ms), S22(ms), S33(ms), S12(ms), S23(ms), S13(ms);
-	Scla M11(ms), M22(ms), M33(ms), M12(ms), M23(ms), M13(ms);
-	Scla L11(ms), L22(ms), L33(ms), L12(ms), L23(ms), L13(ms);
-	Scla &UC1 = L11, &UC2 = L22, &UC3 = L33, &UF1 = S12, &UF2 = S23, &UF3 = S13;
+	/***** solve Mij *****/
 
-	Interp flt1 (UC1,UF1), flt2 (UC2,UF2), flt3 (UC3,UF3);
-	Interp fsm11(S11,M11), fsm22(S22,M22), fsm33(S33,M33), \
-		   fsm12(S12,M12), fsm23(S23,M23), fsm13(S13,M13);
-	Interp fsl11(S11,L11), fsl22(S22,L22), fsl33(S33,L33), \
-		   fsl12(S12,L12), fsl23(S23,L23), fsl13(S13,L13);
+	// Sij, |Sij| and |Sij|*Sij stored in Lij
+	for (int j=1; j<ms.Ny; j++) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
 
-	for (j=1; j<Ny; j++) {
+		const double *sr = vel.Strainrate(i,j,k);
 
-		/***** solve Mij *****/
+		double sra = sqrt(
+			2. * ( sr[0]*sr[0] + sr[1]*sr[1] + sr[2]*sr[2] +
+			2. * ( sr[3]*sr[3] + sr[4]*sr[4] + sr[5]*sr[5] )));
 
-		// Sij and |Sij|
-		for (k=0; k<Nz; k++) {
-		for (i=0; i<Nx; i++) {
-			sr = U.strainrate(i,j,k);
-			sra = sqrt( 2.0 * (
-					sr[0]*sr[0] + sr[1]*sr[1] + sr[2]*sr[2]
-				+ 2.0 * ( sr[3]*sr[3] + sr[4]*sr[4] + sr[5]*sr[5] )
-			) );
+		// Sij
+		s11(i,j,k) = sr[0]; s22(i,j,k) = sr[1]; s33(i,j,k) = sr[2];
+		s12(i,j,k) = sr[3]; s23(i,j,k) = sr[4]; s13(i,j,k) = sr[5];
 
-			S11.id(i,0,k) = sr[0]; S22.id(i,0,k) = sr[1]; S33.id(i,0,k) = sr[2];
-			S12.id(i,0,k) = sr[3]; S23.id(i,0,k) = sr[4]; S13.id(i,0,k) = sr[5];
+		// |Sij|*Sij, stored in Lij
+		l11(i,j,k) = sra * sr[0]; l12(i,j,k) = sra * sr[3];
+		l22(i,j,k) = sra * sr[1]; l23(i,j,k) = sra * sr[4];
+		l33(i,j,k) = sra * sr[2]; l13(i,j,k) = sra * sr[5];
 
-			EV.id(i,j,k) = sra;
-		}}
-		// F(Sij), stored in Mij
-		fsm11.layerTriFlt(0,0); fsm22.layerTriFlt(0,0); fsm33.layerTriFlt(0,0);
-		fsm12.layerTriFlt(0,0); fsm23.layerTriFlt(0,0); fsm13.layerTriFlt(0,0);
+		// |Sij|
+		nut(i,j,k) = sra;
+	}}}
 
-		// |Sij|*Sij
-		for (k=0; k<Nz; k++) {
-		for (i=0; i<Nx; i++) {
-			sra = EV.id(i,j,k);
-			S11.id(i,0,k) *= sra; S22.id(i,0,k) *= sra; S33.id(i,0,k) *= sra;
-			S12.id(i,0,k) *= sra; S23.id(i,0,k) *= sra; S13.id(i,0,k) *= sra;
-		}}
-		// F(|Sij|*Sij), stored in Lij
-		fsl11.layerTriFlt(0,0); fsl22.layerTriFlt(0,0); fsl33.layerTriFlt(0,0);
-		fsl12.layerTriFlt(0,0); fsl23.layerTriFlt(0,0); fsl13.layerTriFlt(0,0);
+	// Mij
+	for (int j=1; j<ms.Ny; j++) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+		// filter & test filter sizes
+		double dlt1_sq = pow(ms.dx(i)*ms.dy(j)*ms.dz(k), 2./3);
+		double dlt2_sq = pow(2., 4./3) * dlt1_sq;
 
-		dlt1 = pow(   dvol[j], 1./3.);
-		dlt2 = pow(4.*dvol[j], 1./3.);
+		// F(Sij)
+		double fsr[6];
 
-		for (k=0; k<Nz; k++) {
-		for (i=0; i<Nx; i++) {
-			// |F(Sij)|
-			sra = sqrt(
-				M11.id(i,0,k) * M11.id(i,0,k) * 2.
-			+	M22.id(i,0,k) * M22.id(i,0,k) * 2.
-			+	M33.id(i,0,k) * M33.id(i,0,k) * 2.
-			+	M12.id(i,0,k) * M12.id(i,0,k) * 4.
-			+	M23.id(i,0,k) * M23.id(i,0,k) * 4.
-			+	M13.id(i,0,k) * M13.id(i,0,k) * 4. );
-			// Mij
-			M11.id(i,0,k) = dlt2*dlt2 * sra * M11.id(i,0,k) - dlt1*dlt1 * L11.id(i,0,k);
-			M22.id(i,0,k) = dlt2*dlt2 * sra * M22.id(i,0,k) - dlt1*dlt1 * L22.id(i,0,k);
-			M33.id(i,0,k) = dlt2*dlt2 * sra * M33.id(i,0,k) - dlt1*dlt1 * L33.id(i,0,k);
-			M12.id(i,0,k) = dlt2*dlt2 * sra * M12.id(i,0,k) - dlt1*dlt1 * L12.id(i,0,k);
-			M23.id(i,0,k) = dlt2*dlt2 * sra * M23.id(i,0,k) - dlt1*dlt1 * L23.id(i,0,k);
-			M13.id(i,0,k) = dlt2*dlt2 * sra * M13.id(i,0,k) - dlt1*dlt1 * L13.id(i,0,k);
-		}}
+		fsr[0] = Filter::TestFilter(i,j,k,s11);
+		fsr[1] = Filter::TestFilter(i,j,k,s22);
+		fsr[2] = Filter::TestFilter(i,j,k,s33);
+		fsr[3] = Filter::TestFilter(i,j,k,s12);
+		fsr[4] = Filter::TestFilter(i,j,k,s23);
+		fsr[5] = Filter::TestFilter(i,j,k,s13);
 
-		/***** solve Lij *****/
+		// |F(Sij)|
+		double fsra = sqrt(
+			2. * ( fsr[0]*fsr[0] + fsr[1]*fsr[1] + fsr[2]*fsr[2] +
+			2. * ( fsr[3]*fsr[3] + fsr[4]*fsr[4] + fsr[5]*fsr[5] )));
 
-		// U in cell centers, temporarily stored in Lii
-		U.layer2CC(UC1[0], UC2[0], UC3[0], j); // L11, L22, L33
+		// Mij = dlt_2^2 * |F(Sij)| * F(Sij) - dlt_1^2 * F(|Sij|*Sij)
+		m11(i,j,k) = dlt2_sq * fsra * fsr[0] - dlt1_sq * Filter::TestFilter(i,j,k,l11);
+		m22(i,j,k) = dlt2_sq * fsra * fsr[1] - dlt1_sq * Filter::TestFilter(i,j,k,l22);
+		m33(i,j,k) = dlt2_sq * fsra * fsr[2] - dlt1_sq * Filter::TestFilter(i,j,k,l33);
+		m12(i,j,k) = dlt2_sq * fsra * fsr[3] - dlt1_sq * Filter::TestFilter(i,j,k,l12);
+		m23(i,j,k) = dlt2_sq * fsra * fsr[4] - dlt1_sq * Filter::TestFilter(i,j,k,l23);
+		m13(i,j,k) = dlt2_sq * fsra * fsr[5] - dlt1_sq * Filter::TestFilter(i,j,k,l13);
+	}}}
 
-		for (k=0; k<Nz; k++) {
-		for (i=0; i<Nx; i++) {
-			u = UC1.id(i,0,k);
-			v = UC2.id(i,0,k);
-			w = UC3.id(i,0,k);
-			// Ui*Uj
-			S11.id(i,0,k) = u * u; S22.id(i,0,k) = v * v; S33.id(i,0,k) = w * w;
-			S12.id(i,0,k) = u * v; S23.id(i,0,k) = v * w; S13.id(i,0,k) = u * w;
-		}}
-		// F(Ui*Uj), assigned to Lij, meanwhile filter U and store F(U) in Sij
-		fsl12.layerTriFlt(0,0); fsl23.layerTriFlt(0,0); fsl13.layerTriFlt(0,0); // S12->L12, S23->L23, S13->L13
-		 flt1.layerTriFlt(0,0);  flt2.layerTriFlt(0,0);  flt3.layerTriFlt(0,0); // L11->S12, L22->S23, L33->S13
-		fsl11.layerTriFlt(0,0); fsl22.layerTriFlt(0,0); fsl33.layerTriFlt(0,0); // S11->L11, S22->L22, S33->L33
+	/***** solve Lij *****/
 
-		for (k=0; k<Nz; k++) {
-		for (i=0; i<Nx; i++) {
-			u = UF1.id(i,0,k);
-			v = UF2.id(i,0,k);
-			w = UF3.id(i,0,k);
-			// Lij
-			L11.id(i,0,k) = u * u - L11.id(i,0,k);
-			L22.id(i,0,k) = v * v - L22.id(i,0,k);
-			L33.id(i,0,k) = w * w - L33.id(i,0,k);
-			L12.id(i,0,k) = u * v - L12.id(i,0,k);
-			L23.id(i,0,k) = v * w - L23.id(i,0,k);
-			L13.id(i,0,k) = u * w - L13.id(i,0,k);
-			// Lij^d
-			sra = 1./3. * (L11.id(i,0,k) + L22.id(i,0,k) + L33.id(i,0,k));
-			L11.id(i,0,k) -= sra;
-			L22.id(i,0,k) -= sra;
-			L33.id(i,0,k) -= sra;
-		}}
+	// Ui, cell-centered, stored in Lij
+	u.Ugrid2CellCenter(uc);
+	v.Vgrid2CellCenter(vc);
+	w.Wgrid2CellCenter(wc);
 
-		/***** calculate eddy viscosity *****/
-		for (i=0; i<Nx; i++) {
-			dlt1 = dlt2 = 0;
+	// F(Ui) and Ui*Uj
+	for (int j=1; j<ms.Ny; j++) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+		// F(Ui), cell-centered, stored in Lii
+		uf(i,j,k) = Filter::TestFilter(i,j,k,uc);
+		vf(i,j,k) = Filter::TestFilter(i,j,k,vc);
+		wf(i,j,k) = Filter::TestFilter(i,j,k,wc);
+		// Ui*Uj
+		s11(i,j,k) = uc(i,j,k) * uc(i,j,k);
+		s22(i,j,k) = vc(i,j,k) * vc(i,j,k);
+		s33(i,j,k) = wc(i,j,k) * wc(i,j,k);
+		s12(i,j,k) = uc(i,j,k) * vc(i,j,k);
+		s23(i,j,k) = vc(i,j,k) * wc(i,j,k);
+		s13(i,j,k) = uc(i,j,k) * wc(i,j,k);
+	}}}
 
-			for (k=0; k<Nz; k++) {
+	// Lij
+	for (int j=1; j<ms.Ny; j++) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+		// Lij = F(Ui) * F(Uj) - F(Ui*Uj)
+		l12(i,j,k) = uf(i,j,k) * vf(i,j,k) - Filter::TestFilter(i,j,k,s12);
+		l23(i,j,k) = vf(i,j,k) * wf(i,j,k) - Filter::TestFilter(i,j,k,s23);
+		l13(i,j,k) = uf(i,j,k) * wf(i,j,k) - Filter::TestFilter(i,j,k,s13);
+		// Lii = F(Ui)^2 - F(Ui^2), note: this must be after Lij
+		l11(i,j,k) = uf(i,j,k) * uf(i,j,k) - Filter::TestFilter(i,j,k,s11);
+		l22(i,j,k) = vf(i,j,k) * vf(i,j,k) - Filter::TestFilter(i,j,k,s22);
+		l33(i,j,k) = wf(i,j,k) * wf(i,j,k) - Filter::TestFilter(i,j,k,s33);
+		// Lij^d
+		double iso = 1./3 * (l11(i,j,k) + l22(i,j,k) + l33(i,j,k));
+		l11(i,j,k) -= iso;
+		l22(i,j,k) -= iso;
+		l33(i,j,k) -= iso;
+	}}}
 
-				dlt1 +=	L11.id(i,0,k) * M11.id(i,0,k)
-					+	L22.id(i,0,k) * M22.id(i,0,k)
-					+	L33.id(i,0,k) * M33.id(i,0,k)
-					+	L12.id(i,0,k) * M12.id(i,0,k) * 2.
-					+	L23.id(i,0,k) * M23.id(i,0,k) * 2.
-					+	L13.id(i,0,k) * M13.id(i,0,k) * 2.;
+	/***** calculate eddy viscosity *****/
 
-				dlt2 +=	M11.id(i,0,k) * M11.id(i,0,k)
-					+	M22.id(i,0,k) * M22.id(i,0,k)
-					+	M33.id(i,0,k) * M33.id(i,0,k)
-					+	M12.id(i,0,k) * M12.id(i,0,k) * 2.
-					+	M23.id(i,0,k) * M23.id(i,0,k) * 2.
-					+	M13.id(i,0,k) * M13.id(i,0,k) * 2.;
-			}
+	for (int j=1; j<ms.Ny; j++) {
+	for (int i=1; i<ms.Nx; i++) {
 
-			for (k=0; k<Nz; k++)
-				EV.id(i,j,k) *= fmin(fmax(.5*dlt1/dlt2, 0), .5) * pow(dvol[j], 2./3.); // |Sij| has been assigned to EV
+		double lm = 0;
+		double mm = 0;
 
-# ifdef SGSDEBUG
-			sprintf(str, "%.18e\t", fmin(fmax(.5*dlt1/dlt2, 0), .5));
-			fputs(str, fp);
-# endif
-			
+		for (int k=1; k<ms.Nz; k++) {
+
+			lm += l11(i,j,k) * m11(i,j,k)
+			    + l22(i,j,k) * m22(i,j,k)
+			    + l33(i,j,k) * m33(i,j,k)
+			    + l12(i,j,k) * m12(i,j,k) * 2.
+			    + l23(i,j,k) * m23(i,j,k) * 2.
+			    + l13(i,j,k) * m13(i,j,k) * 2.;
+
+			mm += m11(i,j,k) * m11(i,j,k)
+			    + m22(i,j,k) * m22(i,j,k)
+			    + m33(i,j,k) * m33(i,j,k)
+			    + m12(i,j,k) * m12(i,j,k) * 2.
+			    + m23(i,j,k) * m23(i,j,k) * 2.
+			    + m13(i,j,k) * m13(i,j,k) * 2.;
 		}
 
-# ifdef SGSDEBUG
-		fputs("\n", fp);
-		if (j==Ny-1) fclose(fp);
-# endif
+		for (int k=1; k<ms.Nz; k++)
+			nut(i,j,k) *= fmin(fmax(.5*lm/mm, 0), .5) * pow(ms.dx(i)*ms.dy(j)*ms.dz(k), 2./3.); // |Sij| has been assigned to nut before
+	}}
 
-	}
-	
-	EV.lyrSet(EV[1], 0).lyrSet(EV[Ny-1], Ny);
-	ms.freeall();
+	// set boundary eddy viscosity
+	Bcond::SetBoundaryY(nut, 1); // homogeneous Neumann
+	Bcond::SetBoundaryX(nut, 3); // periodic
+	Bcond::SetBoundaryZ(nut, 3); // periodic
 }
 
 
-
-void SGS::dynamicvreman(Scla &EV, const Vctr &U, double Re)
+void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 {
-	int i, j, k;
-	double *sr, fsr[6], sr2;
-	double *gr, fgr[9], gr2;
-	double dy2, beta[6], Beta;
-	double sum1 = 0, sum2 = 0;
+	const Mesh &ms = nut.ms;
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
 
-# ifdef SGSDEBUG
-	FILE *fp = fopen("Cv.dat", "a");
-	char str[64];
-# endif
+	// Scla &g11 = m11, &g12 = m22, &g13 = m33;
+	// Scla &g21 = m12, &g22 = m23, &g23 = m13;
+	// Scla &g31 = l11, &g32 = l22, &g33 = l33;
+	// Scla &pss = l12, &gg  = l23;
 
-	Mesh ms(Nx,0,Nz,Lx,0,Lz);
+	Scla s11(ms), s22(ms), s33(ms);
+	Scla s12(ms), s23(ms), s13(ms);
+	Scla g11(ms), g12(ms), g13(ms);
+	Scla g21(ms), g22(ms), g23(ms);
+	Scla g31(ms), g32(ms), g33(ms);
+	Scla pss(ms), gg(ms);
 
-	Scla	FG11(ms), FG12(ms), FG13(ms), \
-			FG21(ms), FG22(ms), FG23(ms), \
-			FG31(ms), FG32(ms), FG33(ms), \
-			FGG (ms), FPSS(ms), FSFS(ms);
+	// Sij
+	for (int j=1; j<ms.Ny; j++) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+		const double *sr = vel.Strainrate(i,j,k);
 
-	Scla	G11(ms), G12(ms), G13(ms), \
-			G21(ms), G22(ms), G23(ms), \
-			G31(ms), G32(ms), G33(ms), \
-			GG (ms), PSS(ms), &SS = FSFS, \
-			&S11 = G11, &S22 = G12, &S33 = G13, \
-			&S12 = G21, &S23 = G22, &S13 = G23, \
-			&FS11 = FG11, &FS22 = FG12, &FS33 = FG13, \
-			&FS12 = FG21, &FS23 = FG22, &FS13 = FG23;
+		s11(i,j,k) = sr[0]; s22(i,j,k) = sr[1]; s33(i,j,k) = sr[2];
+		s12(i,j,k) = sr[3]; s23(i,j,k) = sr[4]; s13(i,j,k) = sr[5];
+	}}}
 
-	Interp	fg11(G11,FG11), fg12(G12,FG12), fg13(G13,FG13), \
-			fg21(G21,FG21), fg22(G22,FG22), fg23(G23,FG23), \
-			fg31(G31,FG31), fg32(G32,FG32), fg33(G33,FG33), \
-			fpss(PSS,FPSS), fgg(GG,FGG), \
-			&fs11 = fg11, &fs22 = fg12, &fs33 = fg13, \
-			&fs12 = fg21, &fs23 = fg22, &fs13 = fg23;
+	// Gij, G:G, PI^g * S:S
+	for (int j=1; j<ms.Ny; j++) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+		// Gij = dUj/dXi
+		const double *gr = vel.Gradient(i,j,k);
+
+		g11(i,j,k) = gr[0]; g12(i,j,k) = gr[1]; g13(i,j,k) = gr[2];
+		g21(i,j,k) = gr[3]; g22(i,j,k) = gr[4]; g23(i,j,k) = gr[5];
+		g31(i,j,k) = gr[6]; g32(i,j,k) = gr[7]; g33(i,j,k) = gr[8];
+
+		// G:G = (dUj/dXi)(dUj/dXi)
+		double gr2 = 0;
+		for (int n=0; n<9; n++) gr2 += gr[n] * gr[n];
+		gg(i,j,k) = gr2;
+
+		// PI^g = sqrt( B / G:G )
+		double dx2 = ms.dx(i) * ms.dx(i);
+		double dy2 = ms.dy(i) * ms.dy(i);
+		double dz2 = ms.dz(i) * ms.dz(i);
+		double beta[6];
+
+		beta[0] = dx2 * gr[0]*gr[0] + dy2 * gr[3]*gr[3] + dz2 * gr[6]*gr[6];
+		beta[1] = dx2 * gr[1]*gr[1] + dy2 * gr[4]*gr[4] + dz2 * gr[7]*gr[7];
+		beta[2] = dx2 * gr[2]*gr[2] + dy2 * gr[5]*gr[5] + dz2 * gr[8]*gr[8];
+		beta[3] = dx2 * gr[0]*gr[1] + dy2 * gr[3]*gr[4] + dz2 * gr[6]*gr[7];
+		beta[4] = dx2 * gr[1]*gr[2] + dy2 * gr[4]*gr[5] + dz2 * gr[7]*gr[8];
+		beta[5] = dx2 * gr[0]*gr[2] + dy2 * gr[3]*gr[5] + dz2 * gr[6]*gr[8];
+
+		double bt2 = beta[0]*beta[1] + beta[1]*beta[2] + beta[0]*beta[2]
+		           - beta[3]*beta[3] - beta[4]*beta[4] - beta[5]*beta[5];
+
+		nut(i,j,k) = sqrt(bt2 / gr2);
+
+		// PI^g * S:S =  PI^g * SijSij
+		double sr2 = pow(s11(i,j,k), 2.)
+		           + pow(s22(i,j,k), 2.)
+		           + pow(s33(i,j,k), 2.)
+		           + pow(s12(i,j,k), 2.) * 2.
+		           + pow(s23(i,j,k), 2.) * 2.
+		           + pow(s13(i,j,k), 2.) * 2.;
+
+		pss(i,j,k) = nut(i,j,k) * sr2;
+	}}}
+
+	// C_nu
+	double sum1 = 0;
+	double sum2 = 0;
+
+	for (int j=1; j<ms.Ny; j++) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+
+		double dx2 = ms.dx(i) * ms.dx(i);
+		double dy2 = ms.dy(i) * ms.dy(i);
+		double dz2 = ms.dz(i) * ms.dz(i);
+
+		// F(Gij)
+		double fgr[9];
+
+		fgr[0] = Filter::TestFilter(i,j,k,g11);
+		fgr[1] = Filter::TestFilter(i,j,k,g12);
+		fgr[2] = Filter::TestFilter(i,j,k,g13);
+		fgr[3] = Filter::TestFilter(i,j,k,g21);
+		fgr[4] = Filter::TestFilter(i,j,k,g22);
+		fgr[5] = Filter::TestFilter(i,j,k,g23);
+		fgr[6] = Filter::TestFilter(i,j,k,g31);
+		fgr[7] = Filter::TestFilter(i,j,k,g32);
+		fgr[8] = Filter::TestFilter(i,j,k,g33);
+
+		// FG:FG = F(dUj/dXi)F(dUj/dXi)
+		double fgfg = 0;
+		for (int n=0; n<9; n++) fgfg += fgr[n] * fgr[n];
+
+		// FS:FS = F(Sij)F(Sij)
+		double fsfs = pow(Filter::TestFilter(i,j,k,s11), 2.)
+		            + pow(Filter::TestFilter(i,j,k,s22), 2.)
+		            + pow(Filter::TestFilter(i,j,k,s33), 2.)
+		            + pow(Filter::TestFilter(i,j,k,s12), 2.) * 2.
+		            + pow(Filter::TestFilter(i,j,k,s23), 2.) * 2.
+		            + pow(Filter::TestFilter(i,j,k,s13), 2.) * 2.;
+
+		// PI^t
+		double beta[6];
+		beta[0] = 4.*dx2 * fgr[0]*fgr[0] + dy2 * fgr[3]*fgr[3] + 4.*dz2 * fgr[6]*fgr[6];
+		beta[1] = 4.*dx2 * fgr[1]*fgr[1] + dy2 * fgr[4]*fgr[4] + 4.*dz2 * fgr[7]*fgr[7];
+		beta[2] = 4.*dx2 * fgr[2]*fgr[2] + dy2 * fgr[5]*fgr[5] + 4.*dz2 * fgr[8]*fgr[8];
+		beta[3] = 4.*dx2 * fgr[0]*fgr[1] + dy2 * fgr[3]*fgr[4] + 4.*dz2 * fgr[6]*fgr[7];
+		beta[4] = 4.*dx2 * fgr[1]*fgr[2] + dy2 * fgr[4]*fgr[5] + 4.*dz2 * fgr[7]*fgr[8];
+		beta[5] = 4.*dx2 * fgr[0]*fgr[2] + dy2 * fgr[3]*fgr[5] + 4.*dz2 * fgr[6]*fgr[8];
+
+		double bt2 = beta[0]*beta[1] + beta[1]*beta[2] + beta[0]*beta[2]
+		           - beta[3]*beta[3] - beta[4]*beta[4] - beta[5]*beta[5];
+
+		double weight = ms.dx(i) * ms.dy(j) * ms.dz(k);
+
+		sum1 += weight * (Filter::TestFilter(i,j,k,gg) - fgfg);
+		sum2 += weight * (Filter::TestFilter(i,j,k,pss) - sqrt(bt2 / fgfg) * fsfs);
+	}}}
 
 
-	for (j=1; j<Ny; j++) {
-		dy2 = dy[j] * dy[j];
-		// Sij, SS
-		for (k=0; k<Nz; k++) {
-		for (i=0; i<Nx; i++) {
-			sr = U.strainrate(i,j,k);
-			sr2 =	sr[0]*sr[0] + sr[1]*sr[1] + sr[2]*sr[2]
-				+ (	sr[3]*sr[3] + sr[4]*sr[4] + sr[5]*sr[5] ) * 2.;
-			S11.id(i,0,k) = sr[0]; S22.id(i,0,k) = sr[1]; S33.id(i,0,k) = sr[2]; // stroed in FG1i
-			S12.id(i,0,k) = sr[3]; S23.id(i,0,k) = sr[4]; S13.id(i,0,k) = sr[5]; // stored in FG2i
-			SS.id(i,0,k) = sr2;
-		}}
-		// F(Sij)
-		fs11.layerTriFlt(0,0); fs22.layerTriFlt(0,0); fs33.layerTriFlt(0,0); // FG1i -> FSii
-		fs12.layerTriFlt(0,0); fs23.layerTriFlt(0,0); fs13.layerTriFlt(0,0); // FG2i -> FSij
+	nut *= fmin(fmax(-.5/Re*sum1/sum2, 0), .5); // PI^g has been assigned to nut
 
-		for (k=0; k<Nz; k++) {
-		for (i=0; i<Nx; i++) {
-			fsr[0] = FS11.id(i,0,k); fsr[1] = FS22.id(i,0,k); fsr[2] = FS33.id(i,0,k);
-			fsr[3] = FS12.id(i,0,k); fsr[4] = FS23.id(i,0,k); fsr[5] = FS13.id(i,0,k);
-			// dUj/dXi
-			gr = U.gradient(i,j,k);
-			G11.id(i,0,k) = gr[0]; G12.id(i,0,k) = gr[1]; G13.id(i,0,k) = gr[2];
-			G21.id(i,0,k) = gr[3]; G22.id(i,0,k) = gr[4]; G23.id(i,0,k) = gr[5];
-			G31.id(i,0,k) = gr[6]; G32.id(i,0,k) = gr[7]; G33.id(i,0,k) = gr[8];
-
-			sr2 =	fsr[0]*fsr[0] + fsr[1]*fsr[1] + fsr[2]*fsr[2]
-				+ (	fsr[3]*fsr[3] + fsr[4]*fsr[4] + fsr[5]*fsr[5] ) * 2.;
-			
-			gr2 =	gr[0]*gr[0] + gr[1]*gr[1] + gr[2]*gr[2]
-				+	gr[3]*gr[3] + gr[4]*gr[4] + gr[5]*gr[5]
-				+	gr[6]*gr[6] + gr[7]*gr[7] + gr[8]*gr[8];
-
-			beta[0] = dx2 * gr[0]*gr[0] + dy2 * gr[3]*gr[3] + dz2 * gr[6]*gr[6];
-			beta[1] = dx2 * gr[1]*gr[1] + dy2 * gr[4]*gr[4] + dz2 * gr[7]*gr[7];
-			beta[2] = dx2 * gr[2]*gr[2] + dy2 * gr[5]*gr[5] + dz2 * gr[8]*gr[8];
-			beta[3] = dx2 * gr[0]*gr[1] + dy2 * gr[3]*gr[4] + dz2 * gr[6]*gr[7];
-			beta[4] = dx2 * gr[1]*gr[2] + dy2 * gr[4]*gr[5] + dz2 * gr[7]*gr[8];
-			beta[5] = dx2 * gr[0]*gr[2] + dy2 * gr[3]*gr[5] + dz2 * gr[6]*gr[8];
-
-			Beta =	beta[0]*beta[1] + beta[1]*beta[2] + beta[0]*beta[2]
-				- (	beta[3]*beta[3] + beta[4]*beta[4] + beta[5]*beta[5]	);
-	
-			// PI^g, PI^g * SS, (dUj/dXi)(dUj/dXi), F(Sij)F(Sij)
-			PSS.id(i,0,k) = SS.id(i,0,k) * ( EV.id(i,j,k) = sqrt(Beta / gr2) );
-			GG.id(i,0,k) = gr2;
-			FSFS.id(i,0,k) = sr2;
-		}}
-		// F(dUj/dXi)
-		fg11.layerTriFlt(0,0); fg12.layerTriFlt(0,0); fg13.layerTriFlt(0,0);
-		fg21.layerTriFlt(0,0); fg22.layerTriFlt(0,0); fg23.layerTriFlt(0,0);
-		fg31.layerTriFlt(0,0); fg32.layerTriFlt(0,0); fg33.layerTriFlt(0,0);
-		// F( (dUj/dXi)(dUj/dXi) )
-		fgg.layerTriFlt(0,0);
-		// F( PI^g * SijSij )
-		fpss.layerTriFlt(0,0);
-	
-		for (k=0; k<Nz; k++) {
-		for (i=0; i<Nx; i++) {
-			// F(dUj/dXi)F(dUj/dXi)
-			fgr[0] = FG11.id(i,0,k); fgr[1] = FG12.id(i,0,k); fgr[2] = FG13.id(i,0,k);
-			fgr[3] = FG21.id(i,0,k); fgr[4] = FG22.id(i,0,k); fgr[5] = FG23.id(i,0,k);
-			fgr[6] = FG31.id(i,0,k); fgr[7] = FG32.id(i,0,k); fgr[8] = FG33.id(i,0,k);
-			gr2 =	fgr[0]*fgr[0] + fgr[1]*fgr[1] + fgr[2]*fgr[2]
-				+	fgr[3]*fgr[3] + fgr[4]*fgr[4] + fgr[5]*fgr[5]
-				+	fgr[6]*fgr[6] + fgr[7]*fgr[7] + fgr[8]*fgr[8];
-			// PI^t
-			beta[0] = 4.*dx2 * fgr[0]*fgr[0] + dy2 * fgr[3]*fgr[3] + 4.*dz2 * fgr[6]*fgr[6];
-			beta[1] = 4.*dx2 * fgr[1]*fgr[1] + dy2 * fgr[4]*fgr[4] + 4.*dz2 * fgr[7]*fgr[7];
-			beta[2] = 4.*dx2 * fgr[2]*fgr[2] + dy2 * fgr[5]*fgr[5] + 4.*dz2 * fgr[8]*fgr[8];
-			beta[3] = 4.*dx2 * fgr[0]*fgr[1] + dy2 * fgr[3]*fgr[4] + 4.*dz2 * fgr[6]*fgr[7];
-			beta[4] = 4.*dx2 * fgr[1]*fgr[2] + dy2 * fgr[4]*fgr[5] + 4.*dz2 * fgr[7]*fgr[8];
-			beta[5] = 4.*dx2 * fgr[0]*fgr[2] + dy2 * fgr[3]*fgr[5] + 4.*dz2 * fgr[6]*fgr[8];
-
-			Beta =	beta[0]*beta[1] + beta[1]*beta[2] + beta[0]*beta[2]
-				- (	beta[3]*beta[3] + beta[4]*beta[4] + beta[5]*beta[5]	);
-
-			sum1 += dvol[j] * ( FGG.id(i,0,k) - gr2 );
-			sum2 += dvol[j] * ( FPSS.id(i,0,k) - sqrt(Beta / gr2) * FSFS.id(i,0,k) );
-		}}
-	}
-
-	EV *= fmin(fmax(-.5/Re*sum1/sum2, 0), .5); // PI^g has been assigned to EV
-
-	EV.lyrSet(EV[1], 0).lyrSet(EV[Ny-1], Ny);
-	ms.freeall();
-
-# ifdef SGSDEBUG
-	sprintf(str, "%.18e\n", fmin(fmax(-.5/Re*sum1/sum2, 0), .5));
-	fputs(str, fp);
-	fclose(fp);
-# endif
-
+	// set boundary eddy viscosity
+	Bcond::SetBoundaryY(nut, 1); // homogeneous Neumann
+	Bcond::SetBoundaryX(nut, 3); // periodic
+	Bcond::SetBoundaryZ(nut, 3); // periodic
 }
-
-
-
-// double SGS::vreman(Vctr &U, int i, int j, int k)
-// {
-// 	double *gr, gr2, beta[6], Beta, dy2 = dy[j]*dy[j];
-
-// 	gr = U.gradient(i,j,k);
-// 	gr2 =	gr[0]*gr[0] + gr[1]*gr[1] + gr[2]*gr[2]
-// 		+	gr[3]*gr[3] + gr[4]*gr[4] + gr[5]*gr[5]
-// 		+	gr[6]*gr[6] + gr[7]*gr[7] + gr[8]*gr[8];
-
-// 	beta[0] = dx2 * gr[0]*gr[0] + dy2 * gr[3]*gr[3] + dz2 * gr[6]*gr[6];
-// 	beta[1] = dx2 * gr[1]*gr[1] + dy2 * gr[4]*gr[4] + dz2 * gr[7]*gr[7];
-// 	beta[2] = dx2 * gr[2]*gr[2] + dy2 * gr[5]*gr[5] + dz2 * gr[8]*gr[8];
-// 	beta[3] = dx2 * gr[0]*gr[1] + dy2 * gr[3]*gr[4] + dz2 * gr[6]*gr[7];
-// 	beta[4] = dx2 * gr[1]*gr[2] + dy2 * gr[4]*gr[5] + dz2 * gr[7]*gr[8];
-// 	beta[5] = dx2 * gr[0]*gr[2] + dy2 * gr[3]*gr[5] + dz2 * gr[6]*gr[8];
-
-// 	Beta =	beta[0]*beta[1] + beta[1]*beta[2] + beta[0]*beta[2]
-// 		- (	beta[3]*beta[3] + beta[4]*beta[4] + beta[5]*beta[5]	);
-
-// 	return sqrt(Beta / gr2);
-// }
 
 
 

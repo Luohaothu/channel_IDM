@@ -1,70 +1,41 @@
-# pragma once
+#pragma once
 
-# include "Basic.h"
+#include "Basic.h"
 
 
 class DA
 {
 	public:
-		DA(const Mesh &mesh): _F(mesh), _FLDH(mesh), _UE(mesh), _MSK(mesh)
-		{
-			_iter = _erro = 0; _vexp = setMask(mesh);
-			_F.reset(); _FLDH.reset(); _UE.reset();
-		};
+		DA(const Mesh &ms);
 
-		bool getExp(double time, const Vctr &UE);
-		bool ifIter(const Vctr &U, double e, int n);
-		void getAdj(const Vctr &U, const Feld &VIS, double dt);
-		const Vctr& getForce(double alpha);
-		void writeForce(const char *path, int tstep) const;
+		bool GetExp(double time, const Vctr &vele);
+		void Reset();
+		bool IfIter(double en, const Vctr &vel);
+		const Vctr& GetAsmForce(const Vctr &vel, const Flow &vis, double dt, double alpha);
+		
+		void WriteLog(double time);
+		void WriteForce(const char *path, int tstep) const;
 		
 	private:
-		Vctr _F;        // driving force to assimilate the flow
-		Feld _FLDH;     // adjoint velocities & pressure
-		Vctr _UE, _MSK; // experiment velocity field & the mask function
-		int _iter;      // iteration number
-		double _erro;   // residual of the iteration
-		double _vexp;   // volume of the space where experiment data exits
+		Vctr fb_;     // driving force to assimilate the flow
+		Flow fldh_;   // adjoint velocities & pressure
+		Vctr vele_;   // experiment velocity field
+		Vctr msk_;    // mask function indicating positions where experiment data are available
+		double erro_; // residual of the iteration
+		int iter_;    // iteration number
 
-		int Nx, Ny, Nz, Nxz;
-		double dx, dz, dx2, dz2, *dy, *h;
-		int *ipa, *ima, *kpa, *kma;
+		static void SetMsk(Vctr &msk);
 
-		const Mesh& setMesh(const Mesh &ms)
-		{
-			Nx = ms.Nx; Ny = ms.Ny; Nz = ms.Nz; Nxz = ms.Nxz;
-			dx = ms.dx; dz = ms.dz; dx2 = ms.dx2; dz2 = ms.dz2;
-			dy = ms.dy; h = ms.h;
-			ipa = ms.ipa; ima = ms.ima; kpa = ms.kpa; kma = ms.kma;
-			return ms;
-		};
+		static void CalcAdjoint(Flow &fldh, const Vctr &vel, const Flow &vis, double dt);
+		static void CalcForce(Vctr &fb, const Vctr &velh, double alpha);
 
-		double setMask(const Mesh &ms)
-		{
-			int nlayers = ms.Ny/2 + 1; // number of layers to be assimilated above boundary (boundaries are never assimilated)
-
-			_MSK.reset();
-			for (int j=0; j<nlayers; j++) {
-				_MSK[1].lyrSet(1., j+1).lyrSet(1., ms.Ny-(j+1));
-				_MSK[2].lyrSet(1., j+2).lyrSet(1., ms.Ny-(j+1));
-				_MSK[3].lyrSet(1., j+1).lyrSet(1., ms.Ny-(j+1));
-			}
-
-			for (int j=1; j<ms.Ny; j++) {
-			for (int k=0; k<ms.Nz; k++) {
-			for (int i=0; i<ms.Nx; i++) {
-				_FLDH.S.id(i,j,k) = _MSK.module(i,j,k);
-			}}}
-			return _FLDH.S.bulkMeanU();
-		};
-
-		void urhs  (Vctr &UH, const Vctr &U, const Vctr &UE, const Vctr &MSK);
-		void getuh1(Vctr &UH, const Vctr &U, const Feld &VIS, double dt);
-		void getuh2(Vctr &UH, const Vctr &U, const Feld &VIS, double dt);
-		void getuh3(Vctr &UH, const Vctr &U, const Feld &VIS, double dt);
-		void rhsdp (Scla &DP, const Vctr &UH, double dt);
-		void getfdp(Scla &DP, double refp);
-		void update(Vctr &UH, const Scla &DP, double dt);
+		static double urhs(Flow &fldh, const Vctr &vel, const Vctr &vele, const Vctr &msk);
+		static void getuh1(Vctr &velh, const Vctr &vel, const Flow &vis, double dt);
+		static void getuh2(Vctr &velh, const Vctr &vel, const Flow &vis, double dt);
+		static void getuh3(Vctr &velh, const Vctr &vel, const Flow &vis, double dt);
+		static void rhsdp (Scla &rdp, const Vctr &velh, double dt);
+		static void getfdp(Scla &fdp, double refp);
+		static void update(Vctr &velh, const Scla &dp, double dt);
 };
 
 

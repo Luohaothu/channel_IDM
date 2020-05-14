@@ -90,7 +90,7 @@ void Matrix::ctdma(double *a, double *b, double *c, double *d)
 
 // # define DEBUG	// g++ -lfftw3 -lm -I include src/Matrix.cpp
 
-# ifdef DEBUG
+#ifdef DEBUG
 
 void tdma_validation()
 {
@@ -120,12 +120,12 @@ int main()
 	tdma_validation();
 }
 
-# endif
+#endif
 
 
 
 
-# ifdef MATRIX_NO_CLASS
+#ifdef MATRIX_NO_CLASS
 
 void tdma(int n, double *a, double *b, double *c, double *d)
 /* Tridiagonal matrix algorithm, result returned in d. (a:1~n-1, b:0~n-1, c:0~n-2, d:0~n-1) */
@@ -199,7 +199,7 @@ void ctdma(int n, double *a, double *b, double *c, double *d)
 	free(sig);
 }
 
-# endif
+#endif
 
 
 
