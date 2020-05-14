@@ -2,17 +2,17 @@
 from basic import *
 from budgets import Budgets
 
-para = DataSetInfo("/root/data/whn/channel_DA/refdata/")
+para = DataSetInfo("../data2/test/")
 
 stas = Statis(Field(para))
-bgts = Budgets(para)
+# bgts = Budgets(para)
 
 stas.calc_statis()
 stas.calc_wallscale()
 stas.flipy()
 
-bgts.dissipation()
-bgts.flipy()
+# bgts.dissipation()
+# bgts.flipy()
 
 
 
@@ -73,13 +73,13 @@ np.savetxt(para.postpath+"profiles.dat", data, header=header, comments='')
 
 
 
-header = \
-	'Title = "profiles of budgets"\n' + \
-	'variables = "%s", "%s"\n' % ( "y<sup>+</sup>", "<greek>e</greek><sup>+</sup>" ) + \
-	'zone t = "%s", i = %i' %( casename, len(jrange) )
-data = np.vstack([ para.yc/stas.lc, bgts.epsl/(stas.uc**3/stas.lc) ])
-data = data.T[jrange]
-np.savetxt(para.postpath+"budgets.dat", data, header=header, comments='')
+# header = \
+# 	'Title = "profiles of budgets"\n' + \
+# 	'variables = "%s", "%s"\n' % ( "y<sup>+</sup>", "<greek>e</greek><sup>+</sup>" ) + \
+# 	'zone t = "%s", i = %i' %( casename, len(jrange) )
+# data = np.vstack([ para.yc/stas.lc, bgts.epsl/(stas.uc**3/stas.lc) ])
+# data = data.T[jrange]
+# np.savetxt(para.postpath+"budgets.dat", data, header=header, comments='')
 
 
 
@@ -122,8 +122,8 @@ data = np.array([np.ravel(temp) for temp in data]).T
 
 pame = para.postpath + "ES2D.dat"
 np.savetxt(pame, data, header=header, comments='')
-os.system("preplot " + pame)
-os.system("rm -f " + pame)
+if not system("preplot " + pame):
+	system("rm -f " + pame)
 
 
 
@@ -164,8 +164,8 @@ data = np.array([np.ravel(temp) for temp in data]).T
 
 pame = para.postpath + "ES1D_xy.dat"
 np.savetxt(pame, data, header=header, comments='')
-os.system("preplot " + pame)
-os.system("rm -f " + pame)
+if not system("preplot " + pame):
+	system("rm -f " + pame)
 
 
 
@@ -206,8 +206,8 @@ data = np.array([np.ravel(temp) for temp in data]).T
 
 pame = para.postpath + "ES1D_zy.dat"
 np.savetxt(pame, data, header=header, comments='')
-os.system("preplot " + pame)
-os.system("rm -f " + pame)
+if not system("preplot " + pame):
+	system("rm -f " + pame)
 
 
 

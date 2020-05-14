@@ -2,7 +2,7 @@ import numpy as np
 from numpy.fft import fft,ifft, fft2,ifft2, hfft,ihfft
 from scipy.integrate import trapz
 from struct import pack, unpack
-import os
+from os import listdir, system
 
 
 ##### common functions #####
@@ -20,7 +20,9 @@ def write_channel(pame, q):
 
 def read_channel(pame):
 	with open(pame, 'rb') as fp: nx, ny, nz = unpack('3i', fp.read(12))
-	return np.fromfile(pame, np.float64, offset=(nx*nz)*8).reshape([ny, nz, nx])
+	# return np.fromfile(pame, np.float64, offset=(nx*nz)*8).reshape([ny, nz, nx])
+	q = np.fromfile(pame, np.float64, ).reshape([ny+1, nz, nx])
+	return q[1:]
 
 ###########################
 
@@ -31,11 +33,11 @@ class DataSetInfo:
 		self.read_XIN(self.datapath)
 		self.read_GRD(self.statpath, self.Ny)
 
-		self.Nxz = self.Nx * self.Nz
-		self.Nxc = self.Nx//2+1
-		self.Nzc = self.Nz//2+1
-		self.kx = np.hstack([range(self.Nxc), range(self.Nxc-self.Nx, 0)]) * (2*np.pi/self.Lx)
-		self.kz = np.hstack([range(self.Nzc), range(self.Nzc-self.Nz, 0)]) * (2*np.pi/self.Lz)
+		self.Nxz = (self.Nx+1) * (self.Nz+1)
+		self.Nxc = (self.Nx-1)//2+1
+		self.Nzc = (self.Nz-1)//2+1
+		self.kx = np.hstack([range(self.Nxc), range(self.Nxc-self.Nx+1, 0)]) * (2*np.pi/self.Lx)
+		self.kz = np.hstack([range(self.Nzc), range(self.Nzc-self.Nz+1, 0)]) * (2*np.pi/self.Lz)
 		self.h, self.dy = self.get_Ymesh(self.y, self.yc)
 
 		self.tsteps = self.get_tsteps(self.fieldpath)
@@ -76,7 +78,7 @@ class DataSetInfo:
 
 	def get_tsteps(self, path):
 		tsteps = []
-		for name in [s for s in os.listdir(path) if ".bin" in s]:
+		for name in [s for s in listdir(path) if ".bin" in s]:
 			tsteps.append(int("".join([c for c in name if c.isdigit()])))
 		return sorted(set(tsteps)) # set() removes duplicate elements
 
@@ -87,7 +89,7 @@ class Field:
 
 	def read(self, name, stagtyp=4):
 		return self.__to_cellcenter(
-			read_channel(self.para.fieldpath + name),
+			read_channel(self.para.fieldpath + name)[:,1:-1,1:-1], # for periodic channels
 			stagtyp if stagtyp in (0,1,2,3) else self.__infer_stagtyp(name)	)
 
 	def read_mean(self, name, stagtyp=4):
@@ -176,6 +178,9 @@ class Statis:
 			self.Evw += self.__flipk( (np.conj(spec(v))*spec(w)).real ) / len(tsteps)
 			self.Euw += self.__flipk( (np.conj(spec(u))*spec(w)).real ) / len(tsteps)
 
+			logs = np.loadtxt(self.para.statpath+'LOG.dat', skiprows=3)
+			self.tauw = - np.mean([log[6] for log in logs if int(log[0]) in tsteps])
+
 	def __flipk(self, q):
 		''' fold all energy to the [:nzc,:nxc] range
 		    Nx must be even, as required by hft, Nz can be even or odd  '''
@@ -220,10 +225,8 @@ class Statis:
 		Re = self.para.Re
 		yc = self.para.yc
 		nudUdy = np.gradient(self.Um, yc) / Re
-
-		# self.tauw = 0.5 * (nudUdy[0] - nudUdy[-1])
-		# self.tauw = np.sum( abs(nudUdy - self.R12)[1:-1] * (self.para.y[2:] - self.para.y[1:-1]) ) / (0.25 * self.para.Ly**2)
-		self.tauw = 4./Ly**2 * trapz(abs(nudUdy-self.R12), yc)
+		
+		# self.tauw = 4./Ly**2 * trapz(abs(nudUdy-self.R12), yc)
 
 		self.utau = self.tauw**.5
 		self.dnu = 1./Re / self.utau
