@@ -52,6 +52,7 @@ private:
 	// ***** construct viscosity ***** //
 	static void CalcVis(Flow &vis, const Vctr &vel, double Re, int sgstyp);
 	static void ModifyBoundaryVis(Flow &vis, const Vctr &vel, double tau12);
+	static void ModifyBoundaryVis(Flow &vis, const Vctr &vel, const Vctr &vel0, double Re);
 
 	// ***** construct body forces ***** //
 	static void CalcFb(Vctr &fb, const double mpg[3]);

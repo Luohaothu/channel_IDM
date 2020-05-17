@@ -50,23 +50,23 @@ void Bcond::ChannelDirichlet(Boundaries &bc, Boundaries &sbc, const Mesh &ms, co
 		// bc.vb4(i,k) = v(i,jb2,k);
 		// bc.wb4(i,k) = w(i,jb2,k);
 
-		// interpolate off-wall boundary
-		bc.ub3(i,k) = Interp::InterpNodeU(ms.x(i),ms.yc(0),ms.zc(k), u);
-		bc.vb3(i,k) = Interp::InterpNodeV(ms.xc(i),ms.y(1),ms.zc(k), v);
-		bc.wb3(i,k) = Interp::InterpNodeW(ms.xc(i),ms.yc(0),ms.z(k), w);
+		// // interpolate off-wall boundary
+		// bc.ub3(i,k) = Interp::InterpNodeU(ms.x(i),ms.yc(0),ms.zc(k), u);
+		// bc.vb3(i,k) = Interp::InterpNodeV(ms.xc(i),ms.y(1),ms.zc(k), v);
+		// bc.wb3(i,k) = Interp::InterpNodeW(ms.xc(i),ms.yc(0),ms.z(k), w);
 
-		bc.ub4(i,k) = Interp::InterpNodeU(ms.x(i),ms.yc(ms.Ny),ms.zc(k), u);
-		bc.vb4(i,k) = Interp::InterpNodeV(ms.xc(i),ms.y(ms.Ny),ms.zc(k), v);
-		bc.wb4(i,k) = Interp::InterpNodeW(ms.xc(i),ms.yc(ms.Ny),ms.z(k), w);
+		// bc.ub4(i,k) = Interp::InterpNodeU(ms.x(i),ms.yc(ms.Ny),ms.zc(k), u);
+		// bc.vb4(i,k) = Interp::InterpNodeV(ms.xc(i),ms.y(ms.Ny),ms.zc(k), v);
+		// bc.wb4(i,k) = Interp::InterpNodeW(ms.xc(i),ms.yc(ms.Ny),ms.z(k), w);
 
-		// // filter off-wall boundary
-		// bc.ub3(i,k) = Filter::FilterNodeU(ms.x(i),ms.yc(0),ms.zc(k), ms.hx(i),0,ms.dz(k), u);
-		// bc.vb3(i,k) = Filter::FilterNodeV(ms.xc(i),ms.y(1),ms.zc(k), ms.dx(i),0,ms.dz(k), v);
-		// bc.wb3(i,k) = Filter::FilterNodeW(ms.xc(i),ms.yc(0),ms.z(k), ms.dx(i),0,ms.hz(k), w);
+		// filter off-wall boundary
+		bc.ub3(i,k) = Filter::FilterNodeU(ms.x(i),ms.yc(0),ms.zc(k), ms.hx(i),0,ms.dz(k), u);
+		bc.vb3(i,k) = Filter::FilterNodeV(ms.xc(i),ms.y(1),ms.zc(k), ms.dx(i),0,ms.dz(k), v);
+		bc.wb3(i,k) = Filter::FilterNodeW(ms.xc(i),ms.yc(0),ms.z(k), ms.dx(i),0,ms.hz(k), w);
 
-		// bc.ub4(i,k) = Filter::FilterNodeU(ms.x(i),ms.yc(ms.Ny),ms.zc(k), ms.hx(i),0,ms.dz(k), u);
-		// bc.vb4(i,k) = Filter::FilterNodeV(ms.xc(i),ms.y(ms.Ny),ms.zc(k), ms.dx(i),0,ms.dz(k), v);
-		// bc.wb4(i,k) = Filter::FilterNodeW(ms.xc(i),ms.yc(ms.Ny),ms.z(k), ms.dx(i),0,ms.hz(k), w);
+		bc.ub4(i,k) = Filter::FilterNodeU(ms.x(i),ms.yc(ms.Ny),ms.zc(k), ms.hx(i),0,ms.dz(k), u);
+		bc.vb4(i,k) = Filter::FilterNodeV(ms.xc(i),ms.y(ms.Ny),ms.zc(k), ms.dx(i),0,ms.dz(k), v);
+		bc.wb4(i,k) = Filter::FilterNodeW(ms.xc(i),ms.yc(ms.Ny),ms.z(k), ms.dx(i),0,ms.hz(k), w);
 	}}
 }
 

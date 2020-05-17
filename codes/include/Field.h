@@ -65,7 +65,7 @@ public:
 	void CellCenter2EdgeZ(Scla &dst) const;
 
 	// differential operators (operating on cell-centered quantities)
-	double* Gradient(int i, int j, int k) const;
+	const double* Gradient(int i, int j, int k) const;
 
 	// arithmetic
 	Scla& SetLyr(double a, int j=0) { TraverseLyr(a, j, set); return *this; }; // set to a
@@ -138,8 +138,8 @@ public:
 	double  Module    (int i, int j, int k) const;
 	double  Divergence(int i, int j, int k) const;
 	double  Convection(int i, int j, int k) const;
-	double* Strainrate(int i, int j, int k) const;
-	double* Gradient  (int i, int j, int k) const;
+	const double* Strainrate(int i, int j, int k) const;
+	const double* Gradient  (int i, int j, int k) const;
 
 private:
 	Scla v1_;

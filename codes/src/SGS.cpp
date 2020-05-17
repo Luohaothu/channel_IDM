@@ -81,7 +81,7 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
 
-		const double *sr = vel.Strainrate(i,j,k);
+		const double *sr = vel.Strainrate(i,j,k); // returned value in Strainrate is static and may not be parallised
 
 		double sra = sqrt(
 			2. * ( sr[0]*sr[0] + sr[1]*sr[1] + sr[2]*sr[2] +
@@ -100,7 +100,10 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 		nut(i,j,k) = sra;
 	}}}
 
+#pragma omp parallel
+{
 	// Mij
+	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
@@ -135,11 +138,15 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 	/***** solve Lij *****/
 
 	// Ui, cell-centered, stored in Lij
-	u.Ugrid2CellCenter(uc);
-	v.Vgrid2CellCenter(vc);
-	w.Wgrid2CellCenter(wc);
+	#pragma omp single
+	{
+		u.Ugrid2CellCenter(uc);
+		v.Vgrid2CellCenter(vc);
+		w.Wgrid2CellCenter(wc);
+	}
 
 	// F(Ui) and Ui*Uj
+	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
@@ -157,6 +164,8 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 	}}}
 
 	// Lij
+	#pragma omp barrier
+	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
@@ -177,6 +186,8 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 
 	/***** calculate eddy viscosity *****/
 
+	#pragma omp barrier
+	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) {
 	for (int i=1; i<ms.Nx; i++) {
 
@@ -203,6 +214,7 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 		for (int k=1; k<ms.Nz; k++)
 			nut(i,j,k) *= fmin(fmax(.5*lm/mm, 0), .5) * pow(ms.dx(i)*ms.dy(j)*ms.dz(k), 2./3.); // |Sij| has been assigned to nut before
 	}}
+}
 
 	// set boundary eddy viscosity
 	Bcond::SetBoundaryY(nut, 1); // homogeneous Neumann
@@ -350,6 +362,98 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 }
 
 
+#define DIRTY_TRICK_
+
+void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel)
+// calculate sub-grid-scale stress by direct filter of vel
+// normal stress at cell-centers and shear stress on edges
+{
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
+
+	// interpolate resolved velocity to cell-centers (virtual boundary use linear extrapolation and ignore periodicity)
+	Scla uc(vel.ms); u.Ugrid2CellCenter(uc);
+	Scla vc(vel.ms); v.Vgrid2CellCenter(vc);
+	Scla wc(vel.ms); w.Wgrid2CellCenter(wc);
+
+	Scla uv(vel.ms), &uu = uc;
+	Scla vw(vel.ms), &vv = vc;
+	Scla uw(vel.ms), &ww = wc;
+
+#ifndef DIRTY_TRICK_
+	// calculate cross terms at cell-centers
+	(uv = uc) *= vc;
+	(vw = vc) *= wc; vv *= vc;
+	(uw = uc) *= wc; uu *= uc; ww *= wc;
+#else
+	(uv = uc) *= vc;
+	(vw = vc) *= wc;
+	(uw = uc) *= wc;
+#endif
+
+	const Mesh &ms = shear.ms; // ms refer to sparse mesh while vel is fully resolved
+
+	Scla &tau11 = normal[1], &tau12 = shear[1];
+	Scla &tau22 = normal[2], &tau23 = shear[2];
+	Scla &tau33 = normal[3], &tau13 = shear[3];
+
+
+#ifndef DIRTY_TRICK_
+	// normal stress at cell-centers
+	for (int j=0; j<=ms.Ny; j++) {
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+
+		double x = ms.xc(i), dx = ms.dx(i);
+		double y = ms.yc(j), dy = 0;
+		double z = ms.zc(k), dz = ms.dz(k);
+
+		tau11(i,j,k) = pow(Filter::FilterNode(x,y,z,dx,dy,dz,u,1), 2.) - Filter::FilterNode(x,y,z,dx,dy,dz,uu,0);
+		tau22(i,j,k) = pow(Filter::FilterNode(x,y,z,dx,dy,dz,v,2), 2.) - Filter::FilterNode(x,y,z,dx,dy,dz,vv,0);
+		tau33(i,j,k) = pow(Filter::FilterNode(x,y,z,dx,dy,dz,w,3), 2.) - Filter::FilterNode(x,y,z,dx,dy,dz,ww,0);
+	}}}
+#endif
+
+	// shear stress on edges
+
+#ifndef DIRTY_TRICK_
+	for (int j=0; j<=ms.Ny; j++) {
+#else
+	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
+#endif
+
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+
+		double x = ms.x (i), dx = ms.hx(i);
+		double y = ms.y (j), dy = 0;
+		double z = ms.zc(k), dz = ms.dz(k);
+
+		if (i>0 && j>0) tau12(i,j,k) =
+			Filter::FilterNode(x,y,z,dx,dy,dz,u,1) *
+			Filter::FilterNode(x,y,z,dx,dy,dz,v,2) -
+			Filter::FilterNode(x,y,z,dx,dy,dz,uv,0);
+
+		x = ms.xc(i); dx = ms.dx(i);
+		y = ms.y (j); dy = 0;
+		z = ms.z (k); dz = ms.hz(k);
+
+		if (j>0 && k>0) tau23(i,j,k) =
+			Filter::FilterNode(x,y,z,dx,dy,dz,v,2) *
+			Filter::FilterNode(x,y,z,dx,dy,dz,w,3) -
+			Filter::FilterNode(x,y,z,dx,dy,dz,vw,0);
+
+		x = ms.x (i); dx = ms.hx(i);
+		y = ms.yc(j); dy = ms.dy(j);
+		z = ms.z (k); dz = ms.hz(k);
+
+		if (i>0 && k>0) tau13(i,j,k) =
+			Filter::FilterNode(x,y,z,dx,dy,dz,u,1) *
+			Filter::FilterNode(x,y,z,dx,dy,dz,w,3) -
+			Filter::FilterNode(x,y,z,dx,dy,dz,uw,0);
+	}}}
+}
 
 
 

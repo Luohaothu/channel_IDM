@@ -62,6 +62,7 @@ void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0)
 	set_time(time_+dt);
 
 	CalcVis(vis_, get_vel(), Re, sgstyp);
+	ModifyBoundaryVis(vis_, get_vel(), solver0.get_vel(), Re);
 
 	Bcond::ChannelDirichlet(bc_, sbc_, ms, solver0.get_vel());
 
@@ -75,7 +76,7 @@ void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0)
 	Bcond::SetBoundaryX(get_vel());
 	Bcond::SetBoundaryZ(get_vel());
 
-	Assimilate(solver0.get_vel(), dt, 5, .1);
+	// Assimilate(solver0.get_vel(), dt, 5, .1);
 }
 
 
@@ -180,34 +181,41 @@ void Solver::ModifyBoundaryVis(Flow &vis, const Vctr &vel, double tau12)
 	}}}
 }
 
-// void Solver::ModifyBoundaryVis(Flow &vis, const Vctr &vel, const Flow &vis0, const Vctr &vel0)
-// {
-// 	const Mesh &ms = vis.ms;
-// 	const Mesh &ms0 = vis0.ms;
+void Solver::ModifyBoundaryVis(Flow &vis, const Vctr &vel, const Vctr &vel0, double Re)
+{
+	const Mesh &ms = vis.ms;
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
 
-// 	Scla &nuz = vis.GetVec(3);
+	Scla &nux = vis.GetVec(1);
+	Scla &nuz = vis.GetVec(3);
 
-// 	const Scla &nuz0 = vis0.SeeVec(3);
-// 	const Scla &u = vel[1], &u0 = vel0[1];
-// 	const Scla &v = vel[2], &v0 = vel0[2];
+	Vctr shear(ms);
+	Vctr &normal = shear; // no intend to solve normal stress, it will be overwritten by shear stress
 
-// 	for (int j=1; j<=ms.Ny; j+= ms.Ny-1) {
-// 	for (int k=1; k<ms.Nz; k++) {
-// 	for (int i=1; i<ms.Nx; i++) {
+	SGS::SubGridStress(shear, normal, vel0);
 
-// 		int j0 = j==1 ? 1 : ms0.Ny;
+	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
+	for (int k=1; k<=ms.Nz; k++) {
+	for (int i=1; i<=ms.Nx; i++) {
+		// boundary sgs shear stress filtered from resolved velocity field
+		double tau12 = shear[1](i,j,k);
+		double tau23 = shear[2](i,j,k);
 
-// 		double s12 = .5 * (
-// 			1./ms.hx(i) * (v(i,j,k) - v(ms.ima(i),j,k)) +
-// 			1./ms.hy(j) * (u(i,j,k) - u(i,ms.jma(j),k)) );
+		// boundary strain rate of the coarse velocity field
+		double s12 = .5 * (
+			1./ms.hx(i) * (v(i,j,k) - v(ms.ima(i),j,k)) +
+			1./ms.hy(j) * (u(i,j,k) - u(i,ms.jma(j),k)) );
 
-// 		double tau12 = 2. * nuz0(i,j0,k) * .5 * (
-// 			1./ms0.hx(i) * (v0(i,j0,k) - v0(ms0.ima(i),j0,k)) +
-// 			1./ms0.hy(j0) * (u0(i,j0,k) - u0(i,ms0.jma(j0),k)) );
+		double s23 = .5 * (
+			1./ms.hy(k) * (w(i,j,k) - w(i,ms.jma(j),k)) +
+			1./ms.hz(j) * (v(i,j,k) - v(i,j,ms.kma(k))) );
 
-// 		nuz(i,j,k) = fmax(.5*tau12/s12, 0);
-// 	}}}
-// }
+		if (k<ms.Nz) nuz(i,j,k) = fmax(1./Re + tau12 / s12, 0);
+		if (i<ms.Nx) nux(i,j,k) = fmax(1./Re + tau23 / s23, 0);
+	}}}
+}
 
 
 void Solver::CalcFb(Vctr &fb, const double mpg[3])

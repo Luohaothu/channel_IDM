@@ -176,33 +176,36 @@ static double BoxFilter3(
 			x2 * BoxFilter3(xs[i0],xp,ym,yp,zm,zp, xs,ys,zs,q, i0,i2,j0,jn,k0,kn) );
 	}
 
-	// divide problem into smaller ones
-	if (k2-k1 > 1) {
-		int k;
-		double z = zs[k = (k1+k2) / 2];
-		double z1 = z - zm;
-		double z2 = zp - z;
-		return 1. / (z1 + z2) * (
-			z1 * BoxFilter3(xm,xp,ym,yp,zm,z, xs,ys,zs,q, i0,in,j0,jn,k0,k) +
-			z2 * BoxFilter3(xm,xp,ym,yp,z,zp, xs,ys,zs,q, i0,in,j0,jn,k,kn) );
+	int recursdep = (i2-i1) * (j2-j1) * (k2-k1); // lower value for deeper recursion
+	int threshold = 32; // avoid over-parallism
+
+	int i, j, k;
+	double x, y, z, f1, f2;
+
+	// divide and conquer
+	if (j2-j1 > 1) {
+		y = ys[j = (j1+j2) / 2];
+		#pragma omp task shared(f1, xm,xp,ym,y,zm,zp, xs,ys,zs,q, i0,in,j0,j,k0,kn) if (recursdep > threshold)
+		f1 = BoxFilter3(xm,xp,ym,y,zm,zp, xs,ys,zs,q, i0,in,j0,j,k0,kn); // only line that is tasked by omp
+		f2 = BoxFilter3(xm,xp,y,yp,zm,zp, xs,ys,zs,q, i0,in,j,jn,k0,kn);
+		#pragma omp taskwait
+		return 1. / (yp-ym) * ((y-ym) * f1 + (yp-y) * f2);
 	}
-	else if (j2-j1 > 1) {
-		int j;
-		double y = ys[j = (j1+j2) / 2];
-		double y1 = y - ym;
-		double y2 = yp - y;
-		return 1. / (y1 + y2) * (
-			y1 * BoxFilter3(xm,xp,ym,y,zm,zp, xs,ys,zs,q, i0,in,j0,j,k0,kn) +
-			y2 * BoxFilter3(xm,xp,y,yp,zm,zp, xs,ys,zs,q, i0,in,j,jn,k0,kn) );
+	else if (k2-k1 > 1) {
+		z = zs[k = (k1+k2) / 2];
+		#pragma omp task shared(f1, xm,xp,ym,yp,zm,z, xs,ys,zs,q, i0,in,j0,jn,k0,k) if (recursdep > threshold)
+		f1 = BoxFilter3(xm,xp,ym,yp,zm,z, xs,ys,zs,q, i0,in,j0,jn,k0,k); // only line that is tasked by omp
+		f2 = BoxFilter3(xm,xp,ym,yp,z,zp, xs,ys,zs,q, i0,in,j0,jn,k,kn);
+		#pragma omp taskwait
+		return 1. / (zp-zm) * ((z-zm) * f1 + (zp-z) * f2);
 	}
 	else if (i2-i1 > 1) {
-		int i;
-		double x = xs[i = (i1+i2) / 2];
-		double x1 = x - xm;
-		double x2 = xp - x;
-		return 1. / (x1 + x2) * (
-			x1 * BoxFilter3(xm,x,ym,yp,zm,zp, xs,ys,zs,q, i0,i,j0,jn,k0,kn) +
-			x2 * BoxFilter3(x,xp,ym,yp,zm,zp, xs,ys,zs,q, i,in,j0,jn,k0,kn) );
+		x = xs[i = (i1+i2) / 2];
+		#pragma omp task shared(f1, xm,x,ym,yp,zm,zp, xs,ys,zs,q, i0,i,j0,jn,k0,kn) if (recursdep > threshold)
+		f1 = BoxFilter3(xm,x,ym,yp,zm,zp, xs,ys,zs,q, i0,i,j0,jn,k0,kn); // only line that is tasked by omp
+		f2 = BoxFilter3(x,xp,ym,yp,zm,zp, xs,ys,zs,q, i,in,j0,jn,k0,kn);
+		#pragma omp taskwait
+		return 1. / (xp-xm) * ((x-xm) * f1 + (xp-x) * f2);
 	}
 
 	double x1 = xs[i1], x2 = xs[i2];
@@ -250,7 +253,13 @@ double Filter::FilterNode(
 	double yp = Interp::Shift(y_+.5*dy, cory[j0], cory[jn]);
 	double zp = Interp::Shift(z_+.5*dz, corz[k0], corz[kn]);
 
-	return BoxFilter3(xm,xp,ym,yp,zm,zp, corx,cory,corz,q, i0,in,j0,jn,k0,kn);
+	double ans;
+
+	#pragma omp parallel
+	#pragma omp single
+	ans = BoxFilter3(xm,xp,ym,yp,zm,zp, corx,cory,corz,q, i0,in,j0,jn,k0,kn);
+	
+	return ans;
 }
 
 double Filter::TestFilter(int i, int j, int k, const Scla &q)
@@ -278,9 +287,71 @@ double Filter::TestFilter(int i, int j, int k, const Scla &q)
 
 
 
-// #define DEBUG
+// #define DEBUG_VALIDATE_
+// #define DEBUG_EFFICIENCY_
 
-#ifdef DEBUG
+
+#ifdef DEBUG_EFFICIENCY_
+#include <sys/time.h>
+#include <omp.h>
+#include "Bcond.h"
+
+
+struct timeval *time0 = new struct timeval;
+struct timeval *time1 = new struct timeval;
+long duration = 0;
+
+int main()
+{
+	omp_set_num_threads(16);
+
+	int Nx = 33; double Lx = 4;
+	int Ny = 33; double Ly = 2;
+	int Nz = 33; double Lz = 4;
+
+	Geometry_prdxz geo(Nx,Ny,Nz, Lx,Ly,Lz);
+	Mesh ms(geo);
+	Scla q(ms), q1(ms);
+
+	geo.InitMesh(0);
+	geo.InitInterval();
+	geo.InitWaveNumber();
+	geo.InitIndices();
+
+	for (int j=0; j<=Ny; j++) {
+	for (int k=0; k<=Nz; k++) {
+	for (int i=0; i<=Nx; i++) {
+		q(i,j,k) = i*j*k;
+	}}}
+
+	Bcond::SetBoundaryX(q, 4);
+	Bcond::SetBoundaryZ(q, 4);
+
+
+	gettimeofday(time0, NULL);
+	
+	for (int j=0; j<=Ny; j++) { cout << j << endl;
+	for (int k=0; k<=Nz; k++) {
+	for (int i=0; i<=Nx; i++) {
+		q1(i,j,k) = Filter::FilterNode(
+			ms.xc(i), ms.yc(j), ms.zc(k),
+			8*ms.dx(1), 8*ms.dy(1), 8*ms.dz(1),
+			q, 0);
+	}}}
+	
+	gettimeofday(time1, NULL);
+	duration = 1e6 * (time1->tv_sec - time0->tv_sec) + (time1->tv_usec - time0->tv_usec);
+
+	cout << duration << endl;
+
+	q1.debug_AsciiOutput("", "q1", 0, Ny+1);
+
+	return 0;
+}
+#endif
+
+
+#ifdef DEBUG_VALIDATE_
 #include "Bcond.h"
 
 int main()

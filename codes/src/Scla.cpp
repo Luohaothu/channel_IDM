@@ -388,7 +388,7 @@ void Scla::CellCenter2EdgeZ(Scla &dst) const
 
 /***** differentiation operators *****/
 
-double* Scla::Gradient(int i, int j, int k) const
+const double* Scla::Gradient(int i, int j, int k) const
 /* compute Gradient of a cell-centered scalar field to corresponding U,V,W grids */
 
 {

@@ -57,7 +57,7 @@ double Vctr::Convection(int i, int j, int k) const
 		+	.5 * fabs(w[kp] + w[id]) / ms.dz(k);
 }
 
-double* Vctr::Strainrate(int i, int j, int k) const
+const double* Vctr::Strainrate(int i, int j, int k) const
 /* compute the strain rate tensor of a vector field at the center of cell (i,j,k) */
 // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
 {
@@ -108,7 +108,7 @@ double* Vctr::Strainrate(int i, int j, int k) const
 	return sr;
 }
 
-double* Vctr::Gradient(int i, int j, int k) const
+const double* Vctr::Gradient(int i, int j, int k) const
 /* compute the gradient tensor of a vector field at the center of cell (i,j,k) */
 // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
 {

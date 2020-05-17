@@ -5,9 +5,13 @@
 
 namespace SGS
 {
+
 void Smargorinsky (Scla &nut, const Vctr &vel, double Re, double Cs);
 void DynamicSmarg (Scla &nut, const Vctr &vel);
 void DynamicVreman(Scla &nut, const Vctr &vel, double Re);
+
+void SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel);
+
 } // namespace SGS
 
 // note: MUST NOT filter and assign values to an array in the same transverse
