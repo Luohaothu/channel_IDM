@@ -68,29 +68,29 @@ public:
 	const double* Gradient(int i, int j, int k) const;
 
 	// arithmetic
-	Scla& SetLyr(double a, int j=0) { TraverseLyr(a, j, set); return *this; }; // set to a
-	Scla& AddLyr(double a, int j=0) { TraverseLyr(a, j, add); return *this; }; // add a
-	Scla& MnsLyr(double a, int j=0) { TraverseLyr(a, j, mns); return *this; }; // minus a
-	Scla& MltLyr(double a, int j=0) { TraverseLyr(a, j, mlt); return *this; }; // multiplied by a
-	Scla& DvdLyr(double a, int j=0) { TraverseLyr(a, j, dvd); return *this; }; // divided by a
+	Scla& SetLyr(double a, int j=0) { TravLyr(a, j, set); return *this; }; // set to a
+	Scla& AddLyr(double a, int j=0) { TravLyr(a, j, add); return *this; }; // add a
+	Scla& MnsLyr(double a, int j=0) { TravLyr(a, j, mns); return *this; }; // minus a
+	Scla& MltLyr(double a, int j=0) { TravLyr(a, j, mlt); return *this; }; // multiplied by a
+	Scla& DvdLyr(double a, int j=0) { TravLyr(a, j, dvd); return *this; }; // divided by a
 
-	Scla& SetLyr(const double *src, int j=0) { TraverseLyr(src, j, set); return *this; };
-	Scla& AddLyr(const double *src, int j=0) { TraverseLyr(src, j, add); return *this; };
-	Scla& MnsLyr(const double *src, int j=0) { TraverseLyr(src, j, mns); return *this; };
-	Scla& MltLyr(const double *src, int j=0) { TraverseLyr(src, j, mlt); return *this; };
-	Scla& DvdLyr(const double *src, int j=0) { TraverseLyr(src, j, dvd); return *this; };
+	Scla& SetLyr(const double *src, int j=0) { TravLyr(src, j, set); return *this; };
+	Scla& AddLyr(const double *src, int j=0) { TravLyr(src, j, add); return *this; };
+	Scla& MnsLyr(const double *src, int j=0) { TravLyr(src, j, mns); return *this; };
+	Scla& MltLyr(const double *src, int j=0) { TravLyr(src, j, mlt); return *this; };
+	Scla& DvdLyr(const double *src, int j=0) { TravLyr(src, j, dvd); return *this; };
 	// note: bulk functions will change the boundary
-	Scla& operator= (double a) { TraverseBlk(a, set); return *this; };
-	Scla& operator+=(double a) { TraverseBlk(a, add); return *this; };
-	Scla& operator-=(double a) { TraverseBlk(a, mns); return *this; };
-	Scla& operator*=(double a) { TraverseBlk(a, mlt); return *this; };
-	Scla& operator/=(double a) { TraverseBlk(a, dvd); return *this; };
+	Scla& operator= (double a) { TravBlk(a, set); return *this; };
+	Scla& operator+=(double a) { TravBlk(a, add); return *this; };
+	Scla& operator-=(double a) { TravBlk(a, mns); return *this; };
+	Scla& operator*=(double a) { TravBlk(a, mlt); return *this; };
+	Scla& operator/=(double a) { TravBlk(a, dvd); return *this; };
 
-	Scla& operator= (const Scla &src) { TraverseBlk(src.SeeBlk(), set); return *this; };
-	Scla& operator+=(const Scla &src) { TraverseBlk(src.SeeBlk(), add); return *this; };
-	Scla& operator-=(const Scla &src) { TraverseBlk(src.SeeBlk(), mns); return *this; };
-	Scla& operator*=(const Scla &src) { TraverseBlk(src.SeeBlk(), mlt); return *this; };
-	Scla& operator/=(const Scla &src) { TraverseBlk(src.SeeBlk(), dvd); return *this; };
+	Scla& operator= (const Scla &src) { TravBlk(src.SeeBlk(), set); return *this; };
+	Scla& operator+=(const Scla &src) { TravBlk(src.SeeBlk(), add); return *this; };
+	Scla& operator-=(const Scla &src) { TravBlk(src.SeeBlk(), mns); return *this; };
+	Scla& operator*=(const Scla &src) { TravBlk(src.SeeBlk(), mlt); return *this; };
+	Scla& operator/=(const Scla &src) { TravBlk(src.SeeBlk(), dvd); return *this; };
 
 	// IO functions
 	void FileIO(const char *path, const char *name, char mode) const;
@@ -114,11 +114,11 @@ private:
 	static void mlt(double &b, double a) {b *= a;};
 	static void dvd(double &b, double a) {b /= a;};
 
-	void TraverseLyr(double a,          int j, void (*pfun)(double&, double));
-	void TraverseLyr(const double *src, int j, void (*pfun)(double&, double));
+	void TravLyr(double a,          int j, void (*pfun)(double&, double));
+	void TravLyr(const double *src, int j, void (*pfun)(double&, double));
 
-	void TraverseBlk(double a,          void (*pfun)(double&, double));
-	void TraverseBlk(const double *src, void (*pfun)(double&, double));
+	void TravBlk(double a,          void (*pfun)(double&, double));
+	void TravBlk(const double *src, void (*pfun)(double&, double));
 };
 
 

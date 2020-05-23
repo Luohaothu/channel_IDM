@@ -56,7 +56,7 @@ private:
 
 	// ***** construct body forces ***** //
 	static void CalcFb(Vctr &fb, const double mpg[3]);
-	static void AddFb(Vctr &fb, const Vctr &f);
+	static void CalcFb(Vctr &fb, const double mpg[3], const Vctr &f);
 
 	// ***** adjusting mean pressure gradient ***** //
 	static void CalcMpg(double mpg[3], Vctr &vel, Vctr &velh, double dt, const double mpgref[3] = NULL);

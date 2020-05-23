@@ -362,7 +362,7 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 }
 
 
-#define DIRTY_TRICK_
+#define DIRTY_TRICK_SGS_
 
 void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel)
 // calculate sub-grid-scale stress by direct filter of vel
@@ -381,7 +381,7 @@ void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel)
 	Scla vw(vel.ms), &vv = vc;
 	Scla uw(vel.ms), &ww = wc;
 
-#ifndef DIRTY_TRICK_
+#ifndef DIRTY_TRICK_SGS_
 	// calculate cross terms at cell-centers
 	(uv = uc) *= vc;
 	(vw = vc) *= wc; vv *= vc;
@@ -399,7 +399,7 @@ void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel)
 	Scla &tau33 = normal[3], &tau13 = shear[3];
 
 
-#ifndef DIRTY_TRICK_
+#ifndef DIRTY_TRICK_SGS_
 	// normal stress at cell-centers
 	for (int j=0; j<=ms.Ny; j++) {
 	for (int k=0; k<=ms.Nz; k++) {
@@ -417,7 +417,7 @@ void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel)
 
 	// shear stress on edges
 
-#ifndef DIRTY_TRICK_
+#ifndef DIRTY_TRICK_SGS_
 	for (int j=0; j<=ms.Ny; j++) {
 #else
 	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {

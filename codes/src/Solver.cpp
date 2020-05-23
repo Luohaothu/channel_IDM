@@ -224,8 +224,9 @@ void Solver::CalcFb(Vctr &fb, const double mpg[3])
 	fb[2] = - mpg[1];
 	fb[3] = - mpg[2];
 }
-void Solver::AddFb(Vctr &fb, const Vctr &f)
+void Solver::CalcFb(Vctr &fb, const double mpg[3], const Vctr &f)
 {
+	CalcFb(fb, mpg);
 	fb[1] += f[1];
 	fb[2] += f[2];
 	fb[3] += f[3];
@@ -341,10 +342,8 @@ void Solver::Assimilate(const Vctr &velexp, double dt, double en, double a)
 		while (assimilator.IfIter(en, vel)) { // converged or reached max iterations yet
 			
 			RollBack(fld_, fldh_, dt);        // roll back the flow fields to the old time step
-			CalcFb(fb_, mpg_);                // MPG cannot be rolled back, but it should not matter
-
-			AddFb(fb_, assimilator.GetAsmForce(vel, vis_, dt, a)); // compute adjoint state and apply assimilating force
-			
+			CalcFb(fb_, mpg_,                 // MPG cannot be rolled back, but it should not matter
+				assimilator.GetAsmForce(vel, vis_, dt, a));   // compute adjoint state and apply assimilating force
 			IDM::calc(fld_, fldh_, vis_, fb_, bc_, sbc_, dt); // solve the time step again under the new force
 		}
 

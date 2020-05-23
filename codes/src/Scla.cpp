@@ -105,19 +105,19 @@ void Scla::ifftz()
 
 /***** convinent operations for whole arrays *****/
 
-void Scla::TraverseLyr(double a, int j, void (*pfun)(double &b, double a))
+void Scla::TravLyr(double a, int j, void (*pfun)(double &b, double a))
 {
 	for (int k=0; k<=Nz; k++)
 	for (int i=0; i<=Nx; i++)
 		pfun(q_[ms.idx(i,j,k)], a);
 }
-void Scla::TraverseLyr(const double *src, int j, void (*pfun)(double &b, double a))
+void Scla::TravLyr(const double *src, int j, void (*pfun)(double &b, double a))
 {
 	for (int k=0; k<=Nz; k++)
 	for (int i=0; i<=Nx; i++)
 		pfun(q_[ms.idx(i,j,k)], src[ms.idx(i,0,k)]);
 }
-void Scla::TraverseBlk(double a, void (*pfun)(double&, double))
+void Scla::TravBlk(double a, void (*pfun)(double&, double))
 {
 	#pragma omp parallel for
 	for (int j=0; j<=Ny; j++)
@@ -125,7 +125,7 @@ void Scla::TraverseBlk(double a, void (*pfun)(double&, double))
 	for (int i=0; i<=Nx; i++)
 		pfun(q_[ms.idx(i,j,k)], a);
 }
-void Scla::TraverseBlk(const double *src, void (*pfun)(double&, double))
+void Scla::TravBlk(const double *src, void (*pfun)(double&, double))
 {
 	#pragma omp parallel for
 	for (int j=0; j<=Ny; j++) {
