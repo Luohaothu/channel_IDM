@@ -362,44 +362,30 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 }
 
 
-#define DIRTY_TRICK_SGS_
-
 void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel)
-// calculate sub-grid-scale stress by direct filter of vel
-// normal stress at cell-centers and shear stress on edges
+// calculate sub-grid-scale stress by direct filter of resolved velocity
+// normal stress at cell-centers and shear stress on edges, all up to virtual boundary
 {
+	const Mesh &ms = shear.ms; // refer to SPARSE mesh on which sgs stress is deployed
+	const Mesh &ms0 = vel.ms;  // refer to RESOLVED mesh on which velocity is deployed
+
 	const Scla &u = vel[1];
 	const Scla &v = vel[2];
 	const Scla &w = vel[3];
-
-	// interpolate resolved velocity to cell-centers (virtual boundary use linear extrapolation and ignore periodicity)
-	Scla uc(vel.ms); u.Ugrid2CellCenter(uc);
-	Scla vc(vel.ms); v.Vgrid2CellCenter(vc);
-	Scla wc(vel.ms); w.Wgrid2CellCenter(wc);
-
-	Scla uv(vel.ms), &uu = uc;
-	Scla vw(vel.ms), &vv = vc;
-	Scla uw(vel.ms), &ww = wc;
-
-#ifndef DIRTY_TRICK_SGS_
-	// calculate cross terms at cell-centers
-	(uv = uc) *= vc;
-	(vw = vc) *= wc; vv *= vc;
-	(uw = uc) *= wc; uu *= uc; ww *= wc;
-#else
-	(uv = uc) *= vc;
-	(vw = vc) *= wc;
-	(uw = uc) *= wc;
-#endif
-
-	const Mesh &ms = shear.ms; // ms refer to sparse mesh while vel is fully resolved
 
 	Scla &tau11 = normal[1], &tau12 = shear[1];
 	Scla &tau22 = normal[2], &tau23 = shear[2];
 	Scla &tau33 = normal[3], &tau13 = shear[3];
 
+	Scla uu(ms0), uv(ms0), &uc = uu; u.Ugrid2CellCenter(uc); // cell-center-interpolation are for cross terms
+	Scla vv(ms0), vw(ms0), &vc = vv; v.Vgrid2CellCenter(vc); // virtual boundary use linear extrapolation
+	Scla ww(ms0), uw(ms0), &wc = ww; w.Wgrid2CellCenter(wc); // with periodicity ignored
 
-#ifndef DIRTY_TRICK_SGS_
+	// calculate cross terms at cell-centers
+	(uv = uc) *= vc;
+	(vw = vc) *= wc; vv *= vc;
+	(uw = uc) *= wc; uu *= uc; ww *= wc;
+
 	// normal stress at cell-centers
 	for (int j=0; j<=ms.Ny; j++) {
 	for (int k=0; k<=ms.Nz; k++) {
@@ -409,20 +395,13 @@ void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel)
 		double y = ms.yc(j), dy = 0;
 		double z = ms.zc(k), dz = ms.dz(k);
 
-		tau11(i,j,k) = pow(Filter::FilterNode(x,y,z,dx,dy,dz,u,1), 2.) - Filter::FilterNode(x,y,z,dx,dy,dz,uu,0);
-		tau22(i,j,k) = pow(Filter::FilterNode(x,y,z,dx,dy,dz,v,2), 2.) - Filter::FilterNode(x,y,z,dx,dy,dz,vv,0);
-		tau33(i,j,k) = pow(Filter::FilterNode(x,y,z,dx,dy,dz,w,3), 2.) - Filter::FilterNode(x,y,z,dx,dy,dz,ww,0);
+		tau11(i,j,k) = pow(Filter::FilterNodeU(x,y,z,dx,dy,dz,u), 2.) - Filter::FilterNodeA(x,y,z,dx,dy,dz,uu);
+		tau22(i,j,k) = pow(Filter::FilterNodeV(x,y,z,dx,dy,dz,v), 2.) - Filter::FilterNodeA(x,y,z,dx,dy,dz,vv);
+		tau33(i,j,k) = pow(Filter::FilterNodeW(x,y,z,dx,dy,dz,w), 2.) - Filter::FilterNodeA(x,y,z,dx,dy,dz,ww);
 	}}}
-#endif
 
 	// shear stress on edges
-
-#ifndef DIRTY_TRICK_SGS_
 	for (int j=0; j<=ms.Ny; j++) {
-#else
-	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
-#endif
-
 	for (int k=0; k<=ms.Nz; k++) {
 	for (int i=0; i<=ms.Nx; i++) {
 
@@ -431,31 +410,94 @@ void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel)
 		double z = ms.zc(k), dz = ms.dz(k);
 
 		if (i>0 && j>0) tau12(i,j,k) =
-			Filter::FilterNode(x,y,z,dx,dy,dz,u,1) *
-			Filter::FilterNode(x,y,z,dx,dy,dz,v,2) -
-			Filter::FilterNode(x,y,z,dx,dy,dz,uv,0);
+			Filter::FilterNodeU(x,y,z,dx,dy,dz,u) *
+			Filter::FilterNodeV(x,y,z,dx,dy,dz,v) -
+			Filter::FilterNodeA(x,y,z,dx,dy,dz,uv);
 
 		x = ms.xc(i); dx = ms.dx(i);
 		y = ms.y (j); dy = 0;
 		z = ms.z (k); dz = ms.hz(k);
 
 		if (j>0 && k>0) tau23(i,j,k) =
-			Filter::FilterNode(x,y,z,dx,dy,dz,v,2) *
-			Filter::FilterNode(x,y,z,dx,dy,dz,w,3) -
-			Filter::FilterNode(x,y,z,dx,dy,dz,vw,0);
+			Filter::FilterNodeV(x,y,z,dx,dy,dz,v) *
+			Filter::FilterNodeW(x,y,z,dx,dy,dz,w) -
+			Filter::FilterNodeA(x,y,z,dx,dy,dz,vw);
 
 		x = ms.x (i); dx = ms.hx(i);
 		y = ms.yc(j); dy = ms.dy(j);
 		z = ms.z (k); dz = ms.hz(k);
 
 		if (i>0 && k>0) tau13(i,j,k) =
-			Filter::FilterNode(x,y,z,dx,dy,dz,u,1) *
-			Filter::FilterNode(x,y,z,dx,dy,dz,w,3) -
-			Filter::FilterNode(x,y,z,dx,dy,dz,uw,0);
+			Filter::FilterNodeU(x,y,z,dx,dy,dz,u) *
+			Filter::FilterNodeW(x,y,z,dx,dy,dz,w) -
+			Filter::FilterNodeA(x,y,z,dx,dy,dz,uw);
 	}}}
 }
 
 
+
+
+#define DIRTY_TRICK_SGS_
+
+void SGS::SubGridShearStress(Vctr &shear, const Vctr &vel)
+// calculate sgs shear stress on edges up to virtual boundary
+// by direct filter of resolved velocity
+{
+	const Mesh &ms = shear.ms; // refer to SPARSE mesh on which sgs stress is deployed
+	const Mesh &ms0 = vel.ms;  // refer to RESOLVED mesh on which velocity is deployed
+
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
+
+	Scla uv(ms0), &tau12 = shear[1], &uc = uv; u.Ugrid2CellCenter(uc); // cell-center-interpolation are for cross terms
+	Scla vw(ms0), &tau23 = shear[2], &vc = vw; v.Vgrid2CellCenter(vc); // virtual boundary use linear extrapolation
+	Scla uw(ms0), &tau13 = shear[3], &wc = uw; w.Wgrid2CellCenter(wc); // with periodicity ignored
+
+	// calculate cross terms at cell-centers
+	Scla temp(ms0);
+	temp = uc;
+	uv *= vc;
+	vw *= wc;
+	uw *= temp;
+
+	// solve shear stress on edges
+#ifndef DIRTY_TRICK_SGS_
+	for (int j=0; j<=ms.Ny; j++) {
+#else
+	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
+#endif
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+
+		double x = ms.x (i), dx = ms.hx(i);
+		double y = ms.y (j), dy = 0;
+		double z = ms.zc(k), dz = ms.dz(k);
+
+		if (i>0 && j>0) tau12(i,j,k) =
+			Filter::FilterNodeU(x,y,z,dx,dy,dz,u) *
+			Filter::FilterNodeV(x,y,z,dx,dy,dz,v) -
+			Filter::FilterNodeA(x,y,z,dx,dy,dz,uv);
+
+		x = ms.xc(i); dx = ms.dx(i);
+		y = ms.y (j); dy = 0;
+		z = ms.z (k); dz = ms.hz(k);
+
+		if (j>0 && k>0) tau23(i,j,k) =
+			Filter::FilterNodeV(x,y,z,dx,dy,dz,v) *
+			Filter::FilterNodeW(x,y,z,dx,dy,dz,w) -
+			Filter::FilterNodeA(x,y,z,dx,dy,dz,vw);
+
+		x = ms.x (i); dx = ms.hx(i);
+		y = ms.yc(j); dy = ms.dy(j);
+		z = ms.z (k); dz = ms.hz(k);
+
+		if (i>0 && k>0) tau13(i,j,k) =
+			Filter::FilterNodeU(x,y,z,dx,dy,dz,u) *
+			Filter::FilterNodeW(x,y,z,dx,dy,dz,w) -
+			Filter::FilterNodeA(x,y,z,dx,dy,dz,uw);
+	}}}
+}
 
 
 

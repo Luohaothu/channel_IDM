@@ -57,6 +57,26 @@ double Vctr::Convection(int i, int j, int k) const
 		+	.5 * fabs(w[kp] + w[id]) / ms.dz(k);
 }
 
+const double* Vctr::ShearStrain(int i, int j, int k) const
+// compute the 3 shear components of strain rate tensor on cell edges up to virtual boundary
+{
+	int id =              ms.idx(i,j,k);
+	int im, jm, km;       ms.imx(i,j,k,im,jm,km);
+	double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
+
+	const Scla &u = v1_;
+	const Scla &v = v2_;
+	const Scla &w = v3_;
+
+	static double sr[3]; // will be overwritten even called from different objects of this class
+
+	sr[0] = .5 * ((u[id]-u[jm]) / hyc + (v[id]-v[im]) / hxc); // S_12
+	sr[1] = .5 * ((v[id]-v[km]) / hzc + (w[id]-w[jm]) / hyc); // S_23
+	sr[2] = .5 * ((u[id]-u[km]) / hzc + (w[id]-w[im]) / hxc); // S_13
+
+	return sr;
+}
+
 const double* Vctr::Strainrate(int i, int j, int k) const
 /* compute the strain rate tensor of a vector field at the center of cell (i,j,k) */
 // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time

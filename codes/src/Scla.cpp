@@ -289,8 +289,8 @@ void Scla::Vgrid2CellCenter(Scla &dst) const
 	double c1 = .5 * ms.dy(0) / ms.dy(1);
 	double c2 = .5 * ms.dy(Ny)/ ms.dy(Ny-1);
 
-	for (int i=0; i<=Nx; i++) {
 	for (int k=0; k<=Nz; k++) {
+	for (int i=0; i<=Nx; i++) {
 		for (int j=1; j<Ny; j++) {
 			id = ms.idx(i,j,k);
 			jp = ms.idx(i,ms.jpa(j),k);
@@ -306,8 +306,8 @@ void Scla::Wgrid2CellCenter(Scla &dst) const
 	double c1 = .5 * ms.dz(0) / ms.dz(1);
 	double c2 = .5 * ms.dz(Nz)/ ms.dz(Nz-1);
 
-	for (int i=0; i<=Nx; i++) {
 	for (int j=0; j<=Ny; j++) {
+	for (int i=0; i<=Nx; i++) {
 		for (int k=1; k<Nz; k++) {
 			id = ms.idx(i,j,k);
 			kp = ms.idx(i,j,ms.kpa(k));

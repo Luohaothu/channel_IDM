@@ -11,6 +11,7 @@ void DynamicSmarg (Scla &nut, const Vctr &vel);
 void DynamicVreman(Scla &nut, const Vctr &vel, double Re);
 
 void SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel);
+void SubGridShearStress(Vctr &shear, const Vctr &vel);
 
 } // namespace SGS
 

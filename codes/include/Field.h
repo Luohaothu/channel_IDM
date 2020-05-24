@@ -138,6 +138,7 @@ public:
 	double  Module    (int i, int j, int k) const;
 	double  Divergence(int i, int j, int k) const;
 	double  Convection(int i, int j, int k) const;
+	const double* ShearStrain(int i, int j, int k) const;
 	const double* Strainrate(int i, int j, int k) const;
 	const double* Gradient  (int i, int j, int k) const;
 
