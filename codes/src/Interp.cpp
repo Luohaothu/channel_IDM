@@ -10,7 +10,7 @@ double Interp::Shift(double x, double x0, double x1)
 	return x==x1 ? x : fmod(fmod(x-x0, l) + l, l) + x0;
 }
 
-double Interp::BiSearch(double x, const double *xs, int i0, int in)
+int Interp::BiSearch(double x, const double *xs, int i0, int in)
 // binary search in range [i0,in) for index of the largest element <= x
 {
 	int mid, lo = i0, hi = in;

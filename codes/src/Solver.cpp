@@ -65,6 +65,7 @@ void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0)
 	ModifyBoundaryVis(vis_, get_vel(), solver0.get_vel(), Re);
 
 	Bcond::ChannelDirichlet(bc_, sbc_, ms, solver0.get_vel());
+	// Bcond::ChannelRobin(bc_, sbc_, get_vel(), vis_, solver0.get_vel(), solver0.get_vis());
 
 	CalcFb(fb_, mpg_);
 
@@ -138,16 +139,7 @@ void Solver::CalcVis(Flow &vis, const Vctr &vel, double Re, int sgstyp)
 {
 	Scla &nuc = (vis.GetScl() = 0);
 
-	// if (2 <= sgstyp && sgstyp <= 4) {
-
-	// 	static SGS sgs(vis.ms);
-
-	// 	switch (sgstyp) {
-	// 	case 2: sgs.Smargorinsky (nuc, vel, Re, .18); break;
-	// 	case 3: sgs.DynamicSmarg (nuc, vel         ); break;
-	// 	case 4: sgs.DynamicVreman(nuc, vel, Re     ); break;
-	// 	}
-	// }
+	// static SGS sgs(vis.ms);
 
 	switch (sgstyp) {
 	case 2: SGS::Smargorinsky (nuc, vel, Re, .18); break;
@@ -183,38 +175,95 @@ void Solver::ModifyBoundaryVis(Flow &vis, const Vctr &vel, double tau12)
 
 void Solver::ModifyBoundaryVis(Flow &vis, const Vctr &vel, const Vctr &vel0, double Re)
 {
-	const Mesh &ms = vis.ms;
-	const Scla &u = vel[1];
-	const Scla &v = vel[2];
-	const Scla &w = vel[3];
+	const Mesh &ms = vis.ms, &ms0 = vel0.ms;
 
-	Scla &nux = vis.GetVec(1);
-	Scla &nuz = vis.GetVec(3);
+	const Scla &u = vel[1], &u0 = vel0[1];
+	const Scla &v = vel[2], &v0 = vel0[2];
+	const Scla &w = vel[3], &w0 = vel0[3];
 
-	Vctr shear(ms);
-	Vctr &normal = shear; // no intend to solve normal stress, it will be overwritten by shear stress
+	Vctr shear(ms); // sgs shear stress filtered from resolved velocity field
+	SGS::SubGridShearStress(shear, vel0);
 
-	SGS::SubGridStress(shear, normal, vel0);
+	Scla &nux = vis.GetVec(1), &tau23 = shear[2];
+	Scla &nuz = vis.GetVec(3), &tau12 = shear[1];
 
+	// for top & bottom real boundaries
 	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
-	for (int k=1; k<=ms.Nz; k++) {
-	for (int i=1; i<=ms.Nx; i++) {
-		// boundary sgs shear stress filtered from resolved velocity field
-		double tau12 = shear[1](i,j,k);
-		double tau23 = shear[2](i,j,k);
 
-		// boundary strain rate of the coarse velocity field
-		double s12 = .5 * (
-			1./ms.hx(i) * (v(i,j,k) - v(ms.ima(i),j,k)) +
-			1./ms.hy(j) * (u(i,j,k) - u(i,ms.jma(j),k)) );
+		double r12dns = 0;
+		double r12les = 0;
+		double tau12m = 0;
 
-		double s23 = .5 * (
-			1./ms.hy(k) * (w(i,j,k) - w(i,ms.jma(j),k)) +
-			1./ms.hz(j) * (v(i,j,k) - v(i,j,ms.kma(k))) );
+		double y = ms.y(j);
 
-		if (k<ms.Nz) nuz(i,j,k) = fmax(1./Re + tau12 / s12, 0);
-		if (i<ms.Nx) nux(i,j,k) = fmax(1./Re + tau23 / s23, 0);
-	}}}
+		// calculate reference (DNS) Reynolds shear stress
+		int j3u = Interp::BiSearch(y, ms0.yc(), 0, ms0.Ny);
+		int j3v = Interp::BiSearch(y, ms0.y (), 1, ms0.Ny);
+		int j4u = j3u + 1;
+		int j4v = j3v + 1;
+
+		double um3 = u0.meanxz(j3u), y3u = ms0.yc(j3u);
+		double um4 = u0.meanxz(j4u), y4u = ms0.yc(j4u);
+		double vm3 = v0.meanxz(j3v), y3v = ms0.y(j3v);
+		double vm4 = v0.meanxz(j4v), y4v = ms0.y(j4v);
+
+		double um = (um3 * (y4u-y) + um4 * (y-y3u)) / (y4u-y3u);
+		double vm = (vm3 * (y4v-y) + vm4 * (y-y3v)) / (y4v-y3v);
+
+		for (int k=1; k<ms0.Nz; k++) {
+		for (int i=1; i<ms0.Nx; i++) {
+			// calculate uv on z-edges and interpolate to the desired y position
+			double x = ms0.x(i);
+			double z = ms0.zc(k);
+			r12dns += (Interp::InterpNodeU(x,y,z,u0) - um)
+			        * (Interp::InterpNodeV(x,y,z,v0) - vm) / ((ms0.Nx-1) * (ms0.Nz-1));
+		}}
+
+		// calculate resolved Reynolds stress and mean sgs stress
+		j3u = ms.jma(j);
+		j4u = j;
+		um3 = u.meanxz(j3u); y3u = ms.yc(j3u);
+		um4 = u.meanxz(j4u); y4u = ms.yc(j4u);
+		um = (um3 * (y4u-y) + um4 * (y-y3u)) / (y4u-y3u);
+		vm = v.meanxz(j);
+
+		for (int k=1; k<ms.Nz; k++) {
+		for (int i=1; i<ms.Nx; i++) {
+
+			int id =              ms.idx(i,j,k);
+			int im, jm, km;       ms.imx(i,j,k,im,jm,km);
+			double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
+			double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
+			double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
+
+			double weight = 1. / ((ms.Nx-1) * (ms.Nz-1));
+
+			r12les += (.5/hyc * (u[id]*dym + u[jm]*dyc) - um)
+			        * (.5/hxc * (v[id]*dxm + v[im]*dxc) - vm) * weight;
+
+			tau12m += tau12[id] * weight;
+		}}
+
+		double rescale = fabs((r12dns - r12les) / tau12m);//1.5;//
+
+		cout << rescale << endl;//"\t" << r12dns << "\t" << r12les << "\t" << tau12m << endl;
+
+		tau12.MltLyr(rescale, j);
+		tau23.MltLyr(rescale, j);
+
+		for (int k=1; k<=ms.Nz; k++) {
+		for (int i=1; i<=ms.Nx; i++) {
+
+			// boundary strain rate of the coarse velocity field
+			const double *sr = vel.ShearStrain(i,j,k);
+
+			double tau12sgs = tau12(i,j,k), s12 = sr[0];
+			double tau23sgs = tau23(i,j,k), s23 = sr[1];
+
+			if (k<ms.Nz) nuz(i,j,k) = 1./Re + fmax(.5 * tau12sgs / s12, 0);
+			if (i<ms.Nx) nux(i,j,k) = 1./Re + fmax(.5 * tau23sgs / s23, 0);
+		}}
+	}
 }
 
 
