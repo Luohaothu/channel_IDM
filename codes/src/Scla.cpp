@@ -231,6 +231,7 @@ double Scla::MeanWxy(int k) const
 double Scla::MeanU() const
 {
 	double sum = 0;
+	#pragma omp parallel for reduction(+: sum)
 	for (int j=1; j<Ny; j++)
 	for (int k=1; k<Nz; k++)
 		sum += MeanUx(j,k) * ms.dy(j) * ms.dz(k);
@@ -239,6 +240,7 @@ double Scla::MeanU() const
 double Scla::MeanV() const
 {
 	double sum = 0;
+	#pragma omp parallel for reduction(+: sum)
 	for (int k=1; k<Nz; k++)
 	for (int i=1; i<Nx; i++)
 		sum += MeanVy(i,k) * ms.dx(i) * ms.dz(k);
@@ -247,6 +249,7 @@ double Scla::MeanV() const
 double Scla::MeanW() const
 {
 	double sum = 0;
+	#pragma omp parallel for reduction(+: sum)
 	for (int j=1; j<Ny; j++)
 	for (int i=1; i<Nx; i++)
 		sum += MeanWz(i,j) * ms.dx(i) * ms.dy(j);
@@ -255,6 +258,7 @@ double Scla::MeanW() const
 double Scla::MeanA() const
 {
 	double sum = 0;
+	#pragma omp parallel for reduction(+: sum)
 	for (int j=1; j<Ny; j++)
 		sum += MeanVxz(j) * ms.dy(j);
 	return sum / ms.Ly;
@@ -268,15 +272,15 @@ double Scla::MeanA() const
 
 void Scla::Ugrid2CellCenter(Scla &dst) const
 {
-	int id, ip;
 	double c1 = .5 * ms.dx(0) / ms.dx(1);
 	double c2 = .5 * ms.dx(Nx)/ ms.dx(Nx-1);
 
+	#pragma omp parallel for
 	for (int j=0; j<=Ny; j++) {
 	for (int k=0; k<=Nz; k++) {
 		for (int i=1; i<Nx; i++) {
-			id = ms.idx(i,j,k);
-			ip = ms.idx(ms.ipa(i),j,k);
+			int id = ms.idx(i,j,k);
+			int ip = ms.idx(ms.ipa(i),j,k);
 			dst(i,j,k) = .5 * (q_[id] + q_[ip]);
 		}
 		dst(0, j,k) = (1+c1) * q_[ms.idx(1, j,k)] - c1 * q_[ms.idx(2,j,k)];
@@ -285,15 +289,15 @@ void Scla::Ugrid2CellCenter(Scla &dst) const
 }
 void Scla::Vgrid2CellCenter(Scla &dst) const
 {
-	int id, jp;
 	double c1 = .5 * ms.dy(0) / ms.dy(1);
 	double c2 = .5 * ms.dy(Ny)/ ms.dy(Ny-1);
 
+	#pragma omp parallel for
 	for (int k=0; k<=Nz; k++) {
 	for (int i=0; i<=Nx; i++) {
 		for (int j=1; j<Ny; j++) {
-			id = ms.idx(i,j,k);
-			jp = ms.idx(i,ms.jpa(j),k);
+			int id = ms.idx(i,j,k);
+			int jp = ms.idx(i,ms.jpa(j),k);
 			dst(i,j,k) = .5 * (q_[id] + q_[jp]);
 		}
 		dst(i,0, k) = (1+c1) * q_[ms.idx(i,1, k)] - c1 * q_[ms.idx(i,2,k)];
@@ -302,15 +306,15 @@ void Scla::Vgrid2CellCenter(Scla &dst) const
 }
 void Scla::Wgrid2CellCenter(Scla &dst) const
 {
-	int id, kp;
 	double c1 = .5 * ms.dz(0) / ms.dz(1);
 	double c2 = .5 * ms.dz(Nz)/ ms.dz(Nz-1);
 
+	#pragma omp parallel for
 	for (int j=0; j<=Ny; j++) {
 	for (int i=0; i<=Nx; i++) {
 		for (int k=1; k<Nz; k++) {
-			id = ms.idx(i,j,k);
-			kp = ms.idx(i,j,ms.kpa(k));
+			int id = ms.idx(i,j,k);
+			int kp = ms.idx(i,j,ms.kpa(k));
 			dst(i,j,k) = .5 * (q_[id] + q_[kp]);
 		}
 		dst(i,j,0 ) = (1+c1) * q_[ms.idx(i,j,1 )] - c1 * q_[ms.idx(i,j,2)];
@@ -323,65 +327,50 @@ void Scla::Wgrid2CellCenter(Scla &dst) const
 
 void Scla::CellCenter2EdgeX(Scla &dst) const
 {
-	for (int j=1; j<=Ny; j++) {
-	for (int k=1; k<=Nz; k++) {
+	#pragma omp parallel for
+	for (int j=1; j<=Ny; j++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hyc=ms.hy(j);
+	for (int k=1; k<=Nz; k++) { double dzm,dzp,dzc=ms.dz(k,dzm,dzp), hzc=ms.hz(k);
 	for (int i=0; i<=Nx; i++) {
 
 		int id =              ms.idx(i,j,k);
+		int jmkm =            ms.idx(i,ms.jma(j),ms.kma(k));
 		int im, jm, km;       ms.imx(i,j,k,im,jm,km);
-		int imjm, jmkm, imkm; ms.mmx(i,j,k,imjm,jmkm,imkm);
-
-		double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
-		double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
-		double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
 
 		dst[id] = .25/hyc/hzc * (
-			q_[id] * dym * dzm +
-			q_[jm] * dyc * dzm +
-			q_[km] * dym * dzc +
-			q_[jmkm] * dyc * dzc );
+			dym * dzm * q_[id] + dyc * dzm * q_[jm] +
+			dym * dzc * q_[km] + dyc * dzc * q_[jmkm] );
 	}}}
 }
 void Scla::CellCenter2EdgeY(Scla &dst) const
 {
+	#pragma omp parallel for
 	for (int j=0; j<=Ny; j++) {
-	for (int k=1; k<=Nz; k++) {
-	for (int i=1; i<=Nx; i++) {
+	for (int k=1; k<=Nz; k++) { double dzm,dzp,dzc=ms.dz(k,dzm,dzp), hzc=ms.hz(k);
+	for (int i=1; i<=Nx; i++) { double dxm,dxp,dxc=ms.dx(i,dxm,dxp), hxc=ms.hx(i);
 
 		int id =              ms.idx(i,j,k);
+		int imkm =            ms.idx(ms.ima(i),j,ms.kma(k));
 		int im, jm, km;       ms.imx(i,j,k,im,jm,km);
-		int imjm, jmkm, imkm; ms.mmx(i,j,k,imjm,jmkm,imkm);
-
-		double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
-		double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
-		double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
 
 		dst[id] = .25/hxc/hzc * (
-			q_[id] * dxm * dzm +
-			q_[im] * dxc * dzm +
-			q_[km] * dxm * dzc +
-			q_[imkm] * dxc * dzc );
+			dxm * dzm * q_[id] + dxc * dzm * q_[im] +
+			dxm * dzc * q_[km] + dxc * dzc * q_[imkm] );
 	}}}
 }
 void Scla::CellCenter2EdgeZ(Scla &dst) const
 {
-	for (int j=1; j<=Ny; j++) {
+	#pragma omp parallel for
+	for (int j=1; j<=Ny; j++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hyc=ms.hy(j);
 	for (int k=0; k<=Nz; k++) {
-	for (int i=1; i<=Nx; i++) {
+	for (int i=1; i<=Nx; i++) { double dxm,dxp,dxc=ms.dx(i,dxm,dxp), hxc=ms.hx(i);
 
 		int id =              ms.idx(i,j,k);
+		int imjm =            ms.idx(ms.ima(i),ms.jma(j),k);
 		int im, jm, km;       ms.imx(i,j,k,im,jm,km);
-		int imjm, jmkm, imkm; ms.mmx(i,j,k,imjm,jmkm,imkm);
-
-		double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
-		double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
-		double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
 
 		dst[id] = .25/hxc/hyc * (
-			q_[id] * dxm * dym +
-			q_[im] * dxc * dym +
-			q_[jm] * dxm * dyc +
-			q_[imjm] * dxc * dyc );
+			dxm * dym * q_[id] + dxc * dym * q_[im] +
+			dxm * dyc * q_[jm] + dxc * dyc * q_[imjm] );
 	}}}
 }
 

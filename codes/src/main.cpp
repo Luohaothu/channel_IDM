@@ -1,4 +1,3 @@
-#include <sys/time.h>
 #include <omp.h>
 
 #include "Para.h"
@@ -9,9 +8,7 @@ using namespace std;
 
 
 /***** computation mode *****/
-# define AUXIMAIN // DEFAULT //
-
-// #define TIME_TEST
+# define DEFAULT // AUXIMAIN //
 
 
 void Config(int n, const Para &para);
@@ -42,27 +39,11 @@ int main()
 	int tstep = Initiate(solver, para);
 	if (tstep == 0) Output(para, solver, tstep);
 
-
-	#ifdef TIME_TEST
-	struct timeval time0, time1;
-	long duration = 0;
-	gettimeofday(&time0, NULL);
-	#endif
-
-
 	// main loop
 	while (tstep++ < para.Nt) {
 		solver.evolve(para.Re, para.dt, para.bftype);
 		Output(para, solver, tstep);
 	}
-
-
-	#ifdef TIME_TEST
-	gettimeofday(&time1, NULL);
-	duration = 1e6 * (time1.tv_sec - time0.tv_sec) + (time1.tv_usec - time0.tv_usec);
-	cout << "Time used: " << duration << " ms" << endl;
-	#endif
-
 
 	cout << "\nComputation finished!" << endl;
 }

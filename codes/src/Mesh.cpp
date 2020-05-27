@@ -127,7 +127,9 @@ void Mesh::hmx(int i, int j, int k, double &hxm, double &hym, double &hzm) const
 // double hxp, hyp, hzp; ms.hpx(i,j,k,hxp,hyp,hzp);
 // double hxm, hym, hzm; ms.hmx(i,j,k,hxm,hym,hzm);
 
-
+// for (int j=1; j<ms.Ny; j++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hym,hyp,hyc=ms.hy(j,hym,hyp);
+// for (int k=1; k<ms.Nz; k++) { double dzm,dzp,dzc=ms.dz(k,dzm,dzp), hzm,hzp,hzc=ms.hz(k,hzm,hzp);
+// for (int i=1; i<ms.Nx; i++) { double dxm,dxp,dxc=ms.dx(i,dxm,dxp), hxm,hxp,hxc=ms.hx(i,hxm,hxp);
 
 
 

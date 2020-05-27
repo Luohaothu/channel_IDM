@@ -153,20 +153,21 @@ public:
 	double hx(int i) const { return geo.hx[i]; };
 	double hy(int j) const { return geo.hy[j]; };
 	double hz(int k) const { return geo.hz[k]; };
-
 	double dx(int i) const { return geo.dx[i]; };
 	double dy(int j) const { return geo.dy[j]; };
 	double dz(int k) const { return geo.dz[k]; };
 
-	double kx(int i) const { return geo.kx[i]; };
-	double kz(int k) const { return geo.kz[k]; };
-
+	double hx(int i, double &hxm, double &hxp) const { hxm = hx(i-1); hxp = hx(i+1); return hx(i); };
+	double hy(int j, double &hym, double &hyp) const { hym = hy(j-1); hyp = hy(j+1); return hy(j); };
+	double hz(int k, double &hzm, double &hzp) const { hzm = hz(k-1); hzp = hz(k+1); return hz(k); };
+	double dx(int i, double &dxm, double &dxp) const { dxm = dx(i-1); dxp = dx(i+1); return dx(i); };
+	double dy(int j, double &dym, double &dyp) const { dym = dy(j-1); dyp = dy(j+1); return dy(j); };
+	double dz(int k, double &dzm, double &dzp) const { dzm = dz(k-1); dzp = dz(k+1); return dz(k); };
+	
+	double kx (int i) const { return geo.kx [i]; };
+	double kz (int k) const { return geo.kz [k]; };
 	double kx2(int i) const { return geo.kx2[i]; };
 	double kz2(int k) const { return geo.kz2[k]; };
-
-	double dx2(int i) const { return pow(dx(i), 2.); };
-	double dy2(int j) const { return pow(dy(j), 2.); };
-	double dz2(int k) const { return pow(dz(k), 2.); };
 
 	// batch indexing
 	void ipx(int i, int j, int k, int &ip, int &jp, int &kp) const;
@@ -184,7 +185,7 @@ public:
 	void hcx(int i, int j, int k, double &hxc, double &hyc, double &hzc) const;
 	void hpx(int i, int j, int k, double &hxp, double &hyp, double &hzp) const;
 	void hmx(int i, int j, int k, double &hxm, double &hym, double &hzm) const;
-	
+
 private:
 	const Geometry &geo;
 
