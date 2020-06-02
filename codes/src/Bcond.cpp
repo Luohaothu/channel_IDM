@@ -32,6 +32,7 @@ void Bcond::ChannelDirichlet(Boundaries &bc, Boundaries &sbc, const Mesh &ms, co
 	const Scla &v = vel[2];
 	const Scla &w = vel[3];
 
+	#pragma omp parallel for
 	for (int k=0; k<=ms.Nz; k++) {
 	for (int i=0; i<=ms.Nx; i++) {
 

@@ -8,7 +8,7 @@ using namespace std;
 
 
 /***** computation mode *****/
-# define DEFAULT // AUXIMAIN //
+# define AUXIMAIN // DEFAULT //
 
 
 void Config(int n, const Para &para);
@@ -67,11 +67,6 @@ int main()
 	geo1.InitMesh(para1.dy_min);
 
 	// geo1.AlignBoundaryYc(geo0);
-
-	// // align OFW boundary yc to the FC yc
-	// int jb = (geo0.Ny - geo1.Ny) / 2;
-	// geo1.yc[0]       = geo0.yc[jb];
-	// geo1.yc[geo1.Ny] = geo0.yc[geo0.Ny-jb];
 
 	geo0.InitInterval();   geo1.InitInterval();
 	geo0.InitWaveNumber(); geo1.InitWaveNumber();

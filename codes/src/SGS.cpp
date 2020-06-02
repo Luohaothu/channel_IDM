@@ -463,9 +463,11 @@ void SGS::SubGridShearStress(Vctr &shear, const Vctr &vel)
 
 	// solve shear stress on edges
 #ifndef DIRTY_TRICK_SGS_
+	#pragma omp parallel for
 	for (int j=0; j<=ms.Ny; j++) {
 #else
 	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
+	#pragma omp parallel for
 #endif
 	for (int k=0; k<=ms.Nz; k++) {
 	for (int i=0; i<=ms.Nx; i++) {

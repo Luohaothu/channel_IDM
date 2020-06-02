@@ -185,26 +185,26 @@ static double BoxFilter3(
 	// divide and conquer
 	if (j2-j1 > 1) {
 		y = ys[j = (j1+j2) / 2];
-		#pragma omp task shared(f1, xm,xp,ym,y,zm,zp, xs,ys,zs,q, i0,in,j0,j,k0,kn) if (recursdep > threshold)
+		// #pragma omp task shared(f1, xm,xp,ym,y,zm,zp, xs,ys,zs,q, i0,in,j0,j,k0,kn) if (recursdep > threshold)
 		f1 = BoxFilter3(xm,xp,ym,y,zm,zp, xs,ys,zs,q, i0,in,j0,j,k0,kn); // only line that is tasked by omp
 		f2 = BoxFilter3(xm,xp,y,yp,zm,zp, xs,ys,zs,q, i0,in,j,jn,k0,kn);
-		#pragma omp taskwait
+		// #pragma omp taskwait
 		return 1. / (yp-ym) * ((y-ym) * f1 + (yp-y) * f2);
 	}
 	else if (k2-k1 > 1) {
 		z = zs[k = (k1+k2) / 2];
-		#pragma omp task shared(f1, xm,xp,ym,yp,zm,z, xs,ys,zs,q, i0,in,j0,jn,k0,k) if (recursdep > threshold)
+		// #pragma omp task shared(f1, xm,xp,ym,yp,zm,z, xs,ys,zs,q, i0,in,j0,jn,k0,k) if (recursdep > threshold)
 		f1 = BoxFilter3(xm,xp,ym,yp,zm,z, xs,ys,zs,q, i0,in,j0,jn,k0,k); // only line that is tasked by omp
 		f2 = BoxFilter3(xm,xp,ym,yp,z,zp, xs,ys,zs,q, i0,in,j0,jn,k,kn);
-		#pragma omp taskwait
+		// #pragma omp taskwait
 		return 1. / (zp-zm) * ((z-zm) * f1 + (zp-z) * f2);
 	}
 	else if (i2-i1 > 1) {
 		x = xs[i = (i1+i2) / 2];
-		#pragma omp task shared(f1, xm,x,ym,yp,zm,zp, xs,ys,zs,q, i0,i,j0,jn,k0,kn) if (recursdep > threshold)
+		// #pragma omp task shared(f1, xm,x,ym,yp,zm,zp, xs,ys,zs,q, i0,i,j0,jn,k0,kn) if (recursdep > threshold)
 		f1 = BoxFilter3(xm,x,ym,yp,zm,zp, xs,ys,zs,q, i0,i,j0,jn,k0,kn); // only line that is tasked by omp
 		f2 = BoxFilter3(x,xp,ym,yp,zm,zp, xs,ys,zs,q, i,in,j0,jn,k0,kn);
-		#pragma omp taskwait
+		// #pragma omp taskwait
 		return 1. / (xp-xm) * ((x-xm) * f1 + (xp-x) * f2);
 	}
 
@@ -255,8 +255,8 @@ double Filter::FilterNode(
 
 	double ans;
 
-	#pragma omp parallel
-	#pragma omp single
+	// #pragma omp parallel
+	// #pragma omp single
 	ans = BoxFilter3(xm,xp,ym,yp,zm,zp, corx,cory,corz,q, i0,in,j0,jn,k0,kn);
 	
 	return ans;
