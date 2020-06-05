@@ -131,7 +131,8 @@ void ChannelDirichlet(Boundaries &bc, Boundaries &sbc, const Mesh &ms, const Vct
 void ChannelDirichlet(Boundaries &bc, Boundaries &sbc, const Mesh &ms, const Vctr &vel, double rsclx, double rsclu);
 
 // Channel: homogeneous Robin BC ( u - l du/dy = 0 ) on both walls
-void ChannelRobin(Boundaries &bc, Boundaries &sbc, const Mesh &ms, const Vctr &vel);
+void ChannelRobin(Boundaries &bc, Boundaries &sbc, const Mesh &ms);
+void ChannelRobin(Boundaries &bc, Boundaries &sbc, const Vctr &vel, const Flow &vis, const Vctr &vel0, const Flow &vis0);
 
 // TBL: no-slip on bottom wall; u=U, dv/dy=dw/dy=0 on top boundary
 void TblCycling(Boundaries &bc, Boundaries &sbc, const Mesh &ms, double ufree);

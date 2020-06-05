@@ -5,6 +5,9 @@
 using namespace std;
 
 
+double SlipLength(int i, int j, int k, const Vctr &vel, const Flow &vis, const Vctr &shear);
+void ShearStress(Vctr &shear, const Vctr &vel, const Flow &vis);
+
 
 // ***** configure boundary conditions ***** //
 
@@ -102,10 +105,8 @@ void Bcond::ChannelDirichlet(Boundaries &bc, Boundaries &sbc, const Mesh &ms, co
 	}}
 }
 
-void Bcond::ChannelRobin(Boundaries &bc, Boundaries &sbc, const Mesh &ms, const Vctr &vel)
+void Bcond::ChannelRobin(Boundaries &bc, Boundaries &sbc, const Mesh &ms)
 {
-	const Mesh &ms0 = vel.ms;
-	
 	double dy0 = ms.dy(0), dyn = ms.dy(ms.Ny);
 	double dy1 = ms.dy(1), dym = ms.dy(ms.Ny-1);
 
@@ -124,6 +125,47 @@ void Bcond::ChannelRobin(Boundaries &bc, Boundaries &sbc, const Mesh &ms, const 
 
 		sbc.vb3(i,k) = - lv / (dy1 + lv);
 		sbc.vb4(i,k) = - lv / (dym + lv);
+	}}
+}
+
+void Bcond::ChannelRobin(Boundaries &bc, Boundaries &sbc,
+	const Vctr &vel, const Flow &vis, const Vctr &vel0, const Flow &vis0)
+{
+	const Mesh &ms = vel.ms;
+
+	// solve for reference shear stress from DNS data
+	Vctr shear0(vel0.ms);
+	ShearStress(shear0, vel0, vis0);
+
+	for (int j=0; j<=ms.Ny; j++) {
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+		shear0[1](i,j,k) = j < ms.Ny/2 ? 0.004 : -0.004;
+		shear0[2](i,j,k) = 0;
+		shear0[3](i,j,k) = 0;
+	}}} // TODO:  test this
+
+
+	// solve for slip length and corresponding BC
+	double dy0 = ms.dy(0), dyn = ms.dy(ms.Ny);
+	double dy1 = ms.dy(1), dym = ms.dy(ms.Ny-1);
+
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+
+		bc.ub3(i,k) = bc.vb3(i,k) = bc.wb3(i,k) = 0;
+		bc.ub4(i,k) = bc.vb4(i,k) = bc.wb4(i,k) = 0;
+
+		double l_bot = SlipLength(i,1,    k, vel, vis, shear0);//0.008;//
+		double l_top = SlipLength(i,ms.Ny,k, vel, vis, shear0);//0.008;//
+
+		if (i==10 && k == 10) cout << l_bot << '\t' << l_top << endl;
+
+		sbc.ub3(i,k) = sbc.wb3(i,k) = (dy0 - 2*l_bot) / (dy1 + 2*l_bot);
+		sbc.ub4(i,k) = sbc.wb4(i,k) = (dyn - 2*l_top) / (dym + 2*l_top);
+
+		sbc.vb3(i,k) = - l_bot / (dy1 + l_bot);
+		sbc.vb4(i,k) = - l_top / (dym + l_top);
 	}}
 }
 
@@ -341,5 +383,137 @@ void Bcond::SetBoundaryZ(Scla &q, int ord)
 
 
 
+
+
+
+
+void DeltaTau(double dtau[3], int j, const Vctr &vel, const Flow &vis, const Vctr &shear)
+{
+	const Mesh &ms = vel.ms; // note: shear has different mesh
+
+	const Scla &u = vel[1], &nux = vis.SeeVec(1), &tau12 = shear[1];
+	const Scla &v = vel[2], &nuy = vis.SeeVec(2), &tau23 = shear[2];
+	const Scla &w = vel[3], &nuz = vis.SeeVec(3), &tau13 = shear[3];
+
+	dtau[0] = 0;
+	dtau[1] = 0;
+	dtau[2] = 0;
+
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+
+		double x = ms.x(i), xc = ms.xc(i), dx = ms.dx(i), hx = ms.hx(i);
+		double z = ms.z(k), zc = ms.zc(k), dz = ms.dz(k), hz = ms.hz(k);
+		double y = ms.y(j);
+		double offsetx = .5 * tau12.ms.dx(1); // filter on edge requires offset
+		double offsetz = .5 * tau23.ms.dz(1);
+
+		// reference shear stress filtered from DNS data
+		double tau12dns = j==1 ? 0.004 : -0.004;//Filter::FilterNodeV(x+offsetx, y, zc, hx,0,dz, tau12);
+		double tau23dns = 0;//Filter::FilterNodeV(xc, y, z+offsetz, dx,0,hz, tau23);
+
+		// strain rate of the current velocity field
+		const double *sr = vel.ShearStrain(i,j,k);
+
+		// Fij = <tau^DNS_ij - tau_ij>
+		dtau[0] += (tau12dns - 2 * nuz(i,j,k) * sr[0]) / ((ms.Nx-1) * (ms.Nz-1));
+		dtau[1] += (tau23dns - 2 * nux(i,j,k) * sr[1]) / ((ms.Nx-1) * (ms.Nz-1));
+		// lack Reynolds stress !!!
+	}}
+}
+
+
+double SlipLength(int i, int j, int k, const Vctr &vel, const Flow &vis, const Vctr &shear)
+// calculate slip length of a cell up to ral boundaries
+// based on least-square of stress-like tensor deployed on cell edges
+{
+	const Mesh &ms = vel.ms; // note: shear has different mesh
+
+	const Scla &u = vel[1], &nux = vis.SeeVec(1), &tau12 = shear[1];
+	const Scla &v = vel[2], &nuy = vis.SeeVec(2), &tau23 = shear[2];
+	const Scla &w = vel[3], &nuz = vis.SeeVec(3), &tau13 = shear[3];
+
+	int id =              ms.idx(i,j,k);
+	int ip, jp, kp;       ms.ipx(i,j,k,ip,jp,kp);
+	int im, jm, km;       ms.imx(i,j,k,im,jm,km);
+	double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
+	double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
+	double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
+
+	// derivative on edges
+	double dudy = (u[id] - u[jm]) / hyc;
+	double dvdx = (v[id] - v[im]) / hxc;
+	double dwdy = (w[id] - w[jm]) / hyc;
+	double dvdz = (v[id] - v[km]) / hzc;
+
+	// reference shear stress filtered from DNS data
+	double x = ms.x(i), xc = ms.xc(i), dx = ms.dx(i), hx = ms.hx(i);
+	double z = ms.z(k), zc = ms.zc(k), dz = ms.dz(k), hz = ms.hz(k);
+	double y = ms.y(j);
+	double offsetx = .5 * tau12.ms.dx(1); // filter on edge requires offset
+	double offsetz = .5 * tau23.ms.dz(1);
+
+	double tau12dns = Filter::FilterNodeV(x+offsetx, y, zc, hx,0,dz, tau12);
+	double tau23dns = Filter::FilterNodeV(xc, y, z+offsetz, dx,0,hz, tau23);
+
+	// Fij = tau^DNS_ij - tau_ij
+	double f12 = tau12dns - nuz[id] * (dvdx + dudy);
+	double f23 = tau23dns - nux[id] * (dvdz + dwdy);
+
+	// Lij = u_i * u_j
+	double l12 = .25/hxc/hyc * (u[id]*dym + u[jm]*dyc) * (v[id]*dxm + v[im]*dxc);
+	double l23 = .25/hzc/hyc * (w[id]*dym + w[jm]*dyc) * (v[id]*dzm + v[km]*dzc);
+
+	// Mij = du_i/dy * du_j/dy
+	double m12, m23;
+	if (j == 1) {
+		m12 = dudy * .5/hxc/dyc * ((v[jp]-v[id]) * dxm + (v(ms.ima(i),ms.jpa(j),k)-v[im]) * dxc);
+		m23 = dwdy * .5/hzc/dyc * ((v[jp]-v[id]) * dzm + (v(i,ms.jpa(j),ms.kma(k))-v[km]) * dzc);
+	}
+	else if (j == ms.Ny) {
+		m12 = dudy * .5/hxc/dym * ((v[id]-v[jm]) * dxm + (v[im]-v(ms.ima(i),ms.jma(j),k)) * dxc);
+		m23 = dwdy * .5/hzc/dym * ((v[id]-v[jm]) * dzm + (v[km]-v(i,ms.jma(j),ms.kma(k))) * dzc);
+	}
+	else {
+		m12 = dudy * .25/hxc/hyc * ((v[jp]-v[jm]) * dxm + (v(ms.ima(i),ms.jpa(j),k)-v(ms.ima(i),ms.jma(j),k)) * dxc);
+		m23 = dwdy * .25/hzc/hyc * ((v[jp]-v[jm]) * dzm + (v(i,ms.jpa(j),ms.kma(k))-v(i,ms.jma(j),ms.kma(k))) * dzc);
+	}
+
+	double l_sq = ((l12+f12)*m12 + (l23+f23)*m23) / (m12*m12 + m23*m23);
+
+	// return sqrt(fmin(fmax(l_sq, 0), 1));
+	return sqrt(fmin(fabs(l_sq), 1));	
+}
+
+
+#define DIRTY_TRICK_BCOND_
+
+void ShearStress(Vctr &shear, const Vctr &vel, const Flow &vis)
+// solve shear stress on edges up to virtual boundaries
+{
+	const Mesh &ms = shear.ms;
+	const Scla &nux = vis.SeeVec(1);
+	const Scla &nuy = vis.SeeVec(2);
+	const Scla &nuz = vis.SeeVec(3);
+
+	Scla &tau12 = shear[1];
+	Scla &tau23 = shear[2];
+	Scla &tau13 = shear[3];
+
+#ifndef DIRTY_TRICK_BCOND_
+	for (int j=0; j<=ms.Ny; j++) {
+#else
+	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
+#endif
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+
+		const double *sr = vel.ShearStrain(i,j,k);
+
+		if (i>0 && j>0) tau12(i,j,k) = 2 * nuz(i,j,k) * sr[0];
+		if (j>0 && k>0) tau23(i,j,k) = 2 * nux(i,j,k) * sr[1];
+		if (i>0 && k>0) tau13(i,j,k) = 2 * nuy(i,j,k) * sr[2];
+	}}}
+}
 
 
