@@ -19,7 +19,7 @@ public:
 	void evolve(double Re, double dt, int sgstyp);
 
 	// ***** test computation ***** //
-	void evolve(double Re, double dt, int sgstyp, Solver &solver0);
+	void evolve(double Re, double dt, int sgstyp, Solver &solver0, double Re0);
 
 
 	double get_time()   const { return time_; };
@@ -32,6 +32,7 @@ public:
 	Vctr& get_vel () { return fld_.GetVec(); };
 	Vctr& get_velh() { return fldh_.GetVec(); };
 	double* get_mpg() { return mpg_; };
+	void    set_mpg(double g1, double g2, double g3) { mpg_[0] = g1; mpg_[1] = g2; mpg_[2] = g3; };
 
 	void debug_Output(const char path[]) const;
 
@@ -51,8 +52,6 @@ private:
 
 	// ***** construct viscosity ***** //
 	static void CalcVis(Flow &vis, const Vctr &vel, double Re, int sgstyp);
-	static void ModifyBoundaryVis(Flow &vis, const Vctr &vel, double tau12);
-	static void ModifyBoundaryVis(Flow &vis, const Vctr &vel, const Vctr &vel0, double Re);
 
 	// ***** construct body forces ***** //
 	static void CalcFb(Vctr &fb, const double mpg[3]);

@@ -2,6 +2,9 @@
 #include "Interp.h"
 #include "Filter.h"
 
+using namespace std;
+
+
 
 // ***** configure boundary conditions ***** //
 
@@ -51,23 +54,51 @@ void Bcond::ChannelDirichlet(Boundaries &bc, Boundaries &sbc, const Mesh &ms, co
 		// bc.vb4(i,k) = v(i,jb2,k);
 		// bc.wb4(i,k) = w(i,jb2,k);
 
-		// // interpolate off-wall boundary
-		// bc.ub3(i,k) = Interp::InterpNodeU(ms.x(i),ms.yc(0),ms.zc(k), u);
-		// bc.vb3(i,k) = Interp::InterpNodeV(ms.xc(i),ms.y(1),ms.zc(k), v);
-		// bc.wb3(i,k) = Interp::InterpNodeW(ms.xc(i),ms.yc(0),ms.z(k), w);
+		// interpolate off-wall boundary
+		bc.ub3(i,k) = Interp::InterpNodeU(ms.x(i),ms.yc(0),ms.zc(k), u);
+		bc.vb3(i,k) = Interp::InterpNodeV(ms.xc(i),ms.y(1),ms.zc(k), v);
+		bc.wb3(i,k) = Interp::InterpNodeW(ms.xc(i),ms.yc(0),ms.z(k), w);
 
-		// bc.ub4(i,k) = Interp::InterpNodeU(ms.x(i),ms.yc(ms.Ny),ms.zc(k), u);
-		// bc.vb4(i,k) = Interp::InterpNodeV(ms.xc(i),ms.y(ms.Ny),ms.zc(k), v);
-		// bc.wb4(i,k) = Interp::InterpNodeW(ms.xc(i),ms.yc(ms.Ny),ms.z(k), w);
+		bc.ub4(i,k) = Interp::InterpNodeU(ms.x(i),ms.yc(ms.Ny),ms.zc(k), u);
+		bc.vb4(i,k) = Interp::InterpNodeV(ms.xc(i),ms.y(ms.Ny),ms.zc(k), v);
+		bc.wb4(i,k) = Interp::InterpNodeW(ms.xc(i),ms.yc(ms.Ny),ms.z(k), w);
+	}}
+}
+
+void Bcond::ChannelDirichlet(Boundaries &bc, Boundaries &sbc, const Mesh &ms, const Vctr &vel, double rsclx, double rsclu)
+{
+	const Mesh &ms0 = vel.ms;
+
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
+
+	#pragma omp parallel for
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+
+		sbc.ub3(i,k) = sbc.vb3(i,k) = sbc.wb3(i,k) = 0;
+		sbc.ub4(i,k) = sbc.vb4(i,k) = sbc.wb4(i,k) = 0;
+
+		double x = ms.x(i) * rsclx, xc = ms.xc(i) * rsclx;
+		double z = ms.z(k) * rsclx, zc = ms.zc(k) * rsclx;
+		double dx= ms.dx(i)* rsclx, hx = ms.hx(i) * rsclx;
+		double dz= ms.dz(k)* rsclx, hz = ms.hz(k) * rsclx;
+
+		double y  = WallRscl(ms.y (1), rsclx);
+		double yc = WallRscl(ms.yc(0), rsclx);
 
 		// filter off-wall boundary
-		bc.ub3(i,k) = Filter::FilterNodeU(ms.x(i),ms.yc(0),ms.zc(k), ms.hx(i),0,ms.dz(k), u);
-		bc.vb3(i,k) = Filter::FilterNodeV(ms.xc(i),ms.y(1),ms.zc(k), ms.dx(i),0,ms.dz(k), v);
-		bc.wb3(i,k) = Filter::FilterNodeW(ms.xc(i),ms.yc(0),ms.z(k), ms.dx(i),0,ms.hz(k), w);
+		bc.ub3(i,k) = Filter::FilterNodeU(x,yc,zc, hx,0,dz, u) * rsclu;
+		bc.vb3(i,k) = Filter::FilterNodeV(xc,y,zc, dx,0,dz, v) * rsclu;
+		bc.wb3(i,k) = Filter::FilterNodeW(xc,yc,z, dx,0,hz, w) * rsclu;
 
-		bc.ub4(i,k) = Filter::FilterNodeU(ms.x(i),ms.yc(ms.Ny),ms.zc(k), ms.hx(i),0,ms.dz(k), u);
-		bc.vb4(i,k) = Filter::FilterNodeV(ms.xc(i),ms.y(ms.Ny),ms.zc(k), ms.dx(i),0,ms.dz(k), v);
-		bc.wb4(i,k) = Filter::FilterNodeW(ms.xc(i),ms.yc(ms.Ny),ms.z(k), ms.dx(i),0,ms.hz(k), w);
+		y  = WallRscl(ms.y (ms.Ny), rsclx);
+		yc = WallRscl(ms.yc(ms.Ny), rsclx);
+
+		bc.ub4(i,k) = Filter::FilterNodeU(x,yc,zc, hx,0,dz, u) * rsclu;
+		bc.vb4(i,k) = Filter::FilterNodeV(xc,y,zc, dx,0,dz, v) * rsclu;
+		bc.wb4(i,k) = Filter::FilterNodeW(xc,yc,z, dx,0,hz, w) * rsclu;
 	}}
 }
 

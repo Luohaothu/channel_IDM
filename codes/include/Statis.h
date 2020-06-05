@@ -13,7 +13,7 @@ public:
 	void Check(const Flow &fld, const Flow &vis, double Re, double dt);
 	void WriteProfile(const char *path, int tstep=-1) const;
 	void WriteLogfile(const char *path, int tstep, double time, const double mpg[3]) const;
-	static double GetLogtime(const char *path, int tstep);
+	static double GetLogTime(const char *path, int tstep, double mpg[3]);
 	
 private:
 	const Mesh &ms;

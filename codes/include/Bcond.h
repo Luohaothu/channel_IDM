@@ -128,6 +128,7 @@ void ChannelNoSlip(Boundaries &bc, Boundaries &sbc, const Mesh &ms);
 
 // Channel off-wall: Dirichlet on both (virtual) boundaries
 void ChannelDirichlet(Boundaries &bc, Boundaries &sbc, const Mesh &ms, const Vctr &vel);
+void ChannelDirichlet(Boundaries &bc, Boundaries &sbc, const Mesh &ms, const Vctr &vel, double rsclx, double rsclu);
 
 // Channel: homogeneous Robin BC ( u - l du/dy = 0 ) on both walls
 void ChannelRobin(Boundaries &bc, Boundaries &sbc, const Mesh &ms, const Vctr &vel);

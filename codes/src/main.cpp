@@ -90,7 +90,7 @@ int main()
 			Output(para0, solver0, tstep0);
 		}
 
-		solver1.evolve(para1.Re, para1.dt, para1.bftype, solver0);
+		solver1.evolve(para1.Re, para1.dt, para1.bftype, solver0, para0.Re);
 		Output(para1, solver1, tstep1);
 	}
 
@@ -127,7 +127,7 @@ int Initiate(Solver &solver, const Para &para)
 	}
 	else if (! strcmp(Para(para.inpath).statpath, para.statpath)) {
 		tstep = para.nread;
-		solver.set_time(Statis::GetLogtime(para.statpath, tstep));
+		solver.set_time(Statis::GetLogTime(para.statpath, tstep, solver.get_mpg()));
 		solver.get_fld().ReadField(para.fieldpath, tstep, "");
 		cout << endl << "Continue from step " << tstep << ", time " << solver.get_time() << endl;
 	}

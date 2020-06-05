@@ -3,6 +3,7 @@
 #include "Filter.h"
 #include "IDM.h"
 #include "SGS.h"
+#include "WM.h"
 #include "DA.h"
 
 using namespace std;
@@ -77,6 +78,7 @@ void Solver::evolve(double Re, double dt, int sgstyp)
 void Solver::evolve(double Re, double dt, int sgstyp)
 {
 	set_time(time_+dt);
+	set_mpg(-0.00174, 0, 0); //-0.0029, 0, 0); //
 
 	CalcVis(vis_, get_vel(), Re, sgstyp);
 
@@ -86,12 +88,11 @@ void Solver::evolve(double Re, double dt, int sgstyp)
 
 	IDM::calc(fld_, fldh_, vis_, fb_, bc_, sbc_, dt);
 
-	CalcMpg(mpg_, get_vel(), get_velh(), dt);
-	// mpg_[0] = -0.0029; mpg_[1] = mpg_[2] = 0;
-
 	Bcond::SetBoundaryY(get_vel(), bc_, sbc_);
 	Bcond::SetBoundaryX(get_vel());
 	Bcond::SetBoundaryZ(get_vel());
+
+	// CalcMpg(mpg_, get_vel(), get_velh(), dt);
 
 	if (sgstyp == 1) RemoveSpanMean(get_vel());
 }
@@ -100,25 +101,32 @@ void Solver::evolve(double Re, double dt, int sgstyp)
 
 // ***** test computation ***** //
 
-void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0)
+void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0, double Re0)
 {
 	set_time(time_+dt);
+	set_mpg(-0.0025, 0, 0);
+
+	double utau  = pow(fabs(mpg_[0]), .5);
+	double utau0 = pow(fabs(solver0.get_mpg()[0]), .5);
+	double rsclu = utau0 ? utau/utau0 : 1;
+	double rsclx = rsclu * Re / Re0;
 
 	CalcVis(vis_, get_vel(), Re, sgstyp);
-	ModifyBoundaryVis(vis_, get_vel(), solver0.get_vel(), Re);
 
-	Bcond::ChannelDirichlet(bc_, sbc_, ms, solver0.get_vel());
+	WM::OffWallSGS(vis_, get_vel(), solver0.get_vel(), Re, rsclx, rsclu);
+
+	Bcond::ChannelDirichlet(bc_, sbc_, ms, solver0.get_vel(), rsclx, rsclu);
 	// Bcond::ChannelRobin(bc_, sbc_, get_vel(), vis_, solver0.get_vel(), solver0.get_vis());
 
 	CalcFb(fb_, mpg_);
 
 	IDM::calc(fld_, fldh_, vis_, fb_, bc_, sbc_, dt);
 
-	CalcMpg(mpg_, get_vel(), get_velh(), dt, solver0.get_mpg());
-
 	Bcond::SetBoundaryY(get_vel(), bc_, sbc_);
 	Bcond::SetBoundaryX(get_vel());
 	Bcond::SetBoundaryZ(get_vel());
+
+	// CalcMpg(mpg_, get_vel(), get_velh(), dt, solver0.get_mpg());
 
 	// Assimilate(solver0.get_vel(), dt, 5, .1);
 }
@@ -195,132 +203,6 @@ void Solver::CalcVis(Flow &vis, const Vctr &vel, double Re, int sgstyp)
 	vis.CellCenter2Edge();
 }
 
-void Solver::ModifyBoundaryVis(Flow &vis, const Vctr &vel, double tau12)
-{
-	const Mesh &ms = vis.ms;
-
-	Scla &nuz = vis.GetVec(3);
-
-	const Scla &u = vel[1];
-	const Scla &v = vel[2];
-
-	for (int j=1; j<=ms.Ny; j+= ms.Ny-1) {
-	for (int k=1; k<ms.Nz; k++) {
-	for (int i=1; i<ms.Nx; i++) {
-
-		double s12 = .5 * (
-			1./ms.hx(i) * (v(i,j,k) - v(ms.ima(i),j,k)) +
-			1./ms.hy(j) * (u(i,j,k) - u(i,ms.jma(j),k)) );
-
-		nuz(i,j,k) = fmax(.5*tau12/s12, 0);
-	}}}
-}
-
-void Solver::ModifyBoundaryVis(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re)
-{
-	const Mesh &ms = vis.ms, &ms0 = veldns.ms;
-
-	const Scla &u = vel[1], &u0 = veldns[1];
-	const Scla &v = vel[2], &v0 = veldns[2];
-	const Scla &w = vel[3], &w0 = veldns[3];
-
-	// viscosity & sgs-stress on edges aimed for
-	Vctr shearsgs(ms);
-	Scla &nux = vis.GetVec(1);
-	Scla &nuz = vis.GetVec(3);
-	const Scla &tau23sgs = shearsgs[2];
-	const Scla &tau12sgs = shearsgs[1];
-
-	// sgs shear stress filtered from resolved velocity field
-	SGS::SubGridShearStress(shearsgs, veldns);
-
-	// for top & bottom real boundaries
-	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
-
-		double r12dns = 0; // DNS Reynolds stress
-		double r12les = 0; // LES resolved Reynolds
-		double v12sgs = 0; // mean sgs-stress filtered from DNS
-
-		// the wall normal position on which stresses act
-		const double y = ms.y(j);
-
-		// ***** rescale the DNS-filtered sgs stress by Reynolds stress defect ***** //
-
-		// calculate reference (DNS) Reynolds shear stress
-		int j3u = Interp::BiSearch(y, ms0.yc(), 0, ms0.Ny), j4u = j3u+1;
-		int j3v = Interp::BiSearch(y, ms0.y(),  1, ms0.Ny), j4v = j3v+1;
-
-		double um3 = u0.meanxz(j3u), y3u = ms0.yc(j3u);
-		double um4 = u0.meanxz(j4u), y4u = ms0.yc(j4u);
-		double vm3 = v0.meanxz(j3v), y3v = ms0.y(j3v);
-		double vm4 = v0.meanxz(j4v), y4v = ms0.y(j4v);
-
-		double um = (um3 * (y4u-y) + um4 * (y-y3u)) / (y4u-y3u);
-		double vm = (vm3 * (y4v-y) + vm4 * (y-y3v)) / (y4v-y3v);
-
-		#pragma omp parallel for reduction(+: r12dns)
-		for (int k=1; k<ms0.Nz; k++) { double z = ms0.zc(k);
-		for (int i=1; i<ms0.Nx; i++) { double x = ms0.x(i);
-			// calculate uv on z-edges and interpolate to the desired y position
-			r12dns += (Interp::InterpNodeU(x,y,z,u0) - um)
-			        * (Interp::InterpNodeV(x,y,z,v0) - vm)
-			        * ((ms.Nx-1) * (ms.Nz-1)) / ((ms0.Nx-1) * (ms0.Nz-1)); // rescale to match the other two
-		}}
-
-		// calculate resolved Reynolds stress and mean sgs-stress
-		um3 = u.meanxz(j3u = ms.jma(j)); y3u = ms.yc(j3u);
-		um4 = u.meanxz(j4u = j);         y4u = ms.yc(j4u);
-		vm  = v.meanxz(j);
-		um  = (um3 * (y4u-y) + um4 * (y-y3u)) / (y4u-y3u);
-
-		for (int k=1; k<ms.Nz; k++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hyc=ms.hy(j);
-		for (int i=1; i<ms.Nx; i++) { double dxm,dxp,dxc=ms.dx(i,dxm,dxp), hxc=ms.hx(i);
-
-			int id =        ms.idx(i,j,k);
-			int im, jm, km; ms.imx(i,j,k,im,jm,km);
-
-			v12sgs += tau12sgs[id];
-			r12les += (.5/hyc * (u[id]*dym + u[jm]*dyc) - um)
-			        * (.5/hxc * (v[id]*dxm + v[im]*dxc) - vm);
-		}}
-
-		const double rescale1 = fabs((r12dns - r12les) / v12sgs);
-		const double rescale2 = fabs((y4u-y3u) / (1-fabs(y-1)) / log((1-fabs(y4u-1))/(1-fabs(y3u-1))));
-
-		// // rescale physical viscosity by replacing low-order differencing with log law
-		// double dyU2 = (um4-um3) / log((1-fabs(y4u-1))/(1-fabs(y3u-1))) / (1-fabs(y-1));
-		// double dyU1 = (um4-um3) / (y4u-y3u);
-		// const double rescale2 = fabs(dyU2 / dyU1);
-
-		// ***** rescale viscosity to account for low-order differencing error ***** //
-
-		// construct low- & high-order differenced U gradient
-		// int j5u = j==1 ? j4u+1 : j3u-1;
-		// double um5 = u.meanxz(j5u);
-		// double y5u = ms.yc(j5u);
-
-		// double dyU2 = (y4u+y5u-2*y) / (y4u-y3u) / (y3u-y5u) * um3
-		//             + (y3u+y5u-2*y) / (y3u-y4u) / (y4u-y5u) * um4
-		//             + (y3u+y4u-2*y) / (y3u-y5u) / (y5u-y4u) * um5;
-
-		cout << rescale1 << " " << rescale2 << endl;
-
-		// ***** modify physical & eddy viscosity accordingly ***** //
-
-		for (int k=1; k<=ms.Nz; k++) {
-		for (int i=1; i<=ms.Nx; i++) {
-			// boundary strain rate of the coarse velocity field
-			const double *sr = vel.ShearStrain(i,j,k);
-
-			double s12 = sr[0], tau12 = tau12sgs(i,j,k) * rescale1;
-			double s23 = sr[1], tau23 = tau23sgs(i,j,k) * rescale1;
-
-			if (k<ms.Nz) nuz(i,j,k) = rescale2/Re + fmax(.5 * tau12 / s12, 0);
-			if (i<ms.Nx) nux(i,j,k) = rescale2/Re + fmax(.5 * tau23 / s23, 0);
-		}}
-	}
-}
-
 
 void Solver::CalcFb(Vctr &fb, const double mpg[3])
 {
@@ -356,13 +238,17 @@ void Solver::CalcMpg(double mpg[3], Vctr &vel, Vctr &velh, double dt, const doub
 	// complement mpg increment that was not included in the velocity update step
 	#pragma omp parallel for
 	for (int j=1; j<ms.Ny; j++) {
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
 
-		u.MnsLyr(dt*dmpg1, j);
-		w.MnsLyr(dt*dmpg3, j);
+		if (i>0) u(i,j,k) -= dt * dmpg1;
+		if (k>0) w(i,j,k) -= dt * dmpg3;
 
-		uh.MnsLyr(dmpg1, j);
-		wh.MnsLyr(dmpg3, j);
-	}
+		if (i>0) uh(i,j,k) -= dmpg1;
+		if (k>0) wh(i,j,k) -= dmpg3;
+	}}}
+
+	// note: since BC has been applied before, this function should maintain boundary relations
 }
 
 
@@ -503,6 +389,138 @@ void Solver::debug_Output(const char path[]) const
 		fb_[3].debug_AsciiOutput(path, names[2], 0, Ny+1);
 	}
 }
+
+
+
+
+
+
+
+// void Solver::ModifyBoundaryVis(Flow &vis, const Vctr &vel, double tau12)
+// {
+// 	const Mesh &ms = vis.ms;
+
+// 	Scla &nuz = vis.GetVec(3);
+
+// 	const Scla &u = vel[1];
+// 	const Scla &v = vel[2];
+
+// 	for (int j=1; j<=ms.Ny; j+= ms.Ny-1) {
+// 	for (int k=1; k<ms.Nz; k++) {
+// 	for (int i=1; i<ms.Nx; i++) {
+
+// 		double s12 = .5 * (
+// 			1./ms.hx(i) * (v(i,j,k) - v(ms.ima(i),j,k)) +
+// 			1./ms.hy(j) * (u(i,j,k) - u(i,ms.jma(j),k)) );
+
+// 		nuz(i,j,k) = fmax(.5*tau12/s12, 0);
+// 	}}}
+// }
+
+// void Solver::ModifyBoundaryVis(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re)
+// {
+// 	const Mesh &ms = vis.ms, &ms0 = veldns.ms;
+
+// 	const Scla &u = vel[1], &u0 = veldns[1];
+// 	const Scla &v = vel[2], &v0 = veldns[2];
+// 	const Scla &w = vel[3], &w0 = veldns[3];
+
+// 	// viscosity & sgs-stress on edges aimed for
+// 	Vctr shearsgs(ms);
+// 	Scla &nux = vis.GetVec(1);
+// 	Scla &nuz = vis.GetVec(3);
+// 	const Scla &tau23sgs = shearsgs[2];
+// 	const Scla &tau12sgs = shearsgs[1];
+
+// 	// sgs shear stress filtered from resolved velocity field
+// 	SGS::SubGridShearStress(shearsgs, veldns);
+
+// 	// for top & bottom real boundaries
+// 	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
+
+// 		double r12dns = 0; // DNS Reynolds stress
+// 		double r12les = 0; // LES resolved Reynolds
+// 		double v12sgs = 0; // mean sgs-stress filtered from DNS
+
+// 		// the wall normal position on which stresses act
+// 		const double y = ms.y(j);
+
+// 		// ***** rescale the DNS-filtered sgs stress by Reynolds stress defect ***** //
+
+// 		// calculate reference (DNS) Reynolds shear stress
+// 		int j3u = Interp::BiSearch(y, ms0.yc(), 0, ms0.Ny), j4u = j3u+1;
+// 		int j3v = Interp::BiSearch(y, ms0.y(),  1, ms0.Ny), j4v = j3v+1;
+
+// 		double um3 = u0.meanxz(j3u), y3u = ms0.yc(j3u);
+// 		double um4 = u0.meanxz(j4u), y4u = ms0.yc(j4u);
+// 		double vm3 = v0.meanxz(j3v), y3v = ms0.y(j3v);
+// 		double vm4 = v0.meanxz(j4v), y4v = ms0.y(j4v);
+
+// 		double um = (um3 * (y4u-y) + um4 * (y-y3u)) / (y4u-y3u);
+// 		double vm = (vm3 * (y4v-y) + vm4 * (y-y3v)) / (y4v-y3v);
+
+// 		#pragma omp parallel for reduction(+: r12dns)
+// 		for (int k=1; k<ms0.Nz; k++) { double z = ms0.zc(k);
+// 		for (int i=1; i<ms0.Nx; i++) { double x = ms0.x(i);
+// 			// calculate uv on z-edges and interpolate to the desired y position
+// 			r12dns += (Interp::InterpNodeU(x,y,z,u0) - um)
+// 			        * (Interp::InterpNodeV(x,y,z,v0) - vm)
+// 			        * ((ms.Nx-1) * (ms.Nz-1)) / ((ms0.Nx-1) * (ms0.Nz-1)); // rescale to match the other two
+// 		}}
+
+// 		// calculate resolved Reynolds stress and mean sgs-stress
+// 		um3 = u.meanxz(j3u = ms.jma(j)); y3u = ms.yc(j3u);
+// 		um4 = u.meanxz(j4u = j);         y4u = ms.yc(j4u);
+// 		vm  = v.meanxz(j);
+// 		um  = (um3 * (y4u-y) + um4 * (y-y3u)) / (y4u-y3u);
+
+// 		for (int k=1; k<ms.Nz; k++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hyc=ms.hy(j);
+// 		for (int i=1; i<ms.Nx; i++) { double dxm,dxp,dxc=ms.dx(i,dxm,dxp), hxc=ms.hx(i);
+
+// 			int id =        ms.idx(i,j,k);
+// 			int im, jm, km; ms.imx(i,j,k,im,jm,km);
+
+// 			v12sgs += tau12sgs[id];
+// 			r12les += (.5/hyc * (u[id]*dym + u[jm]*dyc) - um)
+// 			        * (.5/hxc * (v[id]*dxm + v[im]*dxc) - vm);
+// 		}}
+
+// 		const double rescale1 = fabs((r12dns - r12les) / v12sgs);
+// 		const double rescale2 = fabs((y4u-y3u) / (1-fabs(y-1)) / log((1-fabs(y4u-1))/(1-fabs(y3u-1))));
+
+// 		// // rescale physical viscosity by replacing low-order differencing with log law
+// 		// double dyU2 = (um4-um3) / log((1-fabs(y4u-1))/(1-fabs(y3u-1))) / (1-fabs(y-1));
+// 		// double dyU1 = (um4-um3) / (y4u-y3u);
+// 		// const double rescale2 = fabs(dyU2 / dyU1);
+
+// 		// ***** rescale viscosity to account for low-order differencing error ***** //
+
+// 		// construct low- & high-order differenced U gradient
+// 		// int j5u = j==1 ? j4u+1 : j3u-1;
+// 		// double um5 = u.meanxz(j5u);
+// 		// double y5u = ms.yc(j5u);
+
+// 		// double dyU2 = (y4u+y5u-2*y) / (y4u-y3u) / (y3u-y5u) * um3
+// 		//             + (y3u+y5u-2*y) / (y3u-y4u) / (y4u-y5u) * um4
+// 		//             + (y3u+y4u-2*y) / (y3u-y5u) / (y5u-y4u) * um5;
+
+// 		cout << rescale1 << " " << rescale2 << endl;
+
+// 		// ***** modify physical & eddy viscosity accordingly ***** //
+
+// 		for (int k=1; k<=ms.Nz; k++) {
+// 		for (int i=1; i<=ms.Nx; i++) {
+// 			// boundary strain rate of the coarse velocity field
+// 			const double *sr = vel.ShearStrain(i,j,k);
+
+// 			double s12 = sr[0], tau12 = tau12sgs(i,j,k) * rescale1;
+// 			double s23 = sr[1], tau23 = tau23sgs(i,j,k) * rescale1;
+
+// 			if (k<ms.Nz) nuz(i,j,k) = rescale2/Re + fmax(.5 * tau12 / s12, 0);
+// 			if (i<ms.Nx) nux(i,j,k) = rescale2/Re + fmax(.5 * tau23 / s23, 0);
+// 		}}
+// 	}
+// }
 
 
 

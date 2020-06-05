@@ -439,16 +439,16 @@ void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel)
 
 #define DIRTY_TRICK_SGS_
 
-void SGS::SubGridShearStress(Vctr &shear, const Vctr &vel)
+void SGS::SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, double rsclu)
 // calculate sgs shear stress on edges up to virtual boundary
 // by direct filter of resolved velocity
 {
 	const Mesh &ms = shear.ms; // refer to SPARSE mesh on which sgs stress is deployed
-	const Mesh &ms0 = vel.ms;  // refer to RESOLVED mesh on which velocity is deployed
+	const Mesh &ms0 = veldns.ms; // refer to RESOLVED mesh on which velocity is deployed
 
-	const Scla &u = vel[1];
-	const Scla &v = vel[2];
-	const Scla &w = vel[3];
+	const Scla &u = veldns[1];
+	const Scla &v = veldns[2];
+	const Scla &w = veldns[3];
 
 	Scla uv(ms0), &tau12 = shear[1], &uc = uv; u.Ugrid2CellCenter(uc); // cell-center-interpolation are for cross terms
 	Scla vw(ms0), &tau23 = shear[2], &vc = vw; v.Vgrid2CellCenter(vc); // virtual boundary use linear extrapolation
@@ -472,32 +472,32 @@ void SGS::SubGridShearStress(Vctr &shear, const Vctr &vel)
 	for (int k=0; k<=ms.Nz; k++) {
 	for (int i=0; i<=ms.Nx; i++) {
 
-		double x = ms.x (i), dx = ms.hx(i);
-		double y = ms.y (j), dy = 0;
-		double z = ms.zc(k), dz = ms.dz(k);
+		double x = ms.x (i) * rsclx, dx = ms.hx(i) * rsclx;
+		double z = ms.zc(k) * rsclx, dz = ms.dz(k) * rsclx;
+		double y = WallRscl(ms.y(j), rsclx), dy = 0;
 
-		if (i>0 && j>0) tau12(i,j,k) =
+		if (i>0 && j>0) tau12(i,j,k) = (
 			Filter::FilterNodeU(x,y,z,dx,dy,dz,u) *
 			Filter::FilterNodeV(x,y,z,dx,dy,dz,v) -
-			Filter::FilterNodeA(x,y,z,dx,dy,dz,uv);
+			Filter::FilterNodeA(x,y,z,dx,dy,dz,uv) ) * pow(rsclu, 2.);
 
-		x = ms.xc(i); dx = ms.dx(i);
-		y = ms.y (j); dy = 0;
-		z = ms.z (k); dz = ms.hz(k);
+		x = ms.xc(i) * rsclx; dx = ms.dx(i) * rsclx;
+		z = ms.z (k) * rsclx; dz = ms.hz(k) * rsclx;
+		y = WallRscl(ms.y(j), rsclx); dy = 0;
 
-		if (j>0 && k>0) tau23(i,j,k) =
+		if (j>0 && k>0) tau23(i,j,k) = (
 			Filter::FilterNodeV(x,y,z,dx,dy,dz,v) *
 			Filter::FilterNodeW(x,y,z,dx,dy,dz,w) -
-			Filter::FilterNodeA(x,y,z,dx,dy,dz,vw);
+			Filter::FilterNodeA(x,y,z,dx,dy,dz,vw) ) * pow(rsclu, 2.);
 
-		x = ms.x (i); dx = ms.hx(i);
-		y = ms.yc(j); dy = ms.dy(j);
-		z = ms.z (k); dz = ms.hz(k);
+		x = ms.x (i) * rsclx; dx = ms.hx(i) * rsclx;
+		z = ms.z (k) * rsclx; dz = ms.hz(k) * rsclx;
+		y = WallRscl(ms.yc(j), rsclx); dy = 0;
 
-		if (i>0 && k>0) tau13(i,j,k) =
+		if (i>0 && k>0) tau13(i,j,k) = (
 			Filter::FilterNodeU(x,y,z,dx,dy,dz,u) *
 			Filter::FilterNodeW(x,y,z,dx,dy,dz,w) -
-			Filter::FilterNodeA(x,y,z,dx,dy,dz,uw);
+			Filter::FilterNodeA(x,y,z,dx,dy,dz,uw) ) * pow(rsclu, 2.);
 	}}}
 }
 

@@ -316,20 +316,23 @@ long int Statis::GetLogpos(const char *path, int tstep)
 	return pos;
 }
 
-double Statis::GetLogtime(const char *path, int tstep)
+double Statis::GetLogTime(const char *path, int tstep, double mpg[3])
 {
-	FILE *fp;
-	char str[1024];
 	long int pos = GetLogpos(path, tstep);
-	int n = 0;
-	double t = 0.0;
 
+	char str[1024];
 	sprintf(str, "%sLOG.dat", path?path:"");
 
+	int n;
+	double t = 0;
+	double ener, tau21, tau22, tau23;
+
 	if (pos > 0) {
-		fp = fopen(str, "r");
+		FILE *fp = fopen(str, "r");
 		fseek(fp, pos, SEEK_SET);
-		if(fgets(str, 1024, fp)) sscanf(str, "%i\t%lf", &n, &t);
+		if(fgets(str, 1024, fp))
+			sscanf(str, "%i\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf",
+				&n, &t, &ener, &tau21, &tau22, &tau23, mpg, mpg+1, mpg+2);
 		fclose(fp);
 	}
 
