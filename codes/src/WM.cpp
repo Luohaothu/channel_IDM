@@ -47,8 +47,7 @@ void WM::OffWallSGS(
 	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
 
 		// the wall normal position on which stresses act
-		const double y = ms.y(j);
-		const double y0 = y < 1 ? y * rsclx : 2 - (2-y) * rsclx;
+		const double y = ms.y(j), y0 = WallRscl(y, rsclx);
 
 		// ***** rescale the DNS-filtered sgs stress by Reynolds stress defect ***** //
 
@@ -57,23 +56,24 @@ void WM::OffWallSGS(
 		double s12sgs = 0; // mean sgs-stress filtered from DNS
 
 		// calculate reference (DNS) Reynolds shear stress
-		int j3u = Interp::BiSearch(y0, ms0.yc(), 0, ms0.Ny), j4u = j3u+1;
-		int j3v = Interp::BiSearch(y0, ms0.y(),  1, ms0.Ny), j4v = j3v+1;
+		int j3 = Interp::BiSearch(y0, ms0.yc(), 0, ms0.Ny);
+		int j4 = j3 + 1;
 
-		double um3 = u0.meanxz(j3u), y3u = ms0.yc(j3u);
-		double um4 = u0.meanxz(j4u), y4u = ms0.yc(j4u);
-		double vm3 = v0.meanxz(j3v), y3v = ms0.y(j3v);
-		double vm4 = v0.meanxz(j4v), y4v = ms0.y(j4v);
-
-		double um = (um3 * (y4u-y0) + um4 * (y0-y3u)) / (y4u-y3u);
-		double vm = (vm3 * (y4v-y0) + vm4 * (y0-y3v)) / (y4v-y3v);
+		double um3 = u0.meanxz(j3), y3 = ms0.yc(j3);
+		double um4 = u0.meanxz(j4), y4 = ms0.yc(j4);
+		double vm3 = .5 * (v0.meanxz(j3) + v0.meanxz(ms0.jpa(j3)));
+		double vm4 = .5 * (v0.meanxz(j4) + v0.meanxz(ms0.jpa(j4))); // note: if j4==ms0.Ny, jpa is not valid
 
 		#pragma omp parallel for reduction(+: r12dns)
 		for (int k=1; k<ms0.Nz; k++) { double z = ms0.zc(k);
-		for (int i=1; i<ms0.Nx; i++) { double x = ms0.x(i);
-			// calculate uv on z-edges and interpolate to the desired y position
-			r12dns += (Interp::InterpNodeU(x,y0,z,u0) - um)
-			        * (Interp::InterpNodeV(x,y0,z,v0) - vm);
+		for (int i=1; i<ms0.Nx; i++) { double x = ms0.xc(i);
+			// calculate uv on cell-centers and interpolate to the desired y position
+			// note: interpolation must be afterwards, otherwise the Reynolds stress would be defected
+			r12dns += 1. / (y4-y3) * (
+				(Interp::InterpNodeU(x,y3,z,u0) - um3)
+			  * (Interp::InterpNodeV(x,y3,z,v0) - vm3) * (y4-y0)
+			  + (Interp::InterpNodeU(x,y4,z,u0) - um4)
+			  * (Interp::InterpNodeV(x,y4,z,v0) - vm4) * (y0-y3) );
 		}}
 
 		r12dns *= rsclu * rsclu
@@ -81,10 +81,10 @@ void WM::OffWallSGS(
 			   * (ms.Nz-1.) / (ms0.Nz-1.);
 
 		// calculate resolved Reynolds stress and mean sgs-stress
-		um3 = u.meanxz(j3u = ms.jma(j)); y3u = ms.yc(j3u);
-		um4 = u.meanxz(j4u = j);         y4u = ms.yc(j4u);
-		vm  = v.meanxz(j);
-		um  = (um3 * (y4u-y) + um4 * (y-y3u)) / (y4u-y3u);
+		um3 = u.meanxz(j3 = ms.jma(j)); y3 = ms.yc(j3);
+		um4 = u.meanxz(j4 = j);         y4 = ms.yc(j4);
+		double vm  = v.meanxz(j);
+		double um  = (um3 * (y4-y) + um4 * (y-y3)) / (y4-y3);
 
 		for (int k=1; k<ms.Nz; k++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hyc=ms.hy(j);
 		for (int i=1; i<ms.Nx; i++) { double dxm,dxp,dxc=ms.dx(i,dxm,dxp), hxc=ms.hx(i);
@@ -114,7 +114,7 @@ void WM::OffWallSGS(
 		// const double rsclvis = fabs(dyU2 / dyU1);
 
 		const double rsclsgs = fabs((r12dns - r12les) / s12sgs);
-		const double rsclvis = fabs((y4u-y3u) / (1-fabs(y-1)) / log((1-fabs(y4u-1))/(1-fabs(y3u-1))));
+		const double rsclvis = fabs((y4-y3) / (1-fabs(y-1)) / log((1-fabs(y4-1))/(1-fabs(y3-1))));
 
 
 		FILE *fp = fopen("WMLOG.dat", "a");

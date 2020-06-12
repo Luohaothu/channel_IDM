@@ -78,7 +78,7 @@ void Solver::evolve(double Re, double dt, int sgstyp)
 void Solver::evolve(double Re, double dt, int sgstyp)
 {
 	set_time(time_+dt);
-	set_mpg(-0.00174, 0, 0); //-0.0029, 0, 0); //
+	// set_mpg(-0.00174, 0, 0); //-0.0029, 0, 0); //
 
 	CalcVis(vis_, get_vel(), Re, sgstyp);
 
@@ -92,7 +92,7 @@ void Solver::evolve(double Re, double dt, int sgstyp)
 	Bcond::SetBoundaryX(get_vel());
 	Bcond::SetBoundaryZ(get_vel());
 
-	// CalcMpg(mpg_, get_vel(), get_velh(), dt);
+	CalcMpg(mpg_, get_vel(), get_velh(), dt);
 
 	if (sgstyp == 1) RemoveSpanMean(get_vel());
 }
@@ -104,7 +104,7 @@ void Solver::evolve(double Re, double dt, int sgstyp)
 void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0, double Re0)
 {
 	set_time(time_+dt);
-	set_mpg(-0.0025, 0, 0);
+	// set_mpg(-0.0025, 0, 0);
 
 	double utau  = pow(fabs(mpg_[0]), .5);
 	double utau0 = pow(fabs(solver0.get_mpg()[0]), .5);
@@ -126,7 +126,7 @@ void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0, double Re
 	Bcond::SetBoundaryX(get_vel());
 	Bcond::SetBoundaryZ(get_vel());
 
-	// CalcMpg(mpg_, get_vel(), get_velh(), dt, solver0.get_mpg());
+	CalcMpg(mpg_, get_vel(), get_velh(), dt, solver0.get_mpg());
 
 	// Assimilate(solver0.get_vel(), dt, 5, .1);
 }
