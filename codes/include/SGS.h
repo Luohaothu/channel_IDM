@@ -10,8 +10,9 @@ void Smargorinsky (Scla &nut, const Vctr &vel, double Re, double Cs);
 void DynamicSmarg (Scla &nut, const Vctr &vel);
 void DynamicVreman(Scla &nut, const Vctr &vel, double Re);
 
-void SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel);
+void SubGridStress(Vctr &shear, Vctr &normal, const Vctr &veldns, double rsclx, double rsclu);
 void SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, double rsclu);
+void SubGridNormalStress(Vctr &normal, const Vctr &veldns, double rsclx, double rsclu);
 
 } // namespace SGS
 

@@ -1,8 +1,15 @@
 #include "WM.h"
 #include "SGS.h"
 #include "Interp.h"
+#include "Filter.h"
+#include "Bcond.h"
 
 using namespace std;
+
+void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu);
+void OffWallSubGridNormal(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu);
+void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu);
+
 
 
 void WM::UniformWallShear(Flow &vis, const Vctr &vel, double tau12)
@@ -21,9 +28,23 @@ void WM::UniformWallShear(Flow &vis, const Vctr &vel, double tau12)
 	}}}
 }
 
-void WM::OffWallSGS(
-	Flow &vis, const Vctr &vel, const Vctr &veldns,
-	double Re, double rsclx, double rsclu)
+
+void WM::OffWallSGS(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu)
+{
+	OffWallSubGridShear      (vis, vel, veldns, Re, rsclx, rsclu);
+	// OffWallSubGridNormal     (vis, vel, veldns, Re, rsclx, rsclu);
+	OffWallSubGridDissipation(vis, vel, veldns, Re, rsclx, rsclu);
+
+	// note: when OffWallSubGridDissipation is used in conjuction with OffWallSubGridShear,
+	// the boundary processing at the end of OffWallSubGridDissipation should be commented
+
+	// weird bug: OffWallSubGridDissipation must be after OffWallSubGridShear, do not know why...
+	// Otherwise NaN may occur, but with a cout of r12dns, r12les, s12sgs, the bug disappears...
+}
+
+
+
+void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu)
 // supply sgs stress 12 & 23 on off-wall boundary through viscosity
 {
 	const Mesh &ms = vis.ms, &ms0 = veldns.ms;
@@ -113,7 +134,7 @@ void WM::OffWallSGS(
 		// double dyU1 = (um4-um3) / (y4u-y3u);
 		// const double rsclvis = fabs(dyU2 / dyU1);
 
-		const double rsclsgs = fabs((r12dns - r12les) / s12sgs);
+		const double rsclsgs = fmin(fabs((r12dns - r12les) / s12sgs), 2.);
 		const double rsclvis = fabs((y4-y3) / (1-fabs(y-1)) / log((1-fabs(y4-1))/(1-fabs(y3-1))));
 
 
@@ -137,3 +158,160 @@ void WM::OffWallSGS(
 		}}
 	}
 }
+
+
+void OffWallSubGridNormal(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu)
+// supply sgs stress 22 on off-wall boundary through viscosity
+{
+	const Mesh &ms = vis.ms, &ms0 = veldns.ms;
+
+	const Scla &u = vel[1], &u0 = veldns[1];
+	const Scla &v = vel[2], &v0 = veldns[2];
+	const Scla &w = vel[3], &w0 = veldns[3];
+
+	// viscosity & sgs-stress at cell-center
+	Vctr normalsgs(ms);
+	const Scla &tau22sgs = normalsgs[2];
+
+	Scla &nuc = vis.GetScl();
+
+	// sgs normal stress filtered from resolved velocity field
+	SGS::SubGridNormalStress(normalsgs, veldns, rsclx, rsclu);
+
+	for (int j=1; j<ms.Ny; j+=ms.Ny-2) {
+
+		// the wall normal position on which stresses act
+		const double y = ms.yc(j), y0 = WallRscl(y, rsclx);
+
+		// ***** rescale the DNS-filtered sgs stress by Reynolds stress defect ***** //
+
+		double r22dns = 0; // DNS Reynolds stress
+		double r22les = 0; // LES resolved Reynolds
+		double s22sgs = 0; // mean sgs-stress filtered from DNS
+
+		// calculate reference (DNS) Reynolds shear stress
+		int j3 = Interp::BiSearch(y0, ms0.y(), 1, ms0.Ny);
+		int j4 = j3 + 1;
+
+		double vm3 = v0.meanxz(j3), y3 = ms0.y(j3);
+		double vm4 = v0.meanxz(j4), y4 = ms0.y(j4);
+
+		for (int k=1; k<ms0.Nz; k++) {
+		for (int i=1; i<ms0.Nx; i++) {
+
+			r22dns += 1. / (y4-y3) * (
+				pow(v0(i,j3,k) - vm3, 2.) * (y4-y0) +
+				pow(v0(i,j4,k) - vm4, 2.) * (y0-y3) );
+		}}
+
+		r22dns *= rsclu * rsclu
+			   * (ms.Nx-1.) / (ms0.Nx-1.) // rescale to match the other two
+			   * (ms.Nz-1.) / (ms0.Nz-1.);
+
+		// calculate resolved Reynolds stress and mean sgs-stress
+		vm3 = v.meanxz(j3 = j);
+		vm4 = v.meanxz(j4 = ms.jpa(j));
+
+		for (int k=1; k<ms.Nz; k++) {
+		for (int i=1; i<ms.Nx; i++) {
+
+			s22sgs += tau22sgs(i,j,k);
+			r22les += .5 * (
+				pow(v(i,j3,k) - vm3, 2.) +
+				pow(v(i,j4,k) - vm4, 2.) );
+		}}
+
+		const double rsclsgs = fabs((r22dns - r22les) / s22sgs);
+
+
+		FILE *fp = fopen("WMLOG2.dat", "a");
+		if (j==1) fprintf(fp, "%f\t", rsclsgs);
+		else      fprintf(fp, "%f\n", rsclsgs);
+		fclose(fp);
+
+		// ***** modify physical & eddy viscosity accordingly ***** //
+
+		for (int k=1; k<ms.Nz; k++) {
+		for (int i=1; i<ms.Nx; i++) {
+			// boundary strain rate of the coarse velocity field
+			const double *sr = vel.Strainrate(i,j,k);
+
+			double s22 = sr[1], tau22 = tau22sgs(i,j,k) * rsclsgs;
+
+			nuc(i,j,k) = 1./Re + fmax(.5 * tau22 / s22, 0);
+		}}
+	}
+}
+
+
+
+void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu)
+//  modify eddy viscosity near off-wall boundary by sgs dissipation
+{
+	const Mesh &ms = vis.ms;
+	const Mesh &ms0 = veldns.ms;
+
+	Scla &nuc = vis.GetScl();
+
+	// DNS strainrate field at cell-centers up to real boundary
+	Scla s11(ms0), s22(ms0), s33(ms0);
+	Scla s12(ms0), s23(ms0), s13(ms0);
+
+	#pragma omp parallel for
+	for (int j=1; j<ms0.Ny; j++) {
+	for (int k=1; k<ms0.Nz; k++) {
+	for (int i=1; i<ms0.Nx; i++) {
+
+		const double *sr = veldns.Strainrate(i,j,k); // cannot parallelize because sr is static
+
+		s11(i,j,k) = sr[0]; s22(i,j,k) = sr[1]; s33(i,j,k) = sr[2];
+		s12(i,j,k) = sr[3]; s23(i,j,k) = sr[4]; s13(i,j,k) = sr[5];
+	}}}
+
+	// SGS stress filtered from DNS field
+	Vctr shearsgs(ms);
+	Vctr normalsgs(ms);
+
+	SGS::SubGridStress(shearsgs, normalsgs, veldns, rsclx, rsclu);
+
+	const Scla &tau12sgs = shearsgs[1], &tau11sgs = normalsgs[1];
+	const Scla &tau23sgs = shearsgs[2], &tau22sgs = normalsgs[2];
+	const Scla &tau13sgs = shearsgs[3], &tau33sgs = normalsgs[3];
+
+	// re-solve eddy viscosity near off-wall boundary based on sgs dissipation
+	for (int j=1; j<ms.Ny; j+=ms.Ny-2) {
+	#pragma omp parallel for
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+
+		int id = ms.idx(i,j,k);
+
+		double x = ms.xc(i) * rsclx, dx = ms.dx(i) * rsclx;
+		double z = ms.zc(k) * rsclx, dz = ms.dz(k) * rsclx;
+		double y = WallRscl(ms.yc(j), rsclx), dy = 0;
+
+		double sgsdsp = rsclu * rsclx * ( // rescale Sij to match inner scale
+			tau11sgs[id] * Filter::FilterNodeA(x,y,z,dx,dy,dz,s11) +
+			tau22sgs[id] * Filter::FilterNodeA(x,y,z,dx,dy,dz,s22) +
+			tau33sgs[id] * Filter::FilterNodeA(x,y,z,dx,dy,dz,s33) + (
+			tau12sgs[id] * Filter::FilterNodeA(x,y,z,dx,dy,dz,s12) +
+			tau23sgs[id] * Filter::FilterNodeA(x,y,z,dx,dy,dz,s23) +
+			tau13sgs[id] * Filter::FilterNodeA(x,y,z,dx,dy,dz,s13) ) * 2 );
+
+		const double *sr = vel.Strainrate(i,j,k); // cannot parallelize because sr is static
+
+		double ss =
+			sr[0]*sr[0] + sr[1]*sr[1] + sr[2]*sr[2] +
+		  ( sr[3]*sr[3] + sr[4]*sr[4] + sr[5]*sr[5] ) * 2;
+
+		nuc[id] = 1./Re + fmax(.5*sgsdsp/ss, 0);
+	}}}
+
+	// Bcond::SetBoundaryY(nuc, 1); // homogeneous Neumann
+	// Bcond::SetBoundaryX(nuc, 3); // periodic
+	// Bcond::SetBoundaryZ(nuc, 3); // periodic
+	// vis.CellCenter2Edge();
+}
+
+
+

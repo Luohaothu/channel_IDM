@@ -101,6 +101,7 @@ const double* Vctr::Strainrate(int i, int j, int k) const
 	const Scla &w = v3_;
 
 	static double sr[6]; // will be overwritten even called from different objects of this class
+	#pragma omp threadprivate(sr)
 
 	// S_ii
 	sr[0] = (u[ip] - u[id]) / dxc;

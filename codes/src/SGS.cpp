@@ -362,16 +362,22 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 }
 
 
-void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel)
+
+
+
+#define DIRTY_TRICK_SGS_
+
+
+void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &veldns, double rsclx, double rsclu)
 // calculate sub-grid-scale stress by direct filter of resolved velocity
-// normal stress at cell-centers and shear stress on edges, all up to virtual boundary
+// normal & shear stress both at cell-centers, all up to virtual boundary
 {
 	const Mesh &ms = shear.ms; // refer to SPARSE mesh on which sgs stress is deployed
-	const Mesh &ms0 = vel.ms;  // refer to RESOLVED mesh on which velocity is deployed
+	const Mesh &ms0 = veldns.ms; // refer to RESOLVED mesh on which velocity is deployed
 
-	const Scla &u = vel[1];
-	const Scla &v = vel[2];
-	const Scla &w = vel[3];
+	const Scla &u = veldns[1];
+	const Scla &v = veldns[2];
+	const Scla &w = veldns[3];
 
 	Scla &tau11 = normal[1], &tau12 = shear[1];
 	Scla &tau22 = normal[2], &tau23 = shear[2];
@@ -386,58 +392,47 @@ void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &vel)
 	(vw = vc) *= wc; vv *= vc;
 	(uw = uc) *= wc; uu *= uc; ww *= wc;
 
-	// normal stress at cell-centers
+	// solve stress at cell-centers
+#ifndef DIRTY_TRICK_SGS_
+	#pragma omp parallel for
 	for (int j=0; j<=ms.Ny; j++) {
+#else
+	for (int j=1; j<ms.Ny; j+=ms.Ny-2) {
+	#pragma omp parallel for
+#endif
 	for (int k=0; k<=ms.Nz; k++) {
 	for (int i=0; i<=ms.Nx; i++) {
 
-		double x = ms.xc(i), dx = ms.dx(i);
-		double y = ms.yc(j), dy = 0;
-		double z = ms.zc(k), dz = ms.dz(k);
+		double x = ms.xc(i) * rsclx, dx = ms.dx(i) * rsclx;
+		double z = ms.zc(k) * rsclx, dz = ms.dz(k) * rsclx;
+		double y = WallRscl(ms.yc(j), rsclx), dy = 0;
 
 		tau11(i,j,k) = pow(Filter::FilterNodeU(x,y,z,dx,dy,dz,u), 2.) - Filter::FilterNodeA(x,y,z,dx,dy,dz,uu);
 		tau22(i,j,k) = pow(Filter::FilterNodeV(x,y,z,dx,dy,dz,v), 2.) - Filter::FilterNodeA(x,y,z,dx,dy,dz,vv);
 		tau33(i,j,k) = pow(Filter::FilterNodeW(x,y,z,dx,dy,dz,w), 2.) - Filter::FilterNodeA(x,y,z,dx,dy,dz,ww);
-	}}}
 
-	// shear stress on edges
-	for (int j=0; j<=ms.Ny; j++) {
-	for (int k=0; k<=ms.Nz; k++) {
-	for (int i=0; i<=ms.Nx; i++) {
-
-		double x = ms.x (i), dx = ms.hx(i);
-		double y = ms.y (j), dy = 0;
-		double z = ms.zc(k), dz = ms.dz(k);
-
-		if (i>0 && j>0) tau12(i,j,k) =
+		tau12(i,j,k) =
 			Filter::FilterNodeU(x,y,z,dx,dy,dz,u) *
 			Filter::FilterNodeV(x,y,z,dx,dy,dz,v) -
 			Filter::FilterNodeA(x,y,z,dx,dy,dz,uv);
 
-		x = ms.xc(i); dx = ms.dx(i);
-		y = ms.y (j); dy = 0;
-		z = ms.z (k); dz = ms.hz(k);
-
-		if (j>0 && k>0) tau23(i,j,k) =
+		tau23(i,j,k) =
 			Filter::FilterNodeV(x,y,z,dx,dy,dz,v) *
 			Filter::FilterNodeW(x,y,z,dx,dy,dz,w) -
 			Filter::FilterNodeA(x,y,z,dx,dy,dz,vw);
 
-		x = ms.x (i); dx = ms.hx(i);
-		y = ms.yc(j); dy = ms.dy(j);
-		z = ms.z (k); dz = ms.hz(k);
-
-		if (i>0 && k>0) tau13(i,j,k) =
+		tau13(i,j,k) =
 			Filter::FilterNodeU(x,y,z,dx,dy,dz,u) *
 			Filter::FilterNodeW(x,y,z,dx,dy,dz,w) -
 			Filter::FilterNodeA(x,y,z,dx,dy,dz,uw);
+
+		// rescale to match viscous scale
+		tau11(i,j,k) *= rsclu*rsclu; tau12(i,j,k) *= rsclu*rsclu;
+		tau22(i,j,k) *= rsclu*rsclu; tau23(i,j,k) *= rsclu*rsclu;
+		tau33(i,j,k) *= rsclu*rsclu; tau13(i,j,k) *= rsclu*rsclu;
 	}}}
 }
 
-
-
-
-#define DIRTY_TRICK_SGS_
 
 void SGS::SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, double rsclu)
 // calculate sgs shear stress on edges up to virtual boundary
@@ -500,6 +495,52 @@ void SGS::SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, doub
 			Filter::FilterNodeA(x,y,z,dx,dy,dz,uw) ) * pow(rsclu, 2.);
 	}}}
 }
+
+
+void SGS::SubGridNormalStress(Vctr &normal, const Vctr &veldns, double rsclx, double rsclu)
+// calculate sgs normal stress on cell-centers up to virtual boundary
+// by direct filter of resolved velocity
+{
+	const Mesh &ms = normal.ms; // refer to SPARSE mesh on which sgs stress is deployed
+	const Mesh &ms0 = veldns.ms; // refer to RESOLVED mesh on which velocity is deployed
+
+	const Scla &u = veldns[1];
+	const Scla &v = veldns[2];
+	const Scla &w = veldns[3];
+
+	Scla uu(ms0), &tau11 = normal[1]; (uu = u) *= u;
+	Scla vv(ms0), &tau22 = normal[2]; (vv = v) *= v;
+	Scla ww(ms0), &tau33 = normal[3]; (ww = w) *= w;
+
+	// solve shear stress on edges
+#ifndef DIRTY_TRICK_SGS_
+	#pragma omp parallel for
+	for (int j=0; j<=ms.Ny; j++) {
+#else
+	for (int j=1; j<ms.Ny; j+=ms.Ny-2) {
+	#pragma omp parallel for
+#endif
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+
+		double x = ms.xc(i) * rsclx, dx = ms.dx(i) * rsclx;
+		double z = ms.zc(k) * rsclx, dz = ms.dz(k) * rsclx;
+		double y = WallRscl(ms.yc(j), rsclx), dy = 0;
+
+		tau11(i,j,k) = (
+			pow(Filter::FilterNodeU(x,y,z,dx,dy,dz,u), 2.) -
+			Filter::FilterNodeU(x,y,z,dx,dy,dz,uu) ) * pow(rsclu, 2.);
+
+		tau22(i,j,k) = (
+			pow(Filter::FilterNodeV(x,y,z,dx,dy,dz,v), 2.) -
+			Filter::FilterNodeV(x,y,z,dx,dy,dz,vv) ) * pow(rsclu, 2.);
+
+		tau33(i,j,k) = (
+			pow(Filter::FilterNodeW(x,y,z,dx,dy,dz,w), 2.) -
+			Filter::FilterNodeW(x,y,z,dx,dy,dz,ww) ) * pow(rsclu, 2.);
+	}}}
+}
+
 
 
 
