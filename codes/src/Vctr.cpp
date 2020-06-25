@@ -69,6 +69,7 @@ const double* Vctr::ShearStrain(int i, int j, int k) const
 	const Scla &w = v3_;
 
 	static double sr[3]; // will be overwritten even called from different objects of this class
+	#pragma omp threadprivate(sr)
 
 	sr[0] = .5 * ((u[id]-u[jm]) / hyc + (v[id]-v[im]) / hxc); // S_12
 	sr[1] = .5 * ((v[id]-v[km]) / hzc + (w[id]-w[jm]) / hyc); // S_23
