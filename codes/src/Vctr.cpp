@@ -156,6 +156,7 @@ const double* Vctr::Gradient(int i, int j, int k) const
 	const Scla &w = v3_;
 	
 	static double gr[9]; // will be overwritten even called from different objects of this class
+	#pragma omp threadprivate(gr)
 
 	// a_ii
 	gr[0] = (u[ip] - u[id]) / dxc;	// a11

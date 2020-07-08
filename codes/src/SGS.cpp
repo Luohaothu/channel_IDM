@@ -76,7 +76,10 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 
 	/***** solve Mij *****/
 
+#pragma omp parallel
+{
 	// Sij, |Sij| and |Sij|*Sij stored in Lij
+	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
@@ -100,9 +103,8 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 		nut(i,j,k) = sra;
 	}}}
 
-#pragma omp parallel
-{
 	// Mij
+	#pragma omp barrier
 	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
@@ -242,7 +244,13 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 	Scla g31(ms), g32(ms), g33(ms);
 	Scla pss(ms), gg(ms);
 
+	double sum1 = 0;
+	double sum2 = 0;
+
+#pragma omp parallel
+{
 	// Sij
+	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
@@ -253,6 +261,8 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 	}}}
 
 	// Gij, G:G, PI^g * S:S
+	#pragma omp barrier
+	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
@@ -270,8 +280,8 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 
 		// PI^g = sqrt( B / G:G )
 		double dx2 = ms.dx(i) * ms.dx(i);
-		double dy2 = ms.dy(i) * ms.dy(i);
-		double dz2 = ms.dz(i) * ms.dz(i);
+		double dy2 = ms.dy(j) * ms.dy(j);
+		double dz2 = ms.dz(k) * ms.dz(k);
 		double beta[6];
 
 		beta[0] = dx2 * gr[0]*gr[0] + dy2 * gr[3]*gr[3] + dz2 * gr[6]*gr[6];
@@ -298,16 +308,15 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 	}}}
 
 	// C_nu
-	double sum1 = 0;
-	double sum2 = 0;
-
+	#pragma omp barrier
+	#pragma omp for reduction(+: sum1, sum2)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
 
 		double dx2 = ms.dx(i) * ms.dx(i);
-		double dy2 = ms.dy(i) * ms.dy(i);
-		double dz2 = ms.dz(i) * ms.dz(i);
+		double dy2 = ms.dy(j) * ms.dy(j);
+		double dz2 = ms.dz(k) * ms.dz(k);
 
 		// F(Gij)
 		double fgr[9];
@@ -351,7 +360,7 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 		sum1 += weight * (Filter::TestFilter(i,j,k,gg) - fgfg);
 		sum2 += weight * (Filter::TestFilter(i,j,k,pss) - sqrt(bt2 / fgfg) * fsfs);
 	}}}
-
+}
 
 	nut *= fmin(fmax(-.5/Re*sum1/sum2, 0), .5); // PI^g has been assigned to nut
 
