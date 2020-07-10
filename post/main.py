@@ -1,8 +1,10 @@
 #!/root/Software/anaconda3/bin/python3
 from basic import *
+from statis import Statis
 from budgets import Budgets
 
-para = DataSetInfo("../data2/test/")
+
+para = DataSetInfo("../data_test/test/")
 
 stas = Statis(Field(para))
 # bgts = Budgets(para)
@@ -37,11 +39,11 @@ for name in qs: write_channel(para.postpath + name, qs[name])
 
 
 
-stas.outer_scale()
-# stas.inner_scale()
+# stas.outer_scale()
+stas.inner_scale()
 
 casename = para.datapath.split('/')[-2]
-jrange = range(1, para.Ny//2+1) #range(1, para.Ny) #
+jrange = range(0, para.Ny//2+1) #range(1, para.Ny) #
 krange = range(1, para.Nzc)
 irange = range(1, para.Nxc)
 
