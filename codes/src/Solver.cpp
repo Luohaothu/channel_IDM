@@ -188,7 +188,7 @@ void Solver::InitFrom(Flow &fld, const Flow &fld0)
 
 void Solver::CalcVis(Flow &vis, const Vctr &vel, double Re, int sgstyp)
 {
-	Scla &nuc = (vis.GetScl() = 0);
+	Scla &nuc = vis.GetScl().Set(0);
 
 	// static SGS sgs(vis.ms);
 
@@ -206,9 +206,9 @@ void Solver::CalcVis(Flow &vis, const Vctr &vel, double Re, int sgstyp)
 
 void Solver::CalcFb(Vctr &fb, const double mpg[3])
 {
-	fb[1] = - mpg[0];
-	fb[2] = - mpg[1];
-	fb[3] = - mpg[2];
+	fb[1].Set(- mpg[0]);
+	fb[2].Set(- mpg[1]);
+	fb[3].Set(- mpg[2]);
 }
 void Solver::CalcFb(Vctr &fb, const double mpg[3], const Vctr &f)
 {

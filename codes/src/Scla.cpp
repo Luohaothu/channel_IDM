@@ -14,17 +14,24 @@ Nz(ms.Nz)
 {
 	q_ = new double[(Nx+1) * (Ny+1) * (Nz+1)];
 
-	fftz_temp = new double[Ny * ms.Nzr];
+	fft_temp = new double*[Ny+1];
+	for (int j=0; j<=Ny; j++)
+		fft_temp[j] = new double[max(ms.Nzr,ms.Nxr)];
 
-	frc_z = new fftw_plan[Ny];
-	fcr_z = new fftw_plan[Ny];
-	frc_xz= new fftw_plan[Ny];
-	fcr_xz= new fftw_plan[Ny];
+	frc_x = new fftw_plan[Ny+1];
+	fcr_x = new fftw_plan[Ny+1];
+	frc_z = new fftw_plan[Ny+1];
+	fcr_z = new fftw_plan[Ny+1];
+	frc_xz= new fftw_plan[Ny+1];
+	fcr_xz= new fftw_plan[Ny+1];
 
-	for (int j=1; j<Ny; j++) {
+	for (int j=0; j<=Ny; j++) {
 
-		double *r = &fftz_temp[j * ms.Nzr];
+		double *r = fft_temp[j];
 		fcmplx *c = (fcmplx*) r;
+
+		frc_x[j] = fftw_plan_dft_r2c_1d(Nx-1, r, c, FFTW_MEASURE);
+		fcr_x[j] = fftw_plan_dft_c2r_1d(Nx-1, c, r, FFTW_MEASURE);
 
 		frc_z[j] = fftw_plan_dft_r2c_1d(Nz-1, r, c, FFTW_MEASURE);
 		fcr_z[j] = fftw_plan_dft_c2r_1d(Nz-1, c, r, FFTW_MEASURE);
@@ -39,18 +46,43 @@ Nz(ms.Nz)
 
 Scla::~Scla()
 {
-	for (int j=1; j<Ny; j++) { // note: must not destory fft plan that is not created
+	for (int j=0; j<=Ny; j++) { // note: must not destory fft plan that is not created
+		fftw_destroy_plan(frc_x[j]);
+		fftw_destroy_plan(fcr_x[j]);
 		fftw_destroy_plan(frc_z[j]);
 		fftw_destroy_plan(fcr_z[j]);
 		fftw_destroy_plan(frc_xz[j]);
 		fftw_destroy_plan(fcr_xz[j]);
+		delete[] fft_temp[j];
 	}
+	delete[] frc_x;
+	delete[] fcr_x;
 	delete[] frc_z;
 	delete[] fcr_z;
 	delete[] frc_xz;
 	delete[] fcr_xz;
-	delete[] fftz_temp;
+	delete[] fft_temp;
 	delete[] q_;
+}
+
+Scla::Scla(const Scla &src):
+Scla(src.ms)
+{
+	Set(src);
+}
+
+Scla& Scla::operator=(const Scla &src)
+{
+	if (&src == this) return *this;
+	if (src.ms.Nx != ms.Nx ||
+		src.ms.Ny != ms.Ny ||
+		src.ms.Nz != ms.Nz)
+	{
+		cout << "Scalar sizes do not match !" << endl;
+		exit(0);
+	}
+	cout << "Warning: if you just want to assign values, use Set() instead." << endl;
+	return Set(src);
 }
 
 
@@ -59,7 +91,7 @@ Scla::~Scla()
 void Scla::fftxz()
 {
 	#pragma omp parallel for
-	for (int j=1; j<Ny; j++) {
+	for (int j=0; j<=Ny; j++) {
 		for (int k=1; k<Nz; k++)
 		for (int i=1; i<Nx; i++)
 			q_[ms.idfxz(i-1,j,k-1)] = q_[ms.idx(i,j,k)];
@@ -69,7 +101,7 @@ void Scla::fftxz()
 void Scla::ifftxz()
 {
 	#pragma omp parallel for
-	for (int j=1; j<Ny; j++) {
+	for (int j=0; j<=Ny; j++) {
 		fftw_execute(fcr_xz[j]);
 		for (int k=Nz-1; k>=1; k--)
 		for (int i=Nx-1; i>=1; i--)
@@ -77,25 +109,50 @@ void Scla::ifftxz()
 	}
 }
 
+void Scla::fftx()
+{
+	#pragma omp parallel for
+	for (int j=0; j<=Ny; j++) { double *temp = fft_temp[j];
+	for (int k=0; k<=Nz; k++) {
+		for (int i=1; i<Nx; i++)
+			temp[i-1] = q_[ms.idx(i,j,k)];
+		fftw_execute(frc_x[j]);
+		for (int i=0; i<ms.Nxr; i++)
+			q_[ms.idx(i,j,k)] = temp[i];
+	}}
+}
+void Scla::ifftx()
+{
+	#pragma omp parallel for
+	for (int j=0; j<=Ny; j++) { double *temp = fft_temp[j];
+	for (int k=0; k<=Nz; k++) {
+		for (int i=0; i<ms.Nxr; i++)
+			temp[i] = q_[ms.idx(i,j,k)];
+		fftw_execute(fcr_x[j]);
+		for (int i=1; i<Nx; i++)
+			q_[ms.idx(i,j,k)] = temp[i-1] / (Nx-1);
+	}}
+}
+
 void Scla::fftz()
 {
 	#pragma omp parallel for
-	for (int j=1; j<Ny; j++) { double *temp = &fftz_temp[j * ms.Nzr];
-	for (int i=1; i<Nx; i++) {
+	for (int j=0; j<=Ny; j++) { double *temp = fft_temp[j];
+	for (int i=0; i<=Nx; i++) {
 		for (int k=1; k<Nz; k++)
 			temp[k-1] = q_[ms.idx(i,j,k)];
 		fftw_execute(frc_z[j]);
 		for (int k=0; k<ms.Nzr; k++)
-			q_[ms.idfz(i,j,k)] = temp[k];
+			q_[ms.idx(i,j,k)] = temp[k];
 	}}
 }
 void Scla::ifftz()
 {
 	#pragma omp parallel for
-	for (int j=1; j<Ny; j++) { double *temp = &fftz_temp[j * ms.Nzr];
-	for (int i=1; i<Nx; i++) {
+	for (int j=0; j<=Ny; j++) { double *temp = fft_temp[j];
+	for (int i=0; i<=Nx; i++) {
 		for (int k=0; k<ms.Nzr; k++)
-			temp[k] = q_[ms.idfz(i,j,k)];
+			temp[k] = q_[ms.idx(i,j,k)];
 		fftw_execute(fcr_z[j]);
 		for (int k=1; k<Nz; k++)
 			q_[ms.idx(i,j,k)] = temp[k-1] / (Nz-1);

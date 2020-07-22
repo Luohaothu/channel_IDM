@@ -14,10 +14,10 @@ msk_ (ms)
 {
 	erro_ = 0;
 	iter_ = 0;
-	fb_   = 0;
-	fldh_ = 0;
-	vele_ = 0;
-	msk_  = 0;
+	fb_.Set(0);
+	fldh_.Set(0);
+	vele_.Set(0);
+	msk_.Set(0);
 	SetMsk(msk_);
 }
 
@@ -41,7 +41,7 @@ bool DA::GetExp(double time, const Vctr &vele)
 
 void DA::Reset()
 {
-	fb_ = iter_ = 0;
+	fb_.Set(iter_ = 0);
 }
 
 bool DA::IfIter(double en, const Vctr &vel)

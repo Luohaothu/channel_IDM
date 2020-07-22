@@ -16,10 +16,10 @@ Nz(ms.Nz)
 void Flow::InitRand(double energy)
 /* initiate velocity (up to real boundaries) with random fluctuations */
 {
-	Scla &u = v_[1] = 0;
-	Scla &v = v_[2] = 0;
-	Scla &w = v_[3] = 0;
-	Scla &p = s_    = 0;
+	Scla &u = v_[1].Set(0);
+	Scla &v = v_[2].Set(0);
+	Scla &w = v_[3].Set(0);
+	Scla &p = s_.Set(0);
 
 	srand(time(0));
 	for (int j=1; j<=Ny; j++) { // probability distribution: p(x) = ( x<0 ? x+1 : 1-x )

@@ -124,7 +124,6 @@ public:
 
 	// indexing system
 	int idx(int i, int j, int k) const { return j*(Nx+1)*(Nz+1) + k*(Nx+1) + i; };
-	int idfz(int i, int j, int k) const { return idx(i,j,0) + k*(Nx+1); };
 	int idfxz(int i, int j, int k) const { return idx(0,j,0) + k*Nxr + i; };
 
 	int ima(int i) const { return geo.ima[i]; };

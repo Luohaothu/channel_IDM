@@ -15,6 +15,8 @@ public:
 
 	Scla(const Mesh &ms);
 	~Scla();
+	Scla(const Scla &src);
+	Scla& operator=(const Scla &src);
 
 	// memory access
 	double& operator()(int i, int j, int k)       { return q_[ms.idx(i,j,k)]; };
@@ -30,6 +32,9 @@ public:
 	const double* SeeBlk() const { return &q_[ms.idx(0,0,0)]; };
 
 	// fft
+	void fftx();
+	void ifftx();
+
 	void fftz();  // FORWARD (exponent -1), real to complex, without normalization
 	void ifftz(); // BACKWARD (exponent 1), complex to real, with normalization
 
@@ -80,13 +85,13 @@ public:
 	Scla& MltLyr(const double *src, int j=0) { TravLyr(src, j, mlt); return *this; };
 	Scla& DvdLyr(const double *src, int j=0) { TravLyr(src, j, dvd); return *this; };
 	// note: bulk functions will change the boundary
-	Scla& operator= (double a) { TravBlk(a, set); return *this; };
+	Scla& Set       (double a) { TravBlk(a, set); return *this; };
 	Scla& operator+=(double a) { TravBlk(a, add); return *this; };
 	Scla& operator-=(double a) { TravBlk(a, mns); return *this; };
 	Scla& operator*=(double a) { TravBlk(a, mlt); return *this; };
 	Scla& operator/=(double a) { TravBlk(a, dvd); return *this; };
 
-	Scla& operator= (const Scla &src) { TravBlk(src.SeeBlk(), set); return *this; };
+	Scla& Set       (const Scla &src) { TravBlk(src.SeeBlk(), set); return *this; };
 	Scla& operator+=(const Scla &src) { TravBlk(src.SeeBlk(), add); return *this; };
 	Scla& operator-=(const Scla &src) { TravBlk(src.SeeBlk(), mns); return *this; };
 	Scla& operator*=(const Scla &src) { TravBlk(src.SeeBlk(), mlt); return *this; };
@@ -100,10 +105,13 @@ private:
 	const int Nx, Ny, Nz;
 	// pointer to the bulk memory
 	double *q_;
+	// array of x-direction fft plans
+	fftw_plan *frc_x;
+	fftw_plan *fcr_x;
 	// array of z-direction fft plans
 	fftw_plan *frc_z;
 	fftw_plan *fcr_z;
-	double *fftz_temp;
+	double **fft_temp;
 	// array of 2D fft plans
 	fftw_plan *fcr_xz;
 	fftw_plan *frc_xz;
@@ -129,7 +137,7 @@ public:
 	
 	Vctr(const Mesh &ms);
 
-	Vctr& operator=(double a) { v1_=a; v2_=a; v3_=a; return *this; };
+	Vctr& Set(double a) { v1_.Set(a); v2_.Set(a); v3_.Set(a); return *this; };
 
 	Scla&       operator[](int n)       { return n==1 ? v1_ : n==2 ? v2_ : v3_; };
 	const Scla& operator[](int n) const { return n==1 ? v1_ : n==2 ? v2_ : v3_; };
@@ -156,7 +164,7 @@ public:
 
 	Flow(const Mesh &ms);
 
-	Flow& operator=(double a) { v_ = a; s_ = a; return *this; };
+	Flow& Set(double a) { v_.Set(a); s_.Set(a); return *this; };
 
 	void InitRand(double energy);
 

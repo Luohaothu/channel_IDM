@@ -397,9 +397,9 @@ void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &veldns, double rs
 	Scla ww(ms0), uw(ms0), &wc = ww; w.Wgrid2CellCenter(wc); // with periodicity ignored
 
 	// calculate cross terms at cell-centers
-	(uv = uc) *= vc;
-	(vw = vc) *= wc; vv *= vc;
-	(uw = uc) *= wc; uu *= uc; ww *= wc;
+	(uv.Set(uc)) *= vc;
+	(vw.Set(vc)) *= wc; vv *= vc;
+	(uw.Set(uc)) *= wc; uu *= uc; ww *= wc;
 
 	// solve stress at cell-centers
 #ifndef DIRTY_TRICK_SGS_
@@ -459,8 +459,9 @@ void SGS::SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, doub
 	Scla uw(ms0), &tau13 = shear[3], &wc = uw; w.Wgrid2CellCenter(wc); // with periodicity ignored
 
 	// calculate cross terms at cell-centers
-	Scla temp(ms0);
-	temp = uc;
+	// Scla temp(ms0);
+	// temp.Set(uc);
+	Scla temp(uc);
 	uv *= vc;
 	vw *= wc;
 	uw *= temp;
@@ -517,9 +518,9 @@ void SGS::SubGridNormalStress(Vctr &normal, const Vctr &veldns, double rsclx, do
 	const Scla &v = veldns[2];
 	const Scla &w = veldns[3];
 
-	Scla uu(ms0), &tau11 = normal[1]; (uu = u) *= u;
-	Scla vv(ms0), &tau22 = normal[2]; (vv = v) *= v;
-	Scla ww(ms0), &tau33 = normal[3]; (ww = w) *= w;
+	Scla uu(ms0), &tau11 = normal[1]; (uu.Set(u)) *= u;
+	Scla vv(ms0), &tau22 = normal[2]; (vv.Set(v)) *= v;
+	Scla ww(ms0), &tau33 = normal[3]; (ww.Set(w)) *= w;
 
 	// solve shear stress on edges
 #ifndef DIRTY_TRICK_SGS_

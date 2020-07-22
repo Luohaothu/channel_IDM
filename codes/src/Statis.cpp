@@ -157,11 +157,11 @@ double Statis::CheckProf(const Flow &fld, const Flow &vis, double velm[3])
 	fld.SeeVec(2).Vgrid2CellCenter(v);
 	fld.SeeVec(3).Wgrid2CellCenter(w);
 	
-	p = fld.SeeScl();
+	p.Set(fld.SeeScl());
 	p.SetLyr(p.SeeLyr(1), 0);
 	p.SetLyr(p.SeeLyr(ms.Ny-1), ms.Ny);
 
-	nuc = vis.SeeScl();
+	nuc.Set(vis.SeeScl());
 
 	// reset accumulators
 	double ener = 0;
