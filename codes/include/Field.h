@@ -11,7 +11,7 @@
 class Scla
 {
 public:
-	const Mesh &ms;
+	const Mesh ms;
 
 	Scla(const Mesh &ms);
 	~Scla();
@@ -133,7 +133,7 @@ private:
 class Vctr
 {
 public:
-	const Mesh &ms;
+	const Mesh ms;
 	
 	Vctr(const Mesh &ms);
 
@@ -160,7 +160,7 @@ private:
 class Flow
 {
 public:
-	const Mesh &ms;
+	const Mesh ms;
 
 	Flow(const Mesh &ms);
 

@@ -16,6 +16,8 @@ public:
 
 	Geometry(int Nx, int Ny, int Nz, double Lx, double Ly, double Lz);
 	~Geometry();
+	Geometry(const Geometry &geo);
+	Geometry& operator=(const Geometry &geo);
 	
 	void InitMesh(double dy_min, const char *path=NULL);
 	void InitInterval();
@@ -41,6 +43,7 @@ public:
 	int *kma, *kpa;
 
 private:
+	void DeepCopy(const Geometry &geo);
 	void InitMeshY(const char *path);
 	void InitMeshY(double dy_min);
 	void AlignBoundaryYc(const Geometry &geo);
@@ -186,7 +189,7 @@ public:
 	void hmx(int i, int j, int k, double &hxm, double &hym, double &hzm) const;
 
 private:
-	const Geometry &geo;
+	const Geometry geo;
 
 };
 

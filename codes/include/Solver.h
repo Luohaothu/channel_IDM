@@ -7,7 +7,7 @@
 class Solver
 {
 public:
-	const Mesh &ms;
+	const Mesh ms;
 
 	Solver(const Mesh &ms);
 

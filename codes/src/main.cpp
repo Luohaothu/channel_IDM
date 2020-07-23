@@ -23,8 +23,6 @@ int main()
 	Para para("");
 
 	Geometry_prdxz geo(para.Nx,para.Ny,para.Nz, para.Lx,para.Ly,para.Lz);
-	Mesh mesh(geo);
-	Solver solver(mesh);
 
 	geo.InitMesh(para.dy_min);
 	geo.InitInterval();
@@ -34,6 +32,9 @@ int main()
 	para.showPara();
 	geo.WriteMesh(para.statpath);
 	geo.WriteMeshY(para.statpath);
+	
+	const Mesh mesh(geo);
+	Solver solver(mesh);
 
 	// computation begins
 	int tstep = Initiate(solver, para);
@@ -58,10 +59,6 @@ int main()
 
 	Geometry_prdxz geo0(para0.Nx,para0.Ny,para0.Nz, para0.Lx,para0.Ly,para0.Lz);
 	Geometry_prdxz geo1(para1.Nx,para1.Ny,para1.Nz, para1.Lx,para1.Ly,para1.Lz);
-	Mesh mesh0(geo0);
-	Mesh mesh1(geo1);
-	Solver solver0(mesh0);
-	Solver solver1(mesh1);
 
 	geo0.InitMesh(para0.dy_min);
 	geo1.InitMesh(para1.dy_min);
@@ -75,11 +72,19 @@ int main()
 	para0.showPara(); geo0.WriteMeshY(para0.statpath); geo0.WriteMesh(para0.statpath);
 	para1.showPara(); geo1.WriteMeshY(para1.statpath); geo1.WriteMesh(para1.statpath);
 
+	const Mesh mesh0(geo0);
+	const Mesh mesh1(geo1);
+	Solver solver0(mesh0);
+	Solver solver1(mesh1);
+
 	// computation begins
 	int tstep0 = Initiate(solver0, para0);
 	int tstep1 = Initiate(solver1, para1);
 	if (tstep0 == 0) Output(para0, solver0, tstep0);
 	if (tstep1 == 0) Output(para1, solver1, tstep1);
+
+	solver0.set_mpg(-1.736e-3, 0, 0); //-8.65e-4, 0, 0); //-0.0029, 0, 0); //
+	solver1.set_mpg(-0.0025, 0, 0); //-2.114e-3, 0, 0); //-0.0029, 0, 0); //
 
 	// main loop
 	while (tstep1++ < para1.Nt) {

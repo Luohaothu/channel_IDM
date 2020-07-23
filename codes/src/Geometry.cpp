@@ -54,6 +54,45 @@ Geometry::~Geometry()
 	delete[] kma; delete[] kpa;
 }
 
+Geometry::Geometry(const Geometry &geo):
+Geometry(geo.Nx,geo.Ny,geo.Nz,geo.Lx,geo.Ly,geo.Lz)
+{
+	DeepCopy(geo);
+}
+
+Geometry& Geometry::operator=(const Geometry &geo)
+{
+	if (&geo == this) return *this;
+	if (Nx != geo.Nx || Ny != geo.Ny || Nz != geo.Nz ||
+		Lx != geo.Lx || Ly != geo.Ly || Lz != geo.Lz)
+	{
+		cout << "Geometry sizes do not match !" << endl;
+		exit(0);
+	}
+	DeepCopy(geo);
+	return *this;
+}
+
+void Geometry::DeepCopy(const Geometry &geo)
+{
+	for (int n=0; n<=max(max(Nx,Ny),Nz); n++) {
+		if (n<=Nx) { x[n] = geo.x[n]; xc[n] = geo.xc[n]; }
+		if (n<=Ny) { y[n] = geo.y[n]; yc[n] = geo.yc[n]; }
+		if (n<=Nz) { z[n] = geo.z[n]; zc[n] = geo.zc[n]; }
+
+		if (n<=Nx) { dx[n] = geo.dx[n]; hx[n] = geo.hx[n]; }
+		if (n<=Ny) { dy[n] = geo.dy[n]; hy[n] = geo.hy[n]; }
+		if (n<=Nz) { dz[n] = geo.dz[n]; hz[n] = geo.hz[n]; }
+
+		if (n<Nx) { kx[n] = geo.kx[n]; kx2[n] = geo.kx2[n]; }
+		if (n<Nz) { kz[n] = geo.kz[n]; kz2[n] = geo.kz2[n]; }
+
+		if (n<Nx) { ima[n] = geo.ima[n]; ipa[n] = geo.ipa[n]; }
+		if (n<Ny) { jma[n] = geo.jma[n]; jpa[n] = geo.jpa[n]; }
+		if (n<Nz) { kma[n] = geo.kma[n]; kpa[n] = geo.kpa[n]; }
+	}
+}
+
 
 void Geometry::InitMesh(double dy_min, const char *path)
 {

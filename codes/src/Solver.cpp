@@ -78,7 +78,6 @@ void Solver::evolve(double Re, double dt, int sgstyp)
 void Solver::evolve(double Re, double dt, int sgstyp)
 {
 	set_time(time_+dt);
-	// set_mpg(-0.0029, 0, 0); //-0.00174, 0, 0); //
 
 	CalcVis(vis_, get_vel(), Re, sgstyp);
 
@@ -104,7 +103,6 @@ void Solver::evolve(double Re, double dt, int sgstyp)
 void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0, double Re0)
 {
 	set_time(time_+dt);
-	// set_mpg(-0.0029, 0, 0); //-0.0025, 0, 0); //
 
 	double utau  = pow(fabs(mpg_[0]), .5);
 	double utau0 = pow(fabs(solver0.get_mpg()[0]), .5);

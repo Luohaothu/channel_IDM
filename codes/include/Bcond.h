@@ -7,7 +7,6 @@ class Boundary
 {
 public:
 	Boundary(const Mesh &ms):
-	ms(ms),
 	Nx(ms.Nx),
 	Ny(ms.Ny),
 	Nz(ms.Nz)
@@ -42,7 +41,6 @@ public:
 	double b6(int i, int j) const { return b6_[j*(Nx+1) + i]; };
 
 private:
-	const Mesh &ms;
 	const int Nx, Ny, Nz;
 	double *b1_, *b2_;
 	double *b3_, *b4_;

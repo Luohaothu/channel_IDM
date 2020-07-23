@@ -6,7 +6,8 @@
 class Statis
 {
 public:
-	// Statis() {}; // default constructor, for static function call
+	const Mesh ms;
+
 	Statis(const Mesh &ms);
 	~Statis();
 
@@ -16,8 +17,6 @@ public:
 	static double GetLogTime(const char *path, int tstep, double mpg[3]);
 	
 private:
-	const Mesh &ms;
-
 	double div_; int divpos_[3];
 	double cfl_; int cflpos_[3];
 	double velm_[3]; // bulk mean velocities in 3 directions
