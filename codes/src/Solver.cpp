@@ -5,6 +5,7 @@
 #include "SGS.h"
 #include "WM.h"
 #include "DA.h"
+#include "PIO.h"
 
 using namespace std;
 
@@ -91,7 +92,7 @@ void Solver::evolve(double Re, double dt, int sgstyp)
 	Bcond::SetBoundaryX(get_vel());
 	Bcond::SetBoundaryZ(get_vel());
 
-	CalcMpg(mpg_, get_vel(), get_velh(), dt);
+	// CalcMpg(mpg_, get_vel(), get_velh(), dt);
 
 	if (sgstyp == 1) RemoveSpanMean(get_vel());
 }
@@ -104,16 +105,18 @@ void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0, double Re
 {
 	set_time(time_+dt);
 
-	double utau  = pow(fabs(mpg_[0]), .5);
-	double utau0 = pow(fabs(solver0.get_mpg()[0]), .5);
+	double utau  = sqrt(fabs(mpg_[0]));
+	double utau0 = sqrt(fabs(solver0.get_mpg()[0]));
 	double rsclu = utau0 ? utau/utau0 : 1;
-	double rsclx = rsclu * Re / Re0;
+	double rsclx = rsclu * Re / Re0; // note: tiled MFU must satisfy periodic condition to a high presicion
+	double Ret = utau * Re;
 
 	CalcVis(vis_, get_vel(), Re, sgstyp);
 
 	WM::OffWallSGS(vis_, get_vel(), solver0.get_vel(), Re, rsclx, rsclu);
 
-	Bcond::ChannelDirichlet(bc_, sbc_, ms, solver0.get_vel(), rsclx, rsclu);
+	Bcond::ChannelDirichlet(bc_, sbc_, ms, PIO::BoundaryPredict(get_vel(), solver0.get_vel(), Ret, rsclx, rsclu));
+	// Bcond::ChannelDirichlet(bc_, sbc_, ms, solver0.get_vel(), rsclx, rsclu);
 	// Bcond::ChannelRobin(bc_, sbc_, get_vel(), vis_, solver0.get_vel(), solver0.get_vis());
 
 	CalcFb(fb_, mpg_);
@@ -124,7 +127,7 @@ void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0, double Re
 	Bcond::SetBoundaryX(get_vel());
 	Bcond::SetBoundaryZ(get_vel());
 
-	CalcMpg(mpg_, get_vel(), get_velh(), dt, solver0.get_mpg());
+	// CalcMpg(mpg_, get_vel(), get_velh(), dt, solver0.get_mpg());
 
 	// Assimilate(solver0.get_vel(), dt, 5, .1);
 }
