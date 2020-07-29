@@ -31,9 +31,9 @@ Nzr(Nzc*2)
 	kx = new double[Nx]; kx2 = new double[Nx];
 	kz = new double[Nz]; kz2 = new double[Nz];
 
-	ima = new int[Nx]; ipa = new int[Nx];
-	jma = new int[Ny]; jpa = new int[Ny];
-	kma = new int[Nz]; kpa = new int[Nz];
+	ima = new int[Nx+1]; ipa = new int[Nx+1];
+	jma = new int[Ny+1]; jpa = new int[Ny+1];
+	kma = new int[Nz+1]; kpa = new int[Nz+1];
 }
 
 Geometry::~Geometry()
@@ -87,9 +87,9 @@ void Geometry::DeepCopy(const Geometry &geo)
 		if (n<Nx) { kx[n] = geo.kx[n]; kx2[n] = geo.kx2[n]; }
 		if (n<Nz) { kz[n] = geo.kz[n]; kz2[n] = geo.kz2[n]; }
 
-		if (n<Nx) { ima[n] = geo.ima[n]; ipa[n] = geo.ipa[n]; }
-		if (n<Ny) { jma[n] = geo.jma[n]; jpa[n] = geo.jpa[n]; }
-		if (n<Nz) { kma[n] = geo.kma[n]; kpa[n] = geo.kpa[n]; }
+		if (n<=Nx) { ima[n] = geo.ima[n]; ipa[n] = geo.ipa[n]; }
+		if (n<=Ny) { jma[n] = geo.jma[n]; jpa[n] = geo.jpa[n]; }
+		if (n<=Nz) { kma[n] = geo.kma[n]; kpa[n] = geo.kpa[n]; }
 	}
 }
 
@@ -171,6 +171,11 @@ void Geometry::InitIndices()
 	ima[Nx] = Nx-1; ipa[0] = 1;
 	jma[Ny] = Ny-1; jpa[0] = 1;
 	kma[Nz] = Nz-1; kpa[0] = 1;
+
+	// avoid accessing invalid indices
+	ima[0] = ipa[Nx] = 1/INFTSM;
+	jma[0] = jpa[Ny] = 1/INFTSM;
+	kma[0] = kpa[Nz] = 1/INFTSM;
 }
 
 

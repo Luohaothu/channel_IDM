@@ -80,11 +80,12 @@ int main()
 	// computation begins
 	int tstep0 = Initiate(solver0, para0);
 	int tstep1 = Initiate(solver1, para1);
-	if (tstep0 == 0) Output(para0, solver0, tstep0);
-	if (tstep1 == 0) Output(para1, solver1, tstep1);
 
 	solver0.set_mpg(-1.736e-3, 0, 0); //-8.65e-4, 0, 0); //-0.0029, 0, 0); //
 	solver1.set_mpg(-0.0025, 0, 0); //-2.114e-3, 0, 0); //-0.0029, 0, 0); //
+	
+	if (tstep0 == 0) Output(para0, solver0, tstep0);
+	if (tstep1 == 0) Output(para1, solver1, tstep1);
 
 	// main loop
 	while (tstep1++ < para1.Nt) {

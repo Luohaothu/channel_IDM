@@ -8,8 +8,8 @@ using namespace std;
 
 
 void read_PIO(double *hr, double *hi,
-	double &betv, double &dxbv, double &dzbv,
-	double &betw, double &dxbw, double &dzbw,
+	double &alfv, double &dxav, double &dzav,
+	double &alfw, double &dxaw, double &dzaw,
 	double lc, double y, const double *kx, int Nxc);
 
 
@@ -44,11 +44,11 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 	Scla &ub = velb[1], &vb = velb[2], &wb = velb[3];
 
 	// PIO coefficients
-	double *hr = new double[mso.Nxc], betv, dxbv, dzbv;
-	double *hi = new double[mso.Nxc], betw, dxbw, dzbw;
+	double *hr = new double[mso.Nxc], alfv, dxav, dzav;
+	double *hi = new double[mso.Nxc], alfw, dxaw, dzaw;
 
-	read_PIO(hr, hi, betv, dxbv, dzbv,
-					 betw, dxbw, dzbw, 1./Ret, yb1, geo2.kx, mso.Nxc);
+	read_PIO(hr, hi, alfv, dxav, dzav,
+					 alfw, dxaw, dzaw, 1./Ret, yb1, geo2.kx, mso.Nxc);
 
 	// interpolate from MFU matching inner scale
 	#pragma omp parallel for collapse(2)
@@ -140,17 +140,17 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 		ub(i,0,k) += uo(i,0,k);
 		ub(i,2,k) += uo(i,2,k);
 
-		x = msb.xc(i) + dxbv;
-		z = msb.zc(k) + dzbv;
+		x = msb.xc(i) + dxav;
+		z = msb.zc(k) + dzav;
 
-		vb(i,1,k) += betv * Interp::InterpNodeV(x,yo1,z,vo);
-		vb(i,2,k) += betv * Interp::InterpNodeV(x,yo2,z,vo);
+		vb(i,1,k) += alfv * Interp::InterpNodeV(x,yo1,z,vo);
+		vb(i,2,k) += alfv * Interp::InterpNodeV(x,yo2,z,vo);
 
-		x = msb.xc(i) + dxbw;
-		z = msb.z (k) + dzbw;
+		x = msb.xc(i) + dxaw;
+		z = msb.z (k) + dzaw;
 
-		wb(i,0,k) += betw * Interp::InterpNodeW(x,yo1,z,wo);
-		wb(i,2,k) += betw * Interp::InterpNodeW(x,yo2,z,wo);
+		wb(i,0,k) += alfw * Interp::InterpNodeW(x,yo1,z,wo);
+		wb(i,2,k) += alfw * Interp::InterpNodeW(x,yo2,z,wo);
 	}}
 
 	Bcond::SetBoundaryX(velb);
@@ -174,17 +174,17 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 			us(i,0,k) += Interp::InterpNodeU(x,yo1,z,uo);
 			us(i,2,k) += Interp::InterpNodeU(x,yo2,z,uo);
 
-			x = mss.xc(i) + dxbv;
-			z = mss.zc(k) + dzbv;
+			x = mss.xc(i) + dxav;
+			z = mss.zc(k) + dzav;
 
-			vs(i,1,k) += betv * Interp::InterpNodeV(x,yo1,z,vo);
-			vs(i,2,k) += betv * Interp::InterpNodeV(x,yo2,z,vo);
+			vs(i,1,k) += alfv * Interp::InterpNodeV(x,yo1,z,vo);
+			vs(i,2,k) += alfv * Interp::InterpNodeV(x,yo2,z,vo);
 
-			x = mss.xc(i) + dxbw;
-			z = mss.z (k) + dzbw;
+			x = mss.xc(i) + dxaw;
+			z = mss.z (k) + dzaw;
 
-			ws(i,0,k) += betw * Interp::InterpNodeW(x,yo1,z,wo);
-			ws(i,2,k) += betw * Interp::InterpNodeW(x,yo2,z,wo);
+			ws(i,0,k) += alfw * Interp::InterpNodeW(x,yo1,z,wo);
+			ws(i,2,k) += alfw * Interp::InterpNodeW(x,yo2,z,wo);
 		}}
 
 		Bcond::SetBoundaryX(vels);
@@ -208,8 +208,8 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 
 
 void read_PIO(double *hr, double *hi,
-	double &betv, double &dxbv, double &dzbv,
-	double &betw, double &dxbw, double &dzbw,
+	double &alfv, double &dxav, double &dzav,
+	double &alfw, double &dxaw, double &dzaw,
 	double lc, double y, const double *kx, int Nxc)
 // get PIO coefficients
 {
@@ -239,28 +239,28 @@ void read_PIO(double *hr, double *hi,
 	}}
 	fclose(fp);
 
-	double *betvs = new double[ny];
+	double *alfvs = new double[ny];
 	double *dxbvs = new double[ny];
 	double *dzbvs = new double[ny];
-	double *betws = new double[ny];
+	double *alfws = new double[ny];
 	double *dxbws = new double[ny];
 	double *dzbws = new double[ny];
 
-	fp = fopen("calibration_PIO/V/Beta.dat", "r");
+	fp = fopen("calibration_PIO/V/Alpha.dat", "r");
 	for (int j=-3; j<ny; j++) {
 		fgets(str, 1024, fp);
 		if (j >= 0)
 			sscanf(str, "%le %le %le %le",
-				&ysp[j], &betvs[j], &dxbvs[j], &dzbvs[j]);
+				&ysp[j], &alfvs[j], &dxbvs[j], &dzbvs[j]);
 	}
 	fclose(fp);
 
-	fp = fopen("calibration_PIO/W/Beta.dat", "r");
+	fp = fopen("calibration_PIO/W/Alpha.dat", "r");
 	for (int j=-3; j<ny; j++) {
 		fgets(str, 1024, fp);
 		if (j >= 0)
 			sscanf(str, "%le %le %le %le",
-				&ysp[j], &betws[j], &dxbws[j], &dzbws[j]);
+				&ysp[j], &alfws[j], &dxbws[j], &dzbws[j]);
 	}
 	fclose(fp);
 
@@ -271,13 +271,13 @@ void read_PIO(double *hr, double *hi,
 	double a = ysp[j0+1] - yp;
 	double b = yp - ysp[j0];
 
-	betv = (a * betvs[j0] + b * betvs[j0+1]) / (a+b);
-	dxbv = (a * dxbvs[j0] + b * dxbvs[j0+1]) / (a+b) * lc;
-	dzbv = (a * dzbvs[j0] + b * dzbvs[j0+1]) / (a+b) * lc;
+	alfv = (a * alfvs[j0] + b * alfvs[j0+1]) / (a+b);
+	dxav = (a * dxbvs[j0] + b * dxbvs[j0+1]) / (a+b) * lc;
+	dzav = (a * dzbvs[j0] + b * dzbvs[j0+1]) / (a+b) * lc;
 
-	betw = (a * betws[j0] + b * betws[j0+1]) / (a+b);
-	dxbw = (a * dxbws[j0] + b * dxbws[j0+1]) / (a+b) * lc;
-	dzbw = (a * dzbws[j0] + b * dzbws[j0+1]) / (a+b) * lc;
+	alfw = (a * alfws[j0] + b * alfws[j0+1]) / (a+b);
+	dxaw = (a * dxbws[j0] + b * dxbws[j0+1]) / (a+b) * lc;
+	dzaw = (a * dzbws[j0] + b * dzbws[j0+1]) / (a+b) * lc;
 
 
 	for (int i=0; i<Nxc; i++) {
@@ -305,8 +305,8 @@ void read_PIO(double *hr, double *hi,
 	delete[] ysp;
 	delete[] hrs;
 	delete[] his;
-	delete[] betvs; delete[] dxbvs; delete[] dzbvs;
-	delete[] betws; delete[] dxbws; delete[] dzbws;
+	delete[] alfvs; delete[] dxbvs; delete[] dzbvs;
+	delete[] alfws; delete[] dxbws; delete[] dzbws;
 }
 
 

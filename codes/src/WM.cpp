@@ -133,7 +133,16 @@ void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double 
 			t12sgs += weight1 * tau12sgs(i,j,k);
 	}
 
-	const double rsclsgs = fmin(fmax( fabs(r12dfc / t12sgs), 1.), 2.);
+	// shearsgs[1].Set(-r12dfc);
+	// shearsgs[2].Set(0);
+	// shearsgs[3].Set(0);
+	// for (int k=0; k<=ms.Nz; k++)
+	// for (int i=0; i<=ms.Nx; i++)
+	// 	shearsgs[1](i,ms.Ny,k) *= -1;
+
+	// const double rsclsgs = 1.;
+
+	const double rsclsgs = fmin(fabs(r12dfc / t12sgs), 2.);
 
 	// ***** rescale kinematic viscosity to account for low-order differencing error ***** //
 	const double y = ms.y(1), y3 = ms.yc(0), y4 = ms.yc(1);
