@@ -1,7 +1,7 @@
 from basic import *
 
 
-class Operator:
+class Operators:
 	def __init__(self, para):
 		self.para = para
 

@@ -59,9 +59,6 @@ class Statis:
 			self.Evw += self.__flipk( (np.conj(spec(v))*spec(w)).real ) / len(tsteps)
 			self.Euw += self.__flipk( (np.conj(spec(u))*spec(w)).real ) / len(tsteps)
 
-		logs = np.loadtxt(self.para.statpath+'LOG.dat', skiprows=3)
-		self.tauw = - np.mean([log[6] for log in logs if int(log[0]) in tsteps])
-
 	def __flipk(self, q):
 		''' fold all energy to the [:nzc,:nxc] range
 		    Nx must be even, as required by hft, Nz can be even or odd  '''
@@ -97,18 +94,13 @@ class Statis:
 		self.Evw[:] = .5 * (self.Evw - self.Evw[::-1])
 		self.Euw[:] = .5 * (self.Euw + self.Euw[::-1])
 
-	def calc_wallscale(self):
-		''' calculate the wall scales
-		    make sure Um and R12 have been correctly assigned before
-		    tauw is obtained by integrating the relation ( accurancy tested to be good O(10e-4) )
-		    dU^+/dy^+ - <u'v'>^+ = 1 - y\bar '''
-		    
-		# Ly = self.para.Ly
-		Re = self.para.Re
-		# yc = self.para.yc
-		# nudUdy = np.gradient(self.Um, yc) / Re
-		# self.tauw = 4./Ly**2 * trapz(abs(nudUdy-self.R12), yc)
+	def calc_wallscale(self, tsteps=None):
+		if tsteps is None: tsteps = self.para.tsteps
 
+		Re = self.para.Re
+		logs = np.loadtxt(self.para.statpath+'LOG.dat', skiprows=3)
+		
+		self.tauw = - np.mean([log[6] for log in logs if int(log[0]) in tsteps])
 		self.utau = self.tauw**.5
 		self.dnu = 1./Re / self.utau
 		self.tnu = self.dnu / self.utau
