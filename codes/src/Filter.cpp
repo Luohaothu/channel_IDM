@@ -263,6 +263,7 @@ double Filter::FilterNode(
 }
 
 double Filter::TestFilter(int i, int j, int k, const Scla &q)
+// box filter in wall-parallel directions over uniformly spaced grids with ratio 2
 {
 	const Mesh &ms = q.ms;
 
@@ -274,10 +275,12 @@ double Filter::TestFilter(int i, int j, int k, const Scla &q)
 	int imjp, jmkp, imkp; ms.mpx(i,j,k,imjp,jmkp,imkp);
 	int imjm, jmkm, imkm; ms.mmx(i,j,k,imjm,jmkm,imkm);
 
+	// Simpson's rule
 	return 4./9  *   q[id]
 	     + 1./9  * ( q[im]   + q[ip]   + q[km]   + q[kp] )
 		 + 1./36 * ( q[imkm] + q[ipkp] + q[imkp] + q[ipkm] );
 
+	// // trapezoidal rule (filter ratio is actually sqrt(6))
 	// return 0.25   *   q[id]
 	//      + 0.125  * ( q[im]   + q[ip]   + q[km]   + q[kp] )
 	// 	 + 0.0625 * ( q[imkm] + q[ipkp] + q[imkp] + q[ipkm] );

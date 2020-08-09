@@ -59,19 +59,11 @@ double Interp::InterpNode(double x_, double y_, double z_, const Scla &q, int st
 	double x = Shift(x_, ms.x(1), ms.x(ms.Nx));
 	double y = Shift(y_, ms.y(1), ms.y(ms.Ny));
 	double z = Shift(z_, ms.z(1), ms.z(ms.Nz));
-	// double x = fmod(fmod(x_-ms.x(1), ms.Lx) + ms.Lx, ms.Lx) + ms.x(1);
-	// double y = fmod(fmod(y_-ms.y(1), ms.Ly) + ms.Ly, ms.Ly) + ms.y(1);
-	// double z = fmod(fmod(z_-ms.z(1), ms.Lz) + ms.Lz, ms.Lz) + ms.z(1);
 
 	// binary search for the interpolation range
 	int im = BiSearch(x, corx, i0, in), ip = im + 1;
 	int jm = BiSearch(y, cory, j0, jn), jp = jm + 1;
 	int km = BiSearch(z, corz, k0, kn), kp = km + 1;
-
-	// int mid; // note: im denote the largest point that is <= x
-	// while (ip-im > 1) if (x < corx[mid=(im+ip)/2]) ip = mid; else im = mid;
-	// while (jp-jm > 1) if (y < cory[mid=(jm+jp)/2]) jp = mid; else jm = mid;
-	// while (kp-km > 1) if (z < corz[mid=(km+kp)/2]) kp = mid; else km = mid;
 
 	return InterpCell(q,
 		x, corx[im], corx[ip], im, ip,

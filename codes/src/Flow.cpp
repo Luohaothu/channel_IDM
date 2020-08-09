@@ -114,7 +114,7 @@ void Flow::WriteTecplot(const char *path, int tstep, double time) const
 	fclose(fp);
 
 	sprintf(str, "preplot %s", filename); system(str);
-	sprintf(str, "rm %s",      filename); system(str);
+	// sprintf(str, "rm %s",      filename); system(str);
 }
 
 
