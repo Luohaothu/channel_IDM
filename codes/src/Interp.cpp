@@ -81,6 +81,7 @@ void Interp::InterpBulk(Scla &dst, const Scla &src, int stgtyp)
 	const double *cory = stgtyp==2 ? ms.y() : ms.yc();
 	const double *corz = stgtyp==3 ? ms.z() : ms.zc();
 
+	#pragma omp parallel for collapse(3)
 	for (int j=(stgtyp==2); j<=ms.Ny; j++) {
 	for (int k=(stgtyp==3); k<=ms.Nz; k++) {
 	for (int i=(stgtyp==1); i<=ms.Nx; i++) {

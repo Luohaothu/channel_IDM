@@ -61,7 +61,7 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 				 gmaw,  dxw,  dzw, 1./Ret, yb1);
 
 	// filter from MFU matching inner scale
-	#pragma omp parallel for collapse(2)
+	#pragma omp parallel for collapse(3)
 	for (int j=0; j<=msb.Ny; j++) {
 	for (int k=0; k<=msb.Nz; k++) {
 	for (int i=0; i<=msb.Nx; i++) {

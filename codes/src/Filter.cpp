@@ -186,24 +186,24 @@ static double BoxFilter3(
 	if (j2-j1 > 1) {
 		y = ys[j = (j1+j2) / 2];
 		// #pragma omp task shared(f1, xm,xp,ym,y,zm,zp, xs,ys,zs,q, i0,in,j0,j,k0,kn) if (recursdep > threshold)
-		f1 = BoxFilter3(xm,xp,ym,y,zm,zp, xs,ys,zs,q, i0,in,j0,j,k0,kn); // only line that is tasked by omp
-		f2 = BoxFilter3(xm,xp,y,yp,zm,zp, xs,ys,zs,q, i0,in,j,jn,k0,kn);
+		f1 = BoxFilter3(xm,xp,ym,y,zm,zp, xs,ys,zs,q, i1,i2,j1,j,k1,k2); // only line that is tasked by omp
+		f2 = BoxFilter3(xm,xp,y,yp,zm,zp, xs,ys,zs,q, i1,i2,j,j2,k1,k2);
 		// #pragma omp taskwait
 		return 1. / (yp-ym) * ((y-ym) * f1 + (yp-y) * f2);
 	}
 	else if (k2-k1 > 1) {
 		z = zs[k = (k1+k2) / 2];
 		// #pragma omp task shared(f1, xm,xp,ym,yp,zm,z, xs,ys,zs,q, i0,in,j0,jn,k0,k) if (recursdep > threshold)
-		f1 = BoxFilter3(xm,xp,ym,yp,zm,z, xs,ys,zs,q, i0,in,j0,jn,k0,k); // only line that is tasked by omp
-		f2 = BoxFilter3(xm,xp,ym,yp,z,zp, xs,ys,zs,q, i0,in,j0,jn,k,kn);
+		f1 = BoxFilter3(xm,xp,ym,yp,zm,z, xs,ys,zs,q, i1,i2,j1,j2,k1,k); // only line that is tasked by omp
+		f2 = BoxFilter3(xm,xp,ym,yp,z,zp, xs,ys,zs,q, i1,i2,j1,j2,k,k2);
 		// #pragma omp taskwait
 		return 1. / (zp-zm) * ((z-zm) * f1 + (zp-z) * f2);
 	}
 	else if (i2-i1 > 1) {
 		x = xs[i = (i1+i2) / 2];
 		// #pragma omp task shared(f1, xm,x,ym,yp,zm,zp, xs,ys,zs,q, i0,i,j0,jn,k0,kn) if (recursdep > threshold)
-		f1 = BoxFilter3(xm,x,ym,yp,zm,zp, xs,ys,zs,q, i0,i,j0,jn,k0,kn); // only line that is tasked by omp
-		f2 = BoxFilter3(x,xp,ym,yp,zm,zp, xs,ys,zs,q, i,in,j0,jn,k0,kn);
+		f1 = BoxFilter3(xm,x,ym,yp,zm,zp, xs,ys,zs,q, i1,i,j1,j2,k1,k2); // only line that is tasked by omp
+		f2 = BoxFilter3(x,xp,ym,yp,zm,zp, xs,ys,zs,q, i,i2,j1,j2,k1,k2);
 		// #pragma omp taskwait
 		return 1. / (xp-xm) * ((x-xm) * f1 + (xp-x) * f2);
 	}
@@ -212,16 +212,11 @@ static double BoxFilter3(
 	double y1 = ys[j1], y2 = ys[j2];
 	double z1 = zs[k1], z2 = zs[k2];
 
-	double fmmm = Interp::InterpCell(q, xm,x1,x2,i1,i2, ym,y1,y2,j1,j2, zm,z1,z2,k1,k2);
-	double fmmp = Interp::InterpCell(q, xp,x1,x2,i1,i2, ym,y1,y2,j1,j2, zm,z1,z2,k1,k2);
-	double fmpm = Interp::InterpCell(q, xm,x1,x2,i1,i2, yp,y1,y2,j1,j2, zm,z1,z2,k1,k2);
-	double fmpp = Interp::InterpCell(q, xp,x1,x2,i1,i2, yp,y1,y2,j1,j2, zm,z1,z2,k1,k2);
-	double fpmm = Interp::InterpCell(q, xm,x1,x2,i1,i2, ym,y1,y2,j1,j2, zp,z1,z2,k1,k2);
-	double fpmp = Interp::InterpCell(q, xp,x1,x2,i1,i2, ym,y1,y2,j1,j2, zp,z1,z2,k1,k2);
-	double fppm = Interp::InterpCell(q, xm,x1,x2,i1,i2, yp,y1,y2,j1,j2, zp,z1,z2,k1,k2);
-	double fppp = Interp::InterpCell(q, xp,x1,x2,i1,i2, yp,y1,y2,j1,j2, zp,z1,z2,k1,k2);
+	x = .5 * (xm + xp);
+	y = .5 * (ym + yp);
+	z = .5 * (zm + zp);
 
-	return .125 * (fmmm+fmmp+fmpm+fmpp+fpmm+fpmp+fppm+fppp);
+	return Interp::InterpCell(q, x,x1,x2,i1,i2, y,y1,y2,j1,j2, z,z1,z2,k1,k2);
 }
 
 

@@ -467,12 +467,11 @@ void SGS::SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, doub
 	uw *= temp;
 
 	// solve shear stress on edges
+	#pragma omp parallel for collapse(3)
 #ifndef DIRTY_TRICK_SGS_
-	#pragma omp parallel for
 	for (int j=0; j<=ms.Ny; j++) {
 #else
 	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
-	#pragma omp parallel for
 #endif
 	for (int k=0; k<=ms.Nz; k++) {
 	for (int i=0; i<=ms.Nx; i++) {
@@ -495,6 +494,7 @@ void SGS::SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, doub
 			Filter::FilterNodeW(x,y,z,dx,dy,dz,w) -
 			Filter::FilterNodeA(x,y,z,dx,dy,dz,vw) ) * pow(rsclu, 2.);
 
+#ifndef DIRTY_TRICK_SGS_
 		x = ms.x (i) * rsclx; dx = ms.hx(i) * rsclx;
 		z = ms.z (k) * rsclx; dz = ms.hz(k) * rsclx;
 		y = WallRscl(ms.yc(j), rsclx); dy = 0;
@@ -503,6 +503,7 @@ void SGS::SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, doub
 			Filter::FilterNodeU(x,y,z,dx,dy,dz,u) *
 			Filter::FilterNodeW(x,y,z,dx,dy,dz,w) -
 			Filter::FilterNodeA(x,y,z,dx,dy,dz,uw) ) * pow(rsclu, 2.);
+#endif
 	}}}
 }
 
