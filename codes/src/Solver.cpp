@@ -113,7 +113,7 @@ void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0, double Re
 
 	CalcVis(vis_, get_vel(), Re, sgstyp);
 
-	WM::OffWallSGS(vis_, get_vel(), solver0.get_vel(), Re, rsclx, rsclu);
+	WM::OffWallSGS(vis_, get_vel(), solver0.get_vel(), Re, Ret, rsclx, rsclu);
 
 	Bcond::ChannelDirichlet(bc_, sbc_, ms, PIO::BoundaryPredict(get_vel(), solver0.get_vel(), Ret, rsclx, rsclu));
 	// Bcond::ChannelDirichlet(bc_, sbc_, ms, solver0.get_vel(), rsclx, rsclu);

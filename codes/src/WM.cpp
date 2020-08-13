@@ -3,6 +3,7 @@
 #include "Interp.h"
 #include "Filter.h"
 #include "Bcond.h"
+#include "PIO.h"
 
 using namespace std;
 
@@ -153,7 +154,7 @@ void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, doubl
 
 
 
-void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu)
+void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 // supply sgs stress 12 & 23 on off-wall boundary through viscosity
 {
 	const Mesh &ms = vis.ms;
@@ -168,6 +169,8 @@ void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double 
 
 	// sgs shear stress filtered from resolved velocity field
 	SGS::SubGridShearStress(shearsgs, veldns, rsclx, rsclu);
+
+	// PIO::PredictBoundarySGS(shearsgs, vel, Ret);
 
 	// ***** rescale the DNS-filtered sgs stress by Reynolds stress defect ***** //
 	double r12dfc = 0; // Reynolds stress defect
@@ -404,10 +407,10 @@ void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, d
 }
 
 
-void WM::OffWallSGS(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu)
+void WM::OffWallSGS(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 {
-	OffWallSubGridUniform(vis, vel, veldns, Re, rsclx, rsclu);
-	// OffWallSubGridShear      (vis, vel, veldns, Re, rsclx, rsclu);
+	// OffWallSubGridUniform(vis, vel, veldns, Re, rsclx, rsclu);
+	OffWallSubGridShear      (vis, vel, veldns, Re, Ret, rsclx, rsclu);
 	// OffWallSubGridNormal     (vis, vel, veldns, Re, rsclx, rsclu);
 	// OffWallSubGridDissipation(vis, vel, veldns, Re, rsclx, rsclu);
 

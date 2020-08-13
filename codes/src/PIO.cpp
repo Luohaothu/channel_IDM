@@ -380,6 +380,102 @@ Vctr PIO::Predict(double y, const Vctr &velout, const Vctr &veluni, double Ret, 
 }
 
 
+void PIO::PredictBoundarySGS(Vctr &shearsgs, const Vctr &velout, double Ret)
+{
+	const Mesh &ms = shearsgs.ms;
+
+	double yo1 = 3.9 / sqrt(Ret); // position of outer signal
+	double yo2 = 2. - yo1;
+
+	Geometry_prdxz geo2(ms.Nx,2,ms.Nz, ms.Lx, yo2-yo1, ms.Lz); // to hold uL
+
+	geo2.InitMesh(0);
+	geo2.InitInterval();
+	geo2.InitWaveNumber();
+	geo2.InitIndices();
+
+	const Mesh mso(geo2);
+	Vctr velo(mso);
+	velo.Set(0);
+
+	Scla &uo = velo[1];
+
+	Scla &tau12sgs = shearsgs[1];
+	Scla &tau23sgs = shearsgs[2];
+	// Scla &tau13sgs = shearsgs[3];
+
+	// interpolate from LES outer region
+	Interp::InterpBulkU(uo, velout[1]); // mean values will be removed later
+
+	// PIO coefficients
+	double *hr = new double[mso.Nxc], alfv, dxav, dzav;
+	double *hi = new double[mso.Nxc], alfw, dxaw, dzaw;
+
+	double gmaup, dxup, dzup;
+	double gmaum, dxum, dzum;
+	double gmav,  dxv,  dzv;
+	double gmaw,  dxw,  dzw;
+
+	read_PIO_Sup(hr, hi, alfv, dxav, dzav,
+					 alfw, dxaw, dzaw, 1./Ret, ms.y(1), geo2.kx, mso.Nxc);
+
+	read_PIO_Mod(gmaup, dxup, dzup,
+				 gmaum, dxum, dzum,
+				 gmav,  dxv,  dzv,
+				 gmaw,  dxw,  dzw, 1./Ret, ms.y(1));
+
+	// get uL, vOL, wOL
+	uo.fftx();
+
+	#pragma omp parallel for collapse(2)
+	for (int j=0; j<=2; j+=2) {
+	for (int i=0; i<mso.Nxc; i++) {
+		// get mean value at wave number k_x = 0
+		double um = 0;
+		if (i == 0)
+			for (int k=1; k<mso.Nz; k++)
+				um += uo(2*i,j,k) / (mso.Nz-1.);
+
+		for (int k=1; k<mso.Nz; k++) {
+			double ur = uo(2*i,  j,k) - um;
+			double ui = uo(2*i+1,j,k);
+			// H needs conj because the fft defined in calibration is inversed
+			uo(2*i,  j,k) = hr[i] * ur + hi[i] * ui;
+			uo(2*i+1,j,k) = hr[i] * ui - hi[i] * ur;
+		}
+	}}
+
+	uo.ifftx();
+
+	Bcond::SetBoundaryX(velo);
+	Bcond::SetBoundaryZ(velo);
+
+	// modulation
+	#pragma omp parallel for collapse(2)
+	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+
+		double x = ms.x(i), xc = ms.xc(i);
+		double z = ms.z(k), zc = ms.zc(k);
+		double y = j<=1 ? yo1 : yo2;
+
+		double modw   = gmaw * Interp::InterpNodeU(xc+dxw,y,z+dzw,uo);
+		double modv23 = gmav * Interp::InterpNodeU(xc+dxv,y,z+dzv,uo);
+		double modv12 = gmav * Interp::InterpNodeU(x+dxv,y,zc+dzv,uo);
+		double modup = gmaup * Interp::InterpNodeU(x+dxup,y,zc+dzup,uo);
+		double modum = gmaum * Interp::InterpNodeU(x+dxum,y,zc+dzum,uo);
+		double modu = .5 * (modup + modum);
+
+		if (i > 0) tau12sgs(i,j,k) *= 1 + modu + modv12;
+		if (k > 0) tau23sgs(i,j,k) *= 1 + modw + modv23;
+	}}}
+
+	delete[] hr;
+	delete[] hi;
+}
+
+
 
 void read_PIO_Sup(double *hr, double *hi,
 	double &alfv, double &dxav, double &dzav,
