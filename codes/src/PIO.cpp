@@ -132,34 +132,34 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 	Bcond::SetBoundaryX(velo);
 	Bcond::SetBoundaryZ(velo);
 
-	// modulation
-	for (int j=0; j<=2; j++) {
+	// // modulation
+	// for (int j=0; j<=2; j++) {
 
-		double um = ub.meanxz(j);
-		double vm = vb.meanxz(j);
-		double wm = wb.meanxz(j);
-		double uom = uo.meanxz(j);
+	// 	double um = ub.meanxz(j);
+	// 	double vm = vb.meanxz(j);
+	// 	double wm = wb.meanxz(j);
+	// 	double uom = uo.meanxz(j);
 
-		#pragma omp parallel for
-		for (int k=1; k<msb.Nz; k++) {
-		for (int i=1; i<msb.Nx; i++) {
+	// 	#pragma omp parallel for
+	// 	for (int k=1; k<msb.Nz; k++) {
+	// 	for (int i=1; i<msb.Nx; i++) {
 
-			double x = msb.x(i), xc = msb.xc(i);
-			double z = msb.z(k), zc = msb.zc(k);
-			double y = j<=1 ? yo1 : yo2;
+	// 		double x = msb.x(i), xc = msb.xc(i);
+	// 		double z = msb.z(k), zc = msb.zc(k);
+	// 		double y = j<=1 ? yo1 : yo2;
 
-			double modu;
-			double modv = gmav * (Interp::InterpNodeU(xc+dxv,y,zc+dzv,uo) - uom);
-			double modw = gmaw * (Interp::InterpNodeU(xc+dxw,y,z +dzw,uo) - uom);
+	// 		double modu;
+	// 		double modv = gmav * (Interp::InterpNodeU(xc+dxv,y,zc+dzv,uo) - uom);
+	// 		double modw = gmaw * (Interp::InterpNodeU(xc+dxw,y,z +dzw,uo) - uom);
 
-			if (ub(i,j,k) > um) modu = gmaup * (Interp::InterpNodeU(x+dxup,y,zc+dzup,uo) - uom);
-			else                modu = gmaum * (Interp::InterpNodeU(x+dxum,y,zc+dzum,uo) - uom);
+	// 		if (ub(i,j,k) > um) modu = gmaup * (Interp::InterpNodeU(x+dxup,y,zc+dzup,uo) - uom);
+	// 		else                modu = gmaum * (Interp::InterpNodeU(x+dxum,y,zc+dzum,uo) - uom);
 
-			if (j != 1) ub(i,j,k) = um + (ub(i,j,k) - um) * (1 + modu);
-			if (j != 0) vb(i,j,k) = vm + (vb(i,j,k) - vm) * (1 + modv);
-			if (j != 1) wb(i,j,k) = wm + (wb(i,j,k) - wm) * (1 + modw);
-		}}
-	}
+	// 		if (j != 1) ub(i,j,k) = um + (ub(i,j,k) - um) * (1 + modu);
+	// 		if (j != 0) vb(i,j,k) = vm + (vb(i,j,k) - vm) * (1 + modv);
+	// 		if (j != 1) wb(i,j,k) = wm + (wb(i,j,k) - wm) * (1 + modw);
+	// 	}}
+	// }
 
 	// combine small- & large-scales
 	#pragma omp parallel for
@@ -311,34 +311,34 @@ Vctr PIO::Predict(double y, const Vctr &velout, const Vctr &veluni, double Ret, 
 	delete[] hr;
 	delete[] hi;
 
-	// modulation
-	for (int j=0; j<=2; j++) {
+	// // modulation
+	// for (int j=0; j<=2; j++) {
 
-		double um = us.meanxz(j);
-		double vm = vs.meanxz(j);
-		double wm = ws.meanxz(j);
-		double uom = uo.meanxz(j);
+	// 	double um = us.meanxz(j);
+	// 	double vm = vs.meanxz(j);
+	// 	double wm = ws.meanxz(j);
+	// 	double uom = uo.meanxz(j); // uom seems unnecessary since mean of uo has been removed when calculating uL
 
-		#pragma omp parallel for
-		for (int k=1; k<mss.Nz; k++) {
-		for (int i=1; i<mss.Nx; i++) {
+	// 	#pragma omp parallel for
+	// 	for (int k=1; k<mss.Nz; k++) {
+	// 	for (int i=1; i<mss.Nx; i++) {
 
-			double x = mss.x(i), xc = mss.xc(i);
-			double z = mss.z(k), zc = mss.zc(k);
-			double y = j<=1 ? yo1 : yo2;
+	// 		double x = mss.x(i), xc = mss.xc(i);
+	// 		double z = mss.z(k), zc = mss.zc(k);
+	// 		double y = j<=1 ? yo1 : yo2;
 
-			double modu;
-			double modv = gmav * (Interp::InterpNodeU(xc+dxv,y,zc+dzv,uo) - uom);
-			double modw = gmaw * (Interp::InterpNodeU(xc+dxw,y,z +dzw,uo) - uom);
+	// 		double modu;
+	// 		double modv = gmav * (Interp::InterpNodeU(xc+dxv,y,zc+dzv,uo) - uom);
+	// 		double modw = gmaw * (Interp::InterpNodeU(xc+dxw,y,z +dzw,uo) - uom);
 
-			if (us(i,j,k) > um) modu = gmaup * (Interp::InterpNodeU(x+dxup,y,zc+dzup,uo) - uom);
-			else                modu = gmaum * (Interp::InterpNodeU(x+dxum,y,zc+dzum,uo) - uom);
+	// 		if (us(i,j,k) > um) modu = gmaup * (Interp::InterpNodeU(x+dxup,y,zc+dzup,uo) - uom);
+	// 		else                modu = gmaum * (Interp::InterpNodeU(x+dxum,y,zc+dzum,uo) - uom);
 
-			if (j != 1) us(i,j,k) = um + (us(i,j,k) - um) * (1 + modu);
-			if (j != 0) vs(i,j,k) = vm + (vs(i,j,k) - vm) * (1 + modv);
-			if (j != 1) ws(i,j,k) = wm + (ws(i,j,k) - wm) * (1 + modw);
-		}}
-	}
+	// 		if (j != 1) us(i,j,k) = um + (us(i,j,k) - um) * (1 + modu);
+	// 		if (j != 0) vs(i,j,k) = vm + (vs(i,j,k) - vm) * (1 + modv);
+	// 		if (j != 1) ws(i,j,k) = wm + (ws(i,j,k) - wm) * (1 + modw);
+	// 	}}
+	// }
 
 	// superposition
 	#pragma omp parallel for

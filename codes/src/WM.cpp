@@ -104,11 +104,6 @@ void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, doubl
 {
 	const Mesh &ms = vis.ms;
 
-	// viscosity & sgs-stress on edges aimed for
-	Vctr shearsgs(ms);
-	const Scla &tau23sgs = shearsgs[2];
-	const Scla &tau12sgs = shearsgs[1];
-
 	Scla &nux = vis.GetVec(1);
 	Scla &nuz = vis.GetVec(3);
 
@@ -121,18 +116,6 @@ void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, doubl
 	const double y = ms.y(1), y3 = ms.yc(0), y4 = ms.yc(1);
 	const double rsclvis = fabs((y4-y3) / (1-fabs(y-1)) / log((1-fabs(y4-1))/(1-fabs(y3-1))));
 
-	FILE *fp = fopen("WMLOG.dat", "a");
-	fprintf(fp, "%f\t%f\n", r12dfc, rsclvis);
-	fclose(fp);
-
-	// construct boundary SGS stress
-	shearsgs[1].Set(-r12dfc);
-	shearsgs[2].Set(0);
-	shearsgs[3].Set(0);
-	for (int k=0; k<=ms.Nz; k++)
-	for (int i=0; i<=ms.Nx; i++)
-		shearsgs[1](i,ms.Ny,k) *= -1;
-
 	// ***** modify kinematic & eddy viscosity accordingly ***** //
 	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
 
@@ -142,8 +125,8 @@ void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, doubl
 			// boundary strain rate of the coarse velocity field
 			const double *sr = vel.ShearStrain(i,j,k);
 
-			double s12 = sr[0], tau12 = tau12sgs(i,j,k);
-			double s23 = sr[1], tau23 = tau23sgs(i,j,k);
+			double s12 = sr[0], tau12 = r12dfc * (j<=1 ? -1 : 1);
+			double s23 = sr[1], tau23 = 0;
 
 			// it is necessary to allow negative eddy viscosity on boundary for correct tau
 			if (k<ms.Nz) nuz(i,j,k) = rsclvis/Re + fmin(fmax(.5 * tau12 / s12, -.1), .1);
@@ -207,11 +190,11 @@ void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double 
 			// boundary strain rate of the coarse velocity field
 			const double *sr = vel.ShearStrain(i,j,k);
 
-			double s12 = sr[0], tau12 = tau12sgs(i,j,k) * rsclsgs;
-			double s23 = sr[1], tau23 = tau23sgs(i,j,k) * rsclsgs;
+			// double s12 = sr[0], tau12 = tau12sgs(i,j,k) * rsclsgs;
+			// double s23 = sr[1], tau23 = tau23sgs(i,j,k) * rsclsgs;
 
-			// double s12 = sr[0], tau12 = tau12sgs(i,j,k) + t12sgs * (rsclsgs - 1) * (j==1 ? 1 : -1);
-			// double s23 = sr[1], tau23 = tau23sgs(i,j,k);
+			double s12 = sr[0], tau12 = tau12sgs(i,j,k) + t12sgs * (rsclsgs - 1) * (j==1 ? 1 : -1);
+			double s23 = sr[1], tau23 = tau23sgs(i,j,k);
 
 			// it is necessary to allow negative eddy viscosity on boundary for correct tau
 			if (k<ms.Nz) nuz(i,j,k) = rsclvis/Re + fmin(fmax(.5 * tau12 / s12, -.1), .1);
@@ -409,8 +392,8 @@ void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, d
 
 void WM::OffWallSGS(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 {
-	// OffWallSubGridUniform(vis, vel, veldns, Re, rsclx, rsclu);
-	OffWallSubGridShear      (vis, vel, veldns, Re, Ret, rsclx, rsclu);
+	OffWallSubGridUniform(vis, vel, veldns, Re, rsclx, rsclu);
+	// OffWallSubGridShear      (vis, vel, veldns, Re, Ret, rsclx, rsclu);
 	// OffWallSubGridNormal     (vis, vel, veldns, Re, rsclx, rsclu);
 	// OffWallSubGridDissipation(vis, vel, veldns, Re, rsclx, rsclu);
 

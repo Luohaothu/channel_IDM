@@ -459,8 +459,6 @@ void SGS::SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, doub
 	Scla uw(ms0), &tau13 = shear[3], &wc = uw; w.Wgrid2CellCenter(wc); // with periodicity ignored
 
 	// calculate cross terms at cell-centers
-	// Scla temp(ms0);
-	// temp.Set(uc);
 	Scla temp(uc);
 	uv *= vc;
 	vw *= wc;
