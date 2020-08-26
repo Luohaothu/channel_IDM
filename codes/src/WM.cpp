@@ -25,7 +25,7 @@ void WM::UniformWallShear(Flow &vis, const Vctr &vel, double tau12)
 }
 
 
-double ReynoldsStressDefect(int j, const Vctr &vel, const Vctr &veldns, double rsclx, double rsclu)
+double ReynoldsStressDefect(int j, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 // calculate Reynolds stress R12 - R12^r at Z-edge of layer j
 {
 	const Mesh &ms= vel.ms, &ms0= veldns.ms;
@@ -64,6 +64,7 @@ double ReynoldsStressDefect(int j, const Vctr &vel, const Vctr &veldns, double r
 
 	r12dns -= weight * (um3*vm3 * (y4-y0) + um4*vm4 * (y0-y3)) / (y4-y3);
 	r12dns *= weight * rsclu * rsclu;
+	r12dns += pow(Ret/Re, 2.) * (1 - fabs(y-1.)) * (1 - rsclx);
 
 	// calculate resolved Reynolds stress
 	double um = 0;
@@ -100,7 +101,7 @@ void ProcessBoundaryVis(Flow &vis)
 }
 
 
-void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu)
+void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 {
 	const Mesh &ms = vis.ms;
 
@@ -109,8 +110,8 @@ void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, doubl
 
 	// Reynolds stress defect
 	double r12dfc = .5 * (
-		ReynoldsStressDefect(1,     vel, veldns, rsclx, rsclu) -
-		ReynoldsStressDefect(ms.Ny, vel, veldns, rsclx, rsclu) );
+		ReynoldsStressDefect(1,     vel, veldns, Re, Ret, rsclx, rsclu) -
+		ReynoldsStressDefect(ms.Ny, vel, veldns, Re, Ret, rsclx, rsclu) );
 
 	// rescale kinematic viscosity
 	const double y = ms.y(1), y3 = ms.yc(0), y4 = ms.yc(1);
@@ -164,7 +165,7 @@ void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double 
 		double weight0 = (j>1 ? -1 : 1) * .5;
 		double weight1 = (j>1 ? -1 : 1) * .5 / (ms.Nx-1.) / (ms.Nz-1.);
 
-		r12dfc += weight0 * ReynoldsStressDefect(j, vel, veldns, rsclx, rsclu);
+		r12dfc += weight0 * ReynoldsStressDefect(j, vel, veldns, Re, Ret, rsclx, rsclu);
 
 		for (int k=1; k<ms.Nz; k++)
 		for (int i=1; i<ms.Nx; i++)
@@ -204,91 +205,7 @@ void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double 
 }
 
 
-void OffWallSubGridNormal(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu)
-// supply sgs stress 22 on off-wall boundary through viscosity
-{
-	const Mesh &ms = vis.ms, &ms0 = veldns.ms;
-
-	const Scla &u = vel[1], &u0 = veldns[1];
-	const Scla &v = vel[2], &v0 = veldns[2];
-	const Scla &w = vel[3], &w0 = veldns[3];
-
-	// viscosity & sgs-stress at cell-center
-	Vctr normalsgs(ms);
-	const Scla &tau22sgs = normalsgs[2];
-
-	Scla &nuc = vis.GetScl();
-
-	// sgs normal stress filtered from resolved velocity field
-	SGS::SubGridNormalStress(normalsgs, veldns, rsclx, rsclu);
-
-	for (int j=1; j<ms.Ny; j+=ms.Ny-2) {
-
-		// the wall normal position on which stresses act
-		const double y = ms.yc(j), y0 = WallRscl(y, rsclx);
-
-		// ***** rescale the DNS-filtered sgs stress by Reynolds stress defect ***** //
-
-		double r22dns = 0; // DNS Reynolds stress
-		double r22les = 0; // LES resolved Reynolds
-		double s22sgs = 0; // mean sgs-stress filtered from DNS
-
-		// calculate reference (DNS) Reynolds shear stress
-		int j3 = Interp::BiSearch(y0, ms0.y(), 1, ms0.Ny);
-		int j4 = j3 + 1;
-
-		double vm3 = v0.meanxz(j3), y3 = ms0.y(j3);
-		double vm4 = v0.meanxz(j4), y4 = ms0.y(j4);
-
-		for (int k=1; k<ms0.Nz; k++) {
-		for (int i=1; i<ms0.Nx; i++) {
-
-			r22dns += 1. / (y4-y3) * (
-				pow(v0(i,j3,k) - vm3, 2.) * (y4-y0) +
-				pow(v0(i,j4,k) - vm4, 2.) * (y0-y3) );
-		}}
-
-		r22dns *= rsclu * rsclu
-			   * (ms.Nx-1.) / (ms0.Nx-1.) // rescale to match the other two
-			   * (ms.Nz-1.) / (ms0.Nz-1.);
-
-		// calculate resolved Reynolds stress and mean sgs-stress
-		vm3 = v.meanxz(j3 = j);
-		vm4 = v.meanxz(j4 = ms.jpa(j));
-
-		for (int k=1; k<ms.Nz; k++) {
-		for (int i=1; i<ms.Nx; i++) {
-
-			s22sgs += tau22sgs(i,j,k);
-			r22les += .5 * (
-				pow(v(i,j3,k) - vm3, 2.) +
-				pow(v(i,j4,k) - vm4, 2.) );
-		}}
-
-		const double rsclsgs = fabs((r22dns - r22les) / s22sgs);
-
-
-		FILE *fp = fopen("WMLOG2.dat", "a");
-		if (j==1) fprintf(fp, "%f\t", rsclsgs);
-		else      fprintf(fp, "%f\n", rsclsgs);
-		fclose(fp);
-
-		// ***** modify physical & eddy viscosity accordingly ***** //
-
-		for (int k=1; k<ms.Nz; k++) {
-		for (int i=1; i<ms.Nx; i++) {
-			// boundary strain rate of the coarse velocity field
-			const double *sr = vel.Strainrate(i,j,k);
-
-			double s22 = sr[1], tau22 = tau22sgs(i,j,k) * rsclsgs;
-
-			nuc(i,j,k) = 1./Re + fmax(.5 * tau22 / s22, 0);
-		}}
-	}
-}
-
-
-void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu)
+void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 //  modify eddy viscosity near off-wall boundary by sgs dissipation
 {
 	const Mesh &ms = vis.ms;
@@ -370,7 +287,7 @@ void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, d
 			t12sgs += weight1 * 2. * (nuz(i,j,k)-1./Re) * vel.ShearStrain(i,j,k)[0];
 		}}
 
-		r12dfc += weight2 * ReynoldsStressDefect(j, vel, veldns, rsclx, rsclu);
+		r12dfc += weight2 * ReynoldsStressDefect(j, vel, veldns, Re, Ret, rsclx, rsclu);
 	}
 
 	double rscldsp = fmin(fmax(fabs(r12dfc / t12sgs), 1.), 4.);
@@ -392,10 +309,9 @@ void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, d
 
 void WM::OffWallSGS(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 {
-	OffWallSubGridUniform(vis, vel, veldns, Re, rsclx, rsclu);
+	OffWallSubGridUniform(vis, vel, veldns, Re, Ret, rsclx, rsclu);
 	// OffWallSubGridShear      (vis, vel, veldns, Re, Ret, rsclx, rsclu);
-	// OffWallSubGridNormal     (vis, vel, veldns, Re, rsclx, rsclu);
-	// OffWallSubGridDissipation(vis, vel, veldns, Re, rsclx, rsclu);
+	// OffWallSubGridDissipation(vis, vel, veldns, Re, Ret, rsclx, rsclu);
 
 	// note: when OffWallSubGridDissipation is used in conjuction with OffWallSubGridShear,
 	// the boundary processing at the end of OffWallSubGridDissipation should be commented
@@ -460,7 +376,7 @@ void WM::debug_ShowBoundaryShear(const Vctr &vel, const Flow &vis)
 
 
 // a test implementation that has been proved of no use
-void OffWallSubGridShear_from_inner(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double rsclx, double rsclu)
+void OffWallSubGridShear_from_inner(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 // rescale SGS stress 12 & 23 on off-wall boundary through viscosity
 {
 	const Mesh &ms = vis.ms;
@@ -476,7 +392,7 @@ void OffWallSubGridShear_from_inner(Flow &vis, const Vctr &vel, const Vctr &veld
 		double weight0 = (j>1 ? -1 : 1) * .5;
 		double weight1 = (j>1 ? -1 : 1) * .5 / (ms.Nx-1.) / (ms.Nz-1.);
 
-		r12dfc += weight0 * ReynoldsStressDefect(j, vel, veldns, rsclx, rsclu);
+		r12dfc += weight0 * ReynoldsStressDefect(j, vel, veldns, Re, Ret, rsclx, rsclu);
 
 		#pragma omp parallel for reduction(+: t12sgs)
 		for (int k=1; k<ms.Nz; k++)
