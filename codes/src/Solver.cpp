@@ -111,6 +111,12 @@ void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0, double Re
 	double rsclx = rsclu * Re / Re0; // note: tiled MFU must satisfy periodic condition to a high presicion
 	double Ret = utau * Re;
 
+	// cout << utau << endl;
+	// cout << utau0 << endl;
+	// cout << rsclu << endl; // utau_LES / utau_MFU
+	// cout << rsclx << endl; // Ret_LES / Ret_MFU
+	// cout << Ret << endl;
+
 	CalcVis(vis_, get_vel(), Re, sgstyp);
 
 	WM::OffWallSGS(vis_, get_vel(), solver0.get_vel(), Re, Ret, rsclx, rsclu);

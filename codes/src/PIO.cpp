@@ -189,9 +189,9 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 	delete[] hi;
 
 	// record for debug
-	static int cnt = 0;
-	if ((++cnt) % 1000 == 0)
-		PIO::Predict(yb1, vel, velmfu, Ret, rsclx, rsclu, cnt);
+	// static int cnt = 0;
+	// if ((++cnt) % 1000 == 0)
+	// 	PIO::Predict(yb1, vel, velmfu, Ret, rsclx, rsclu, cnt);
 
 
 	return velb;

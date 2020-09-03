@@ -115,7 +115,7 @@ void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, doubl
 
 	// rescale kinematic viscosity
 	const double y = ms.y(1), y3 = ms.yc(0), y4 = ms.yc(1);
-	const double rsclvis = fabs((y4-y3) / (1-fabs(y-1)) / log((1-fabs(y4-1))/(1-fabs(y3-1))));
+	const double rsclvis = 1.; //fabs((y4-y3) / (1-fabs(y-1)) / log((1-fabs(y4-1))/(1-fabs(y3-1))));
 
 	// ***** modify kinematic & eddy viscosity accordingly ***** //
 	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
