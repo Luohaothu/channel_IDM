@@ -82,7 +82,8 @@ void Solver::evolve(double Re, double dt, int sgstyp)
 
 	CalcVis(vis_, get_vel(), Re, sgstyp);
 
-	Bcond::ChannelNoSlip(bc_, sbc_, ms);
+	// Bcond::ChannelNoSlip(bc_, sbc_, ms);
+	Bcond::ChannelHalf(bc_, sbc_, ms);
 
 	CalcFb(fb_, mpg_);
 

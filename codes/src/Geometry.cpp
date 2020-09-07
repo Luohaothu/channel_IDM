@@ -185,26 +185,19 @@ void Geometry::InitMeshY(double dy_min)
 /* generate grid points for y-direction
    dy_min >0 for two-sided hyperbolic tangent, <0 one-sided, =0 uniform */
 {
-	if (fabs(dy_min) < INFTSM) {
-		// uniform mesh
+	if (INFTSM < dy_min && dy_min < Ly/(Ny-1.)) {
+		double gma = newton_iter(dy_min, get_dymin, Ny, Ly);
+		for (int j=1; j<=Ny; j++)
+			y[j] = hyptan(j, gma, Ny, Ly);
+	}
+	else if (INFTSM < -dy_min && -dy_min < Ly/(Ny-1.)) {
+		double gma = newton_iter(-dy_min, get_dymin, 2*Ny-1, 2*Ly);
+		for (int j=1; j<=Ny; j++)
+			y[j] = hyptan(j, gma, 2*Ny-1, 2*Ly); // 1 + Ly * tanh(gma * ((j-1)/(Ny-1) - 1)) / tanh(gma);
+	}
+	else
 		for (int j=1; j<=Ny; j++)
 			y[j] = 1 + Ly * ((j-1)/(Ny-1.) - .5);
-	}
-	else if (fabs(dy_min) <= Ly / (Ny-1.)) {
-		// Newton iteration to determine parameter
-		double gma = dy_min > 0 ?
-			newton_iter( dy_min, get_dymin, Ny, Ly) :
-			newton_iter(-dy_min, get_dymin, 2*Ny-1, 2*Ly);
-
-		for (int j=1; j<=Ny; j++)
-			y[j] = dy_min > 0 ?
-				hyptan(j, gma, Ny, Ly) :
-				hyptan(j, gma, 2*Ny-1, 2*Ly); // 1 + Ly * tanh(gma * ((j-1)/(Ny-1) - 1)) / tanh(gma);
-	}
-	else {
-		cout << "Mesh error: dy_min too large !" << endl;
-		exit(0);
-	}
 }
 
 void Geometry::InitMeshY(const char *path)

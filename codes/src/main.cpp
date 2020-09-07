@@ -8,7 +8,7 @@ using namespace std;
 
 
 /***** computation mode *****/
-# define AUXIMAIN // DEFAULT //
+# define DEFAULT // AUXIMAIN //
 
 
 void Config(int n, const Para &para);
@@ -38,6 +38,9 @@ int main()
 
 	// computation begins
 	int tstep = Initiate(solver, para);
+
+	solver.set_mpg(-1.736e-3, 0, 0);
+	
 	if (tstep == 0) Output(para, solver, tstep);
 
 	// main loop

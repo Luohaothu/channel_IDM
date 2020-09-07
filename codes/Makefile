@@ -12,11 +12,11 @@ DATADIR = ../
 
 OUTPUT = idm_whn
 
-# CC = icc
+# CC = icpc
 # LIBS = -lfftw3 -lm -qopenmp
 CC = g++-9
 LIBS = -lfftw3 -lm -fopenmp
-CFLAGS = -I $(IDIR) $(LIBS)
+CFLAGS = -std=c++17 -I $(IDIR) $(LIBS)
 
 
 ##### file lists #####

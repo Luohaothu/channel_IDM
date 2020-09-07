@@ -169,6 +169,24 @@ void Bcond::ChannelRobin(Boundaries &bc, Boundaries &sbc,
 	}}
 }
 
+void Bcond::ChannelHalf(Boundaries &bc, Boundaries &sbc, const Mesh &ms)
+{
+	double dy0 = ms.dy(0);
+	double dy1 = ms.dy(1);
+
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+
+		bc.ub3(i,k) = 0; sbc.ub3(i,k) = dy0 / dy1; // for points deployed on virtual boundary,
+		bc.wb3(i,k) = 0; sbc.wb3(i,k) = dy0 / dy1; // interpolation is needed to satisfy BC on real boundary
+		bc.vb3(i,k) = 0; sbc.vb3(i,k) = 0;
+
+		bc.ub4(i,k) = 0; sbc.ub4(i,k) = -1;
+		bc.wb4(i,k) = 0; sbc.wb4(i,k) = -1;
+		bc.vb4(i,k) = 0; sbc.vb4(i,k) = 0;
+	}}
+}
+
 void Bcond::TblCycling(Boundaries &bc, Boundaries &sbc, const Mesh &ms, double ufree)
 {
 	double dy0 = ms.dy(0);
