@@ -1,7 +1,6 @@
 import numpy as np
 from numpy.fft import fft,ifft, fft2,ifft2, hfft,ihfft
 from scipy.integrate import trapz
-from struct import pack, unpack
 from os import listdir, system
 
 
@@ -12,12 +11,14 @@ def phys(q): return hfft(fft(q, axis=-2)) # Nx must be even
 
 def write_channel(pame, q):
 	ny, nz, nx = q.shape
-	info = np.array([nx, ny, nz]+[0]*(2*nx*nz-3), dtype=np.int32).tobytes() # 2* for 4bit -> 8bit
-	np.hstack([ unpack(nx*nz*'d', info), np.ravel(q) ]).tofile(pame)
+	info = np.zeros(nx*nz, q.dtype)
+	info.dtype = np.int32
+	info[:3] = nx, ny, nz
+	info.dtype = q.dtype
+	np.concatenate((info, q), axis=None).astype(np.float64).tofile(pame)
 
 def read_channel(pame):
-	with open(pame, 'rb') as fp: nx, ny, nz = unpack('3i', fp.read(12))
-	# return np.fromfile(pame, np.float64, offset=(nx*nz)*8).reshape([ny, nz, nx])
+	nx, ny, nz = np.fromfile(pame, np.int32, 3)
 	q = np.fromfile(pame, np.float64, ).reshape([ny+1, nz, nx])
 	return q[1:]
 
@@ -39,6 +40,9 @@ class DataSetInfo:
 		self.Nzc, self.kz = self.__get_wavenumber(self.Nz, self.Lz)
 
 		self.tsteps = self.__get_tsteps(self.fieldpath)
+
+		self.calc_wallscale()
+		self.scale_none()
 
 	def read_XIN(self, path):
 		with open(path + "XINDAT") as fp:
@@ -87,6 +91,39 @@ class DataSetInfo:
 		self.x, self.xc = np.array(x), np.array(xc)
 		self.y, self.yc = np.array(y), np.array(yc)
 		self.z, self.zc = np.array(z), np.array(zc)
+
+	def calc_wallscale(self, tsteps=None):
+		if tsteps is None: tsteps = self.tsteps
+
+		Re = self.Re
+		logs = np.loadtxt(self.statpath+'LOG.dat', skiprows=3)
+
+		self.uave = np.mean([ log[9] for log in logs if int(log[0]) in tsteps])
+		self.utau = np.mean([-log[6] for log in logs if int(log[0]) in tsteps])**.5
+		
+		self.tauw = self.utau**2
+		self.dnu = 1./Re / self.utau
+		self.tnu = self.dnu / self.utau
+		self.Ret = 1./self.dnu # channel height is taken for 2.0
+
+	def scale_none(self):
+		self.lc = 1.
+		self.tc = 1.
+		self.uc = 1.
+		self.pc = 1.
+
+	def scale_inner(self):
+		self.lc = self.dnu
+		self.tc = self.tnu
+		self.uc = self.utau
+		self.pc = self.tauw
+
+	def scale_velo(self, uc):
+		''' specify a characteristic velocity to scale, with h and rho be 1 by default '''
+		self.uc = self.uc
+		self.lc = 1.
+		self.tc = 1. / uc
+		self.pc = uc**2
 
 	def __get_Interval(self, y, yc):
 		hy = np.empty(len(y))

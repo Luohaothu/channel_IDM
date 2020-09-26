@@ -2,9 +2,9 @@ from basic import *
 
 
 class Statis:
-	def __init__(self, feld):
-		self.feld = feld
-		self.para = feld.para
+	def __init__(self, para):
+		self.para = para
+		self.feld = Field(para)
 
 	def calc_umean(self, tsteps=None):
 		self.Um = np.zeros(self.para.Ny+1)
@@ -16,16 +16,16 @@ class Statis:
 
 	def calc_statis(self, tsteps=None):
 		Ny = self.para.Ny
+		Nz = self.para.Nz
 		Nxc= self.para.Nxc
-		Nzc= self.para.Nzc
 		if tsteps is None: tsteps = self.para.tsteps
 
 		self.R11, self.R22, self.R33          = (np.zeros(Ny+1) for _ in range(3))
 		self.R12, self.R23, self.R13          = (np.zeros(Ny+1) for _ in range(3))
 		self.Rpu, self.Rpv, self.Rpw, self.Rpp= (np.zeros(Ny+1) for _ in range(4))
 		self.Um , self.Vm , self.Wm , self.Pm = (np.zeros(Ny+1) for _ in range(4))
-		self.Euu, self.Evv, self.Eww, self.Epp= (np.zeros([Ny+1, Nzc, Nxc]) for _ in range(4))
-		self.Euv, self.Evw, self.Euw          = (np.zeros([Ny+1, Nzc, Nxc]) for _ in range(3))
+		self.Euu, self.Evv, self.Eww, self.Epp= (np.zeros([Ny+1, Nz-1, Nxc]) for _ in range(4))
+		self.Euv, self.Evw, self.Euw          = (np.zeros([Ny+1, Nz-1, Nxc], dtype=complex) for _ in range(3))
 
 		for tstep in tsteps:
 			print("Reading statis: tstep", tstep)
@@ -33,6 +33,11 @@ class Statis:
 			v, vm = self.feld.read_fluc_mean("V%08i.bin"%tstep)
 			w, wm = self.feld.read_fluc_mean("W%08i.bin"%tstep)
 			p, pm = self.feld.read_fluc_mean("P%08i.bin"%tstep)
+
+			fu = spec(u)
+			fv = spec(v)
+			fw = spec(w)
+			fp = spec(p)
 
 			self.Um += um / len(tsteps)
 			self.Vm += vm / len(tsteps)
@@ -51,15 +56,16 @@ class Statis:
 			self.Rpw += np.mean(p*w, axis=(-1,-2)) / len(tsteps)
 			self.Rpp += np.mean(p**2,axis=(-1,-2)) / len(tsteps)
 
-			self.Euu += self.__flipk( np.abs(spec(u))**2 ) / len(tsteps)
-			self.Evv += self.__flipk( np.abs(spec(v))**2 ) / len(tsteps)
-			self.Eww += self.__flipk( np.abs(spec(w))**2 ) / len(tsteps)
-			self.Epp += self.__flipk( np.abs(spec(p))**2 ) / len(tsteps)
-			self.Euv += self.__flipk( (np.conj(spec(u))*spec(v)).real ) / len(tsteps)
-			self.Evw += self.__flipk( (np.conj(spec(v))*spec(w)).real ) / len(tsteps)
-			self.Euw += self.__flipk( (np.conj(spec(u))*spec(w)).real ) / len(tsteps)
+			self.Euu += np.abs(fu)**2 / len(tsteps)
+			self.Evv += np.abs(fv)**2 / len(tsteps)
+			self.Eww += np.abs(fw)**2 / len(tsteps)
+			self.Epp += np.abs(fp)**2 / len(tsteps)
+			self.Euv += fu.conj()*fv  / len(tsteps)
+			self.Evw += fv.conj()*fw  / len(tsteps)
+			self.Euw += fu.conj()*fw  / len(tsteps)
 
-	def __flipk(self, q):
+	@staticmethod
+	def __flipk(q):
 		''' fold all energy to the [:nzc,:nxc] range
 		    Nx must be even, as required by hft, Nz can be even or odd  '''
 		nzcu = int(np.ceil(q.shape[-2]/2))
@@ -67,6 +73,15 @@ class Statis:
 		q.T[1:-1] *= 2 # .T usually returns a view which can act as left value
 		q.T[:,1:nzcu] += q.T[:,:nzcd:-1]
 		return (q.T[:,:nzcd+1]).T
+
+	def flipk(self):
+		self.Euu = self.__flipk(self.Euu)
+		self.Evv = self.__flipk(self.Evv)
+		self.Eww = self.__flipk(self.Eww)
+		self.Epp = self.__flipk(self.Epp)
+		self.Euv = self.__flipk(self.Euv.real)
+		self.Evw = self.__flipk(self.Evw.real)
+		self.Euw = self.__flipk(self.Euw.real)
 
 	def flipy(self):
 		self.Um[:] = .5 * (self.Um + self.Um[::-1])
@@ -93,28 +108,4 @@ class Statis:
 		self.Euv[:] = .5 * (self.Euv - self.Euv[::-1])
 		self.Evw[:] = .5 * (self.Evw - self.Evw[::-1])
 		self.Euw[:] = .5 * (self.Euw + self.Euw[::-1])
-
-	def calc_wallscale(self, tsteps=None):
-		if tsteps is None: tsteps = self.para.tsteps
-
-		Re = self.para.Re
-		logs = np.loadtxt(self.para.statpath+'LOG.dat', skiprows=3)
-		
-		self.tauw = - np.mean([log[6] for log in logs if int(log[0]) in tsteps])
-		self.utau = self.tauw**.5
-		self.dnu = 1./Re / self.utau
-		self.tnu = self.dnu / self.utau
-		self.Ret = 1./self.dnu # channel height is taken for 2.0
-
-	def inner_scale(self):
-		self.lc = self.dnu
-		self.tc = self.tnu
-		self.uc = self.utau
-		self.pc = self.tauw
-
-	def outer_scale(self):
-		self.lc = 1.
-		self.tc = 1.
-		self.uc = 1.
-		self.pc = 1.
 

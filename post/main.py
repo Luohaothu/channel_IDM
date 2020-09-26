@@ -4,13 +4,13 @@ from statis import Statis
 from budgets import Budgets
 
 
-para = DataSetInfo("../data_test/test/")
+para = DataSetInfo("mytest/")
+para.scale_velo(para.utau)
 
-stas = Statis(Field(para))
+stas = Statis(para)
 # bgts = Budgets(para)
 
 stas.calc_statis()
-stas.calc_wallscale()
 stas.flipy()
 
 # bgts.dissipation()
@@ -19,28 +19,17 @@ stas.flipy()
 
 
 with open(para.postpath+"wallscale.txt", 'w') as fp:
-	fp.write("Re_tau = %.18e\n"%stas.Ret)
-	fp.write("u_tau = %.18e\n"%stas.utau)
-	fp.write("tau_w = %.18e\n"%stas.tauw)
-	fp.write("delta_nu = %.18e\n"%stas.dnu)
-	fp.write("t_nu = %.18e\n"%stas.tnu)
-	fp.write("dy_min_plus = %.18e\n"%((para.y[2]-para.y[1])/stas.dnu))
-	fp.write("dy_max_plus = %.18e\n"%((para.y[para.Ny//2+1]-para.y[para.Ny//2])/stas.dnu))
-
-
-qs = { 'Euu.bin':stas.Euu, 'Evv.bin':stas.Evv, 'Eww.bin':stas.Eww, 'Epp.bin':stas.Epp,
-       'Euv.bin':stas.Euv, 'Evw.bin':stas.Evw, 'Euw.bin':stas.Euw, }
-##################################################
-for name in qs: write_channel(para.postpath + name, qs[name])
-########### above: write & below: read ###########
-# for name in qs: read_channel (para.postpath + name)
-##################################################
+	fp.write("Re_tau = %.18e\n"%para.Ret)
+	fp.write("u_tau = %.18e\n"%para.utau)
+	fp.write("tau_w = %.18e\n"%para.tauw)
+	fp.write("delta_nu = %.18e\n"%para.dnu)
+	fp.write("t_nu = %.18e\n"%para.tnu)
+	fp.write("dy_min_plus = %.18e\n"%((para.y[2]-para.y[1])/para.dnu))
+	fp.write("dy_max_plus = %.18e\n"%((para.y[para.Ny//2+1]-para.y[para.Ny//2])/para.dnu))
 
 
 
 
-# stas.outer_scale()
-stas.inner_scale()
 
 casename = para.datapath.split('/')[-2]
 jrange = range(0, para.Ny//2+1) #range(1, para.Ny) #
@@ -60,13 +49,13 @@ header = \
 		"<u'p'><sup>+</sup>", "<v'p'><sup>+</sup>", "<w'p'><sup>+</sup>", "<p'p'><sup>+</sup>"	) + \
 	'zone t = "%s", i = %i' %( casename, len(jrange) )
 
-data = np.vstack([ para.yc/stas.lc,
-	stas.Um,	stas.Vm,	stas.Wm,	stas.Pm/stas.pc,
+data = np.vstack([ para.yc/para.lc,
+	stas.Um,	stas.Vm,	stas.Wm,	stas.Pm/para.pc,
 	stas.R11,	stas.R22,	stas.R33,	stas.R12,	stas.R23,	stas.R13,
-	stas.Rpu,	stas.Rpv,	stas.Rpw,	stas.Rpp/stas.pc**2	])
-data[1:4] /= stas.uc
-data[5:11] /= stas.uc**2
-data[11:14] /= stas.uc * stas.pc
+	stas.Rpu,	stas.Rpv,	stas.Rpw,	stas.Rpp/para.pc**2	])
+data[1:4] /= para.uc
+data[5:11] /= para.uc**2
+data[11:14] /= para.uc * para.pc
 data = data.T[jrange]
 
 np.savetxt(para.postpath+"profiles.dat", data, header=header, comments='')
@@ -79,9 +68,25 @@ np.savetxt(para.postpath+"profiles.dat", data, header=header, comments='')
 # 	'Title = "profiles of budgets"\n' + \
 # 	'variables = "%s", "%s"\n' % ( "y<sup>+</sup>", "<greek>e</greek><sup>+</sup>" ) + \
 # 	'zone t = "%s", i = %i' %( casename, len(jrange) )
-# data = np.vstack([ para.yc/stas.lc, bgts.epsl/(stas.uc**3/stas.lc) ])
+# data = np.vstack([ para.yc/para.lc, bgts.epsl/(para.uc**3/para.lc) ])
 # data = data.T[jrange]
 # np.savetxt(para.postpath+"budgets.dat", data, header=header, comments='')
+
+
+
+
+
+write_channel(para.postpath + 'Euu.bin', stas.Euu[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
+write_channel(para.postpath + 'Evv.bin', stas.Evv[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
+write_channel(para.postpath + 'Eww.bin', stas.Eww[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
+write_channel(para.postpath + 'Epp.bin', stas.Epp[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.pc*para.lc)**2)
+write_channel(para.postpath + 'Euvr.bin', stas.Euv.real[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
+write_channel(para.postpath + 'Euvi.bin', stas.Euv.imag[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
+write_channel(para.postpath + 'Evwr.bin', stas.Evw.real[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
+write_channel(para.postpath + 'Evwi.bin', stas.Evw.imag[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
+write_channel(para.postpath + 'Euwr.bin', stas.Euw.real[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
+write_channel(para.postpath + 'Euwi.bin', stas.Euw.imag[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
+stas.flipk()
 
 
 
@@ -116,10 +121,10 @@ for i in irange:
 				stas.Evw[j,k,i],
 				stas.Euw[j,k,i]	]
 
-data[3:] *= data[0] * data[1] / (4*np.pi**2 / para.Lx / para.Lz) / stas.uc**2
-data[6] *= stas.uc**2 / stas.pc**2
-data[:2] = np.log10(2*np.pi / data[:2] / stas.lc)
-data[2] /= stas.lc
+data[3:] *= data[0] * data[1] / (4*np.pi**2 / para.Lx / para.Lz) / para.uc**2
+data[6] *= para.uc**2 / para.pc**2
+data[:2] = np.log10(2*np.pi / data[:2] / para.lc)
+data[2] /= para.lc
 data = np.array([np.ravel(temp) for temp in data]).T
 
 pame = para.postpath + "ES2D.dat"
@@ -158,10 +163,10 @@ for i in irange:
 			np.sum(stas.Evw[j,:,i]),
 			np.sum(stas.Euw[j,:,i])	]
 
-data[2:] *= data[0] / (2*np.pi / para.Lx) / stas.uc**2
-data[5] *= stas.uc**2 / stas.pc**2
+data[2:] *= data[0] / (2*np.pi / para.Lx) / para.uc**2
+data[5] *= para.uc**2 / para.pc**2
 data[0] = 2*np.pi / data[0]
-data[:2] = np.log10(data[:2] / stas.lc)
+data[:2] = np.log10(data[:2] / para.lc)
 data = np.array([np.ravel(temp) for temp in data]).T
 
 pame = para.postpath + "ES1D_xy.dat"
@@ -200,10 +205,10 @@ for k in krange:
 			np.sum(stas.Evw[j,k]),
 			np.sum(stas.Euw[j,k])	]
 
-data[2:] *= data[0] / (2*np.pi / para.Lz) / stas.uc**2
-data[5] *= stas.uc**2 / stas.pc**2
+data[2:] *= data[0] / (2*np.pi / para.Lz) / para.uc**2
+data[5] *= para.uc**2 / para.pc**2
 data[0] = 2*np.pi / data[0]
-data[:2] = np.log10(data[:2] / stas.lc)
+data[:2] = np.log10(data[:2] / para.lc)
 data = np.array([np.ravel(temp) for temp in data]).T
 
 pame = para.postpath + "ES1D_zy.dat"
