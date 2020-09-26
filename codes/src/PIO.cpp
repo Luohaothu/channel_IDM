@@ -6,6 +6,8 @@
 
 using namespace std;
 
+// #define MODULATION
+
 
 void read_PIO_Sup(double *hr, double *hi,
 	double &alfv, double &dxav, double &dzav,
@@ -70,12 +72,15 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 		double z  = msb.z (k) * rsclx, zc = msb.zc(k) * rsclx;
 		double dx = msb.dx(i) * rsclx, hx = msb.hx(i) * rsclx;
 		double dz = msb.dz(k) * rsclx, hz = msb.hz(k) * rsclx;
-		double y  = WallRscl(msb.y (j), rsclx);
-		double yc = WallRscl(msb.yc(j), rsclx);
+		double y  = Filter::WallRscl(msb.y (j), rsclx, ms0);
+		double yc = Filter::WallRscl(msb.yc(j), rsclx, ms0);
 
 		if (i>0) ub(i,j,k) = Filter::FilterNodeU(x,yc,zc, hx,0,dz, velmfu[1]) * rsclu;
 		if (j>0) vb(i,j,k) = Filter::FilterNodeV(xc,y,zc, dx,0,dz, velmfu[2]) * rsclu;
 		if (k>0) wb(i,j,k) = Filter::FilterNodeW(xc,yc,z, dx,0,hz, velmfu[3]) * rsclu;
+
+		// handle HALFMFU
+		if (1+msb.Ny < 2/ms0.Ly*j) vb(i,j,k) *= -1;
 	}}}
 
 	// interpolate from LES outer region
@@ -132,34 +137,36 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 	Bcond::SetBoundaryX(velo);
 	Bcond::SetBoundaryZ(velo);
 
-	// // modulation
-	// for (int j=0; j<=2; j++) {
+#ifdef MODULATION
+	// modulation
+	for (int j=0; j<=2; j++) {
 
-	// 	double um = ub.meanxz(j);
-	// 	double vm = vb.meanxz(j);
-	// 	double wm = wb.meanxz(j);
-	// 	double uom = uo.meanxz(j);
+		double um = ub.meanxz(j);
+		double vm = vb.meanxz(j);
+		double wm = wb.meanxz(j);
+		double uom = uo.meanxz(j);
 
-	// 	#pragma omp parallel for
-	// 	for (int k=1; k<msb.Nz; k++) {
-	// 	for (int i=1; i<msb.Nx; i++) {
+		#pragma omp parallel for
+		for (int k=1; k<msb.Nz; k++) {
+		for (int i=1; i<msb.Nx; i++) {
 
-	// 		double x = msb.x(i), xc = msb.xc(i);
-	// 		double z = msb.z(k), zc = msb.zc(k);
-	// 		double y = j<=1 ? yo1 : yo2;
+			double x = msb.x(i), xc = msb.xc(i);
+			double z = msb.z(k), zc = msb.zc(k);
+			double y = j<=1 ? yo1 : yo2;
 
-	// 		double modu;
-	// 		double modv = gmav * (Interp::InterpNodeU(xc+dxv,y,zc+dzv,uo) - uom);
-	// 		double modw = gmaw * (Interp::InterpNodeU(xc+dxw,y,z +dzw,uo) - uom);
+			double modu;
+			double modv = gmav * (Interp::InterpNodeU(xc+dxv,y,zc+dzv,uo) - uom);
+			double modw = gmaw * (Interp::InterpNodeU(xc+dxw,y,z +dzw,uo) - uom);
 
-	// 		if (ub(i,j,k) > um) modu = gmaup * (Interp::InterpNodeU(x+dxup,y,zc+dzup,uo) - uom);
-	// 		else                modu = gmaum * (Interp::InterpNodeU(x+dxum,y,zc+dzum,uo) - uom);
+			if (ub(i,j,k) > um) modu = gmaup * (Interp::InterpNodeU(x+dxup,y,zc+dzup,uo) - uom);
+			else                modu = gmaum * (Interp::InterpNodeU(x+dxum,y,zc+dzum,uo) - uom);
 
-	// 		if (j != 1) ub(i,j,k) = um + (ub(i,j,k) - um) * (1 + modu);
-	// 		if (j != 0) vb(i,j,k) = vm + (vb(i,j,k) - vm) * (1 + modv);
-	// 		if (j != 1) wb(i,j,k) = wm + (wb(i,j,k) - wm) * (1 + modw);
-	// 	}}
-	// }
+			if (j != 1) ub(i,j,k) = um + (ub(i,j,k) - um) * (1 + modu);
+			if (j != 0) vb(i,j,k) = vm + (vb(i,j,k) - vm) * (1 + modv);
+			if (j != 1) wb(i,j,k) = wm + (wb(i,j,k) - wm) * (1 + modw);
+		}}
+	}
+#endif
 
 	// combine small- & large-scales
 	#pragma omp parallel for
@@ -246,12 +253,15 @@ Vctr PIO::Predict(double y, const Vctr &velout, const Vctr &veluni, double Ret, 
 
 		double x = mss.x(i) * rsclx, xc = mss.xc(i) * rsclx;
 		double z = mss.z(k) * rsclx, zc = mss.zc(k) * rsclx;
-		double y = WallRscl(mss.y (j), rsclx);
-		double yc= WallRscl(mss.yc(j), rsclx);
+		double y = Filter::WallRscl(mss.y (j), rsclx, ms0);
+		double yc= Filter::WallRscl(mss.yc(j), rsclx, ms0);
 
 		if (i>0) us(i,j,k) = Interp::InterpNodeU(x,yc,zc,veluni[1]) * rsclu;
 		if (j>0) vs(i,j,k) = Interp::InterpNodeV(xc,y,zc,veluni[2]) * rsclu;
 		if (k>0) ws(i,j,k) = Interp::InterpNodeW(xc,yc,z,veluni[3]) * rsclu;
+
+		// handle HALFMFU
+		if (1+mss.Ny < 2/ms0.Ly*j) vs(i,j,k) *= -1;
 	}}}
 
 	// interpolate from LES outer region
@@ -311,34 +321,34 @@ Vctr PIO::Predict(double y, const Vctr &velout, const Vctr &veluni, double Ret, 
 	delete[] hr;
 	delete[] hi;
 
-	// // modulation
-	// for (int j=0; j<=2; j++) {
+	// here MODULATION should always stay since the purpose of this function is to obtain highly resolved predicted field
+	for (int j=0; j<=2; j++) {
 
-	// 	double um = us.meanxz(j);
-	// 	double vm = vs.meanxz(j);
-	// 	double wm = ws.meanxz(j);
-	// 	double uom = uo.meanxz(j); // uom seems unnecessary since mean of uo has been removed when calculating uL
+		double um = us.meanxz(j);
+		double vm = vs.meanxz(j);
+		double wm = ws.meanxz(j);
+		double uom = uo.meanxz(j); // uom seems unnecessary since mean of uo has been removed when calculating uL
 
-	// 	#pragma omp parallel for
-	// 	for (int k=1; k<mss.Nz; k++) {
-	// 	for (int i=1; i<mss.Nx; i++) {
+		#pragma omp parallel for
+		for (int k=1; k<mss.Nz; k++) {
+		for (int i=1; i<mss.Nx; i++) {
 
-	// 		double x = mss.x(i), xc = mss.xc(i);
-	// 		double z = mss.z(k), zc = mss.zc(k);
-	// 		double y = j<=1 ? yo1 : yo2;
+			double x = mss.x(i), xc = mss.xc(i);
+			double z = mss.z(k), zc = mss.zc(k);
+			double y = j<=1 ? yo1 : yo2;
 
-	// 		double modu;
-	// 		double modv = gmav * (Interp::InterpNodeU(xc+dxv,y,zc+dzv,uo) - uom);
-	// 		double modw = gmaw * (Interp::InterpNodeU(xc+dxw,y,z +dzw,uo) - uom);
+			double modu;
+			double modv = gmav * (Interp::InterpNodeU(xc+dxv,y,zc+dzv,uo) - uom);
+			double modw = gmaw * (Interp::InterpNodeU(xc+dxw,y,z +dzw,uo) - uom);
 
-	// 		if (us(i,j,k) > um) modu = gmaup * (Interp::InterpNodeU(x+dxup,y,zc+dzup,uo) - uom);
-	// 		else                modu = gmaum * (Interp::InterpNodeU(x+dxum,y,zc+dzum,uo) - uom);
+			if (us(i,j,k) > um) modu = gmaup * (Interp::InterpNodeU(x+dxup,y,zc+dzup,uo) - uom);
+			else                modu = gmaum * (Interp::InterpNodeU(x+dxum,y,zc+dzum,uo) - uom);
 
-	// 		if (j != 1) us(i,j,k) = um + (us(i,j,k) - um) * (1 + modu);
-	// 		if (j != 0) vs(i,j,k) = vm + (vs(i,j,k) - vm) * (1 + modv);
-	// 		if (j != 1) ws(i,j,k) = wm + (ws(i,j,k) - wm) * (1 + modw);
-	// 	}}
-	// }
+			if (j != 1) us(i,j,k) = um + (us(i,j,k) - um) * (1 + modu);
+			if (j != 0) vs(i,j,k) = vm + (vs(i,j,k) - vm) * (1 + modv);
+			if (j != 1) ws(i,j,k) = wm + (ws(i,j,k) - wm) * (1 + modw);
+		}}
+	}
 
 	// superposition
 	#pragma omp parallel for
@@ -381,7 +391,9 @@ Vctr PIO::Predict(double y, const Vctr &velout, const Vctr &veluni, double Ret, 
 
 
 void PIO::PredictBoundarySGS(Vctr &shearsgs, const Vctr &velout, double Ret)
+// add modulation effect to fluctuating SGS stress (since SGS is in itself small-scale, there is no superposition)
 {
+#ifdef MODULATION
 	const Mesh &ms = shearsgs.ms;
 
 	double yo1 = 3.9 / sqrt(Ret); // position of outer signal
@@ -473,6 +485,7 @@ void PIO::PredictBoundarySGS(Vctr &shearsgs, const Vctr &velout, double Ret)
 
 	delete[] hr;
 	delete[] hi;
+#endif
 }
 
 
@@ -535,7 +548,7 @@ void read_PIO_Sup(double *hr, double *hi,
 	fclose(fp);
 
 	// interpolation
-	double yp = WallRscl(y, 1./lc);
+	double yp = y / lc;
 	int j0 = Interp::BiSearch(yp, ysp, 0, ny-1);
 
 	double a = ysp[j0+1] - yp;
@@ -643,7 +656,7 @@ void read_PIO_Mod(
 	fclose(fp);
 
 	// interpolation
-	double yp = WallRscl(y, 1./lc);
+	double yp = y / lc;
 	int j0 = Interp::BiSearch(yp, ysp, 0, ny-1);
 
 	double a = ysp[j0+1] - yp;

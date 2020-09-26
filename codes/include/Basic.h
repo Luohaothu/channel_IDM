@@ -15,4 +15,3 @@
 #define INFTSM 1e-8
 
 
-#define WallRscl(y, r) (y < 1 ? r * y : 2 - r * (2-y))

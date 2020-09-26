@@ -34,7 +34,7 @@ double ReynoldsStressDefect(int j, const Vctr &vel, const Vctr &veldns, double R
 
 	// the wall normal position on which stresses act
 	const double y = ms.y(j);
-	const double y0 = WallRscl(y, rsclx); // position in DNS field with y^+ matched
+	const double y0 = Filter::WallRscl(y, rsclx, ms0); // position in DNS field with y^+ matched
 
 	double r12dns = 0; // DNS Reynolds stress
 	double r12les = 0; // LES resolved Reynolds
@@ -109,7 +109,11 @@ void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, doubl
 	Scla &nuz = vis.GetVec(3);
 
 	// Reynolds stress defect
-	double r12dfc = .5 * (
+	double r12dfc = veldns.ms.Ly < 2 ? \
+		// HALFMFU
+		ReynoldsStressDefect(1, vel, veldns, Re, Ret, rsclx, rsclu) \
+		// full channel
+		: .5 * (
 		ReynoldsStressDefect(1,     vel, veldns, Re, Ret, rsclx, rsclu) -
 		ReynoldsStressDefect(ms.Ny, vel, veldns, Re, Ret, rsclx, rsclu) );
 
@@ -154,7 +158,7 @@ void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double 
 	// sgs shear stress filtered from resolved velocity field
 	SGS::SubGridShearStress(shearsgs, veldns, rsclx, rsclu);
 
-	// PIO::PredictBoundarySGS(shearsgs, vel, Ret);
+	PIO::PredictBoundarySGS(shearsgs, vel, Ret);
 
 	// ***** rescale the DNS-filtered sgs stress by Reynolds stress defect ***** //
 	double r12dfc = 0; // Reynolds stress defect
@@ -162,7 +166,7 @@ void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double 
 
 	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
 		// average for top & bottom real boundaries
-		double weight0 = (j>1 ? -1 : 1) * .5;
+		double weight0 = (j>1 ? -1 : 1) * .5 + .5 * (veldns.ms.Ly < 2); // handle HALFMFU
 		double weight1 = (j>1 ? -1 : 1) * .5 / (ms.Nx-1.) / (ms.Nz-1.);
 
 		r12dfc += weight0 * ReynoldsStressDefect(j, vel, veldns, Re, Ret, rsclx, rsclu);
@@ -176,7 +180,7 @@ void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double 
 
 	// ***** rescale kinematic viscosity to account for low-order differencing error ***** //
 	const double y = ms.y(1), y3 = ms.yc(0), y4 = ms.yc(1);
-	const double rsclvis = fabs((y4-y3) / (1-fabs(y-1)) / log((1-fabs(y4-1))/(1-fabs(y3-1))));
+	const double rsclvis = 1.; //fabs((y4-y3) / (1-fabs(y-1)) / log((1-fabs(y4-1))/(1-fabs(y3-1))));
 
 	FILE *fp = fopen("WMLOG.dat", "a");
 	fprintf(fp, "%f\t%f\n", rsclsgs, rsclvis);
@@ -249,7 +253,7 @@ void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, d
 
 		double x = ms.xc(i) * rsclx, dx = ms.dx(i) * rsclx;
 		double z = ms.zc(k) * rsclx, dz = ms.dz(k) * rsclx;
-		double y = WallRscl(ms.yc(j), rsclx), dy = 0;
+		double y = Filter::WallRscl(ms.yc(j), rsclx, ms0), dy = 0;
 
 		double sgsdsp = rsclu * rsclx * ( // rescale Sij to match inner scale
 			tau11sgs[id] * Filter::FilterNodeA(x,y,z,dx,dy,dz,s11) +

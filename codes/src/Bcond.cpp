@@ -88,20 +88,23 @@ void Bcond::ChannelDirichlet(Boundaries &bc, Boundaries &sbc, const Mesh &ms, co
 		double dx= ms.dx(i)* rsclx, hx = ms.hx(i) * rsclx;
 		double dz= ms.dz(k)* rsclx, hz = ms.hz(k) * rsclx;
 
-		double y  = WallRscl(ms.y (1), rsclx);
-		double yc = WallRscl(ms.yc(0), rsclx);
+		double y  = Filter::WallRscl(ms.y (1), rsclx, ms0);
+		double yc = Filter::WallRscl(ms.yc(0), rsclx, ms0);
 
 		// filter off-wall boundary
 		bc.ub3(i,k) = Filter::FilterNodeU(x,yc,zc, hx,0,dz, u) * rsclu;
 		bc.vb3(i,k) = Filter::FilterNodeV(xc,y,zc, dx,0,dz, v) * rsclu;
 		bc.wb3(i,k) = Filter::FilterNodeW(xc,yc,z, dx,0,hz, w) * rsclu;
 
-		y  = WallRscl(ms.y (ms.Ny), rsclx);
-		yc = WallRscl(ms.yc(ms.Ny), rsclx);
+		y  = Filter::WallRscl(ms.y (ms.Ny), rsclx, ms0);
+		yc = Filter::WallRscl(ms.yc(ms.Ny), rsclx, ms0);
 
 		bc.ub4(i,k) = Filter::FilterNodeU(x,yc,zc, hx,0,dz, u) * rsclu;
 		bc.vb4(i,k) = Filter::FilterNodeV(xc,y,zc, dx,0,dz, v) * rsclu;
 		bc.wb4(i,k) = Filter::FilterNodeW(xc,yc,z, dx,0,hz, w) * rsclu;
+
+		// handle HALFMFU
+		if (ms0.Ly < 2) bc.vb4(i,k) *= -1;
 	}}
 }
 

@@ -8,7 +8,7 @@ using namespace std;
 
 
 /***** computation mode *****/
-# define DEFAULT // AUXIMAIN //
+# define AUXIMAIN // DEFAULT //
 
 
 void Config(int n, const Para &para);
@@ -84,11 +84,13 @@ int main()
 	int tstep0 = Initiate(solver0, para0);
 	int tstep1 = Initiate(solver1, para1);
 
-	solver0.set_mpg(-1.736e-3, 0, 0); //-8.65e-4, 0, 0); //-0.0029, 0, 0); //
-	solver1.set_mpg(-0.0025, 0, 0); //-2.114e-3, 0, 0); //-0.0029, 0, 0); //
 
-	// solver0.set_mpg(-8.65e-4, 0, 0); // MFU is fixed to Ret 2000
-	// solver1.set_mpg(-1.9753e-3, 0, 0); // LES is Ret 4000, need to use corase mesh to obtain initial field
+	solver0.set_mpg(-1.,       0, 0); solver1.set_mpg(-1.,        0, 0); // Ret specified by XINDAT
+	solver0.set_mpg(-2.9e-3,   0, 0); solver1.set_mpg(-2.9e-3,    0, 0); // Ret 540
+	solver0.set_mpg(-1.736e-3, 0, 0); solver1.set_mpg(-2.5e-3,    0, 0); // Ret 1000
+	solver0.set_mpg(-8.65e-4,  0, 0); solver1.set_mpg(-2.114e-3,  0, 0); // Ret 2000
+	solver0.set_mpg(-8.65e-4,  0, 0); solver1.set_mpg(-1.9753e-3, 0, 0); // Ret 4000 (MFU 2000)
+
 	
 	if (tstep0 == 0) Output(para0, solver0, tstep0);
 	if (tstep1 == 0) Output(para1, solver1, tstep1);
@@ -96,7 +98,7 @@ int main()
 	// main loop
 	while (tstep1++ < para1.Nt) {
 
-		while (solver1.get_time() - solver0.get_time() > INFTSM) {
+		while (solver0.get_time() - solver1.get_time() < para1.dt - INFTSM) {
 			tstep0 ++;
 			solver0.evolve(para0.Re, para0.dt, para0.bftype);
 			Output(para0, solver0, tstep0);
