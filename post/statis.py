@@ -70,9 +70,10 @@ class Statis:
 		    Nx must be even, as required by hft, Nz can be even or odd  '''
 		nzcu = int(np.ceil(q.shape[-2]/2))
 		nzcd = q.shape[-2]//2
-		q.T[1:-1] *= 2 # .T usually returns a view which can act as left value
-		q.T[:,1:nzcu] += q.T[:,:nzcd:-1]
-		return (q.T[:,:nzcd+1]).T
+		p = np.copy((q.T[:,:nzcd+1]).T)
+		p.T[:,1:nzcu] += q.T[:,:nzcd:-1]
+		p.T[1:-1] *= 2
+		return p
 
 	def flipk(self):
 		self.Euu = self.__flipk(self.Euu)
