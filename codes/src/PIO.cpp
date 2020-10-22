@@ -72,8 +72,8 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 		double z  = msb.z (k) * rsclx, zc = msb.zc(k) * rsclx;
 		double dx = msb.dx(i) * rsclx, hx = msb.hx(i) * rsclx;
 		double dz = msb.dz(k) * rsclx, hz = msb.hz(k) * rsclx;
-		double y  = Filter::WallRscl(msb.y (j), rsclx, ms0);
-		double yc = Filter::WallRscl(msb.yc(j), rsclx, ms0);
+		double y  = Filter::WallRscl(msb.y (j), rsclx);
+		double yc = Filter::WallRscl(msb.yc(j), rsclx);
 
 		if (i>0) ub(i,j,k) = Filter::FilterNodeU(x,yc,zc, hx,0,dz, velmfu[1]) * rsclu;
 		if (j>0) vb(i,j,k) = Filter::FilterNodeV(xc,y,zc, dx,0,dz, velmfu[2]) * rsclu;
@@ -197,7 +197,7 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 
 	// record for debug
 	// static int cnt = 0;
-	// if ((++cnt) % 1000 == 0)
+	// if ((++cnt) % 5000 == 0)
 	// 	PIO::Predict(yb1, vel, velmfu, Ret, rsclx, rsclu, cnt);
 
 
@@ -253,8 +253,8 @@ Vctr PIO::Predict(double y, const Vctr &velout, const Vctr &veluni, double Ret, 
 
 		double x = mss.x(i) * rsclx, xc = mss.xc(i) * rsclx;
 		double z = mss.z(k) * rsclx, zc = mss.zc(k) * rsclx;
-		double y = Filter::WallRscl(mss.y (j), rsclx, ms0);
-		double yc= Filter::WallRscl(mss.yc(j), rsclx, ms0);
+		double y = Filter::WallRscl(mss.y (j), rsclx);
+		double yc= Filter::WallRscl(mss.yc(j), rsclx);
 
 		if (i>0) us(i,j,k) = Interp::InterpNodeU(x,yc,zc,veluni[1]) * rsclu;
 		if (j>0) vs(i,j,k) = Interp::InterpNodeV(xc,y,zc,veluni[2]) * rsclu;

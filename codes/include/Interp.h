@@ -5,7 +5,8 @@
 
 namespace Interp
 {
-double Shift(double x, double x0, double x1);
+double ShiftPrd(double x, double x0, double x1);
+double ShiftMir(double x, double x0, double x1);
 int BiSearch(double x, const double *xs, int lo, int hi);
 
 double InterpCell(const Scla &q,

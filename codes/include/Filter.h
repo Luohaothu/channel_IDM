@@ -17,6 +17,6 @@ inline double FilterNodeV(double x, double y, double z, double dx, double dy, do
 inline double FilterNodeW(double x, double y, double z, double dx, double dy, double dz, const Scla &q) { return FilterNode(x,y,z,dx,dy,dz,q,3); }
 
 // rescale y position to match inner scale, use Ly as criterion to switch between full- and half-channel scenario
-inline double WallRscl(double y, double r, const Mesh &ms) { return y<1 ? r*y : ms.Ly<2 ? r*(2-y) : 2-r*(2-y); }
+inline double WallRscl(double y, double r) { return y<1 ? r*y : 2-r*(2-y); }
 
 } // namespace Filter

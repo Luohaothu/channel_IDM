@@ -34,7 +34,7 @@ double ReynoldsStressDefect(int j, const Vctr &vel, const Vctr &veldns, double R
 
 	// the wall normal position on which stresses act
 	const double y = ms.y(j);
-	const double y0 = Filter::WallRscl(y, rsclx, ms0); // position in DNS field with y^+ matched
+	const double y0 = Filter::WallRscl(y, rsclx); // position in DNS field with y^+ matched
 
 	double r12dns = 0; // DNS Reynolds stress
 	double r12les = 0; // LES resolved Reynolds
@@ -253,7 +253,7 @@ void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, d
 
 		double x = ms.xc(i) * rsclx, dx = ms.dx(i) * rsclx;
 		double z = ms.zc(k) * rsclx, dz = ms.dz(k) * rsclx;
-		double y = Filter::WallRscl(ms.yc(j), rsclx, ms0), dy = 0;
+		double y = Filter::WallRscl(ms.yc(j), rsclx), dy = 0;
 
 		double sgsdsp = rsclu * rsclx * ( // rescale Sij to match inner scale
 			tau11sgs[id] * Filter::FilterNodeA(x,y,z,dx,dy,dz,s11) +

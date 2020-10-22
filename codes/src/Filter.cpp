@@ -240,13 +240,13 @@ double Filter::FilterNode(
 	int kn = ms.Nz, k0 = (stgtyp==3 || corz[kn]-corz[0]>ms.Lz+INFTSM);
 
 	// shift target position into meaningful range
-	double xm = Interp::Shift(x-.5*dx, corx[i0], corx[in]);
-	double ym = Interp::Shift(y-.5*dy, cory[j0], cory[jn]);
-	double zm = Interp::Shift(z-.5*dz, corz[k0], corz[kn]);
+	double xm = Interp::ShiftPrd(x-.5*dx, corx[i0], corx[in]);
+	double ym = Interp::ShiftMir(y-.5*dy, cory[j0], cory[jn]);
+	double zm = Interp::ShiftPrd(z-.5*dz, corz[k0], corz[kn]);
 
-	double xp = Interp::Shift(x+.5*dx, corx[i0], corx[in]);
-	double yp = Interp::Shift(y+.5*dy, cory[j0], cory[jn]);
-	double zp = Interp::Shift(z+.5*dz, corz[k0], corz[kn]);
+	double xp = Interp::ShiftPrd(x+.5*dx, corx[i0], corx[in]);
+	double yp = Interp::ShiftMir(y+.5*dy, cory[j0], cory[jn]);
+	double zp = Interp::ShiftPrd(z+.5*dz, corz[k0], corz[kn]);
 
 	double ans;
 

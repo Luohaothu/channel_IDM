@@ -3,11 +3,19 @@
 using namespace std;
 
 
-double Interp::Shift(double x, double x0, double x1)
+double Interp::ShiftPrd(double x, double x0, double x1)
 // shift x into range [x0,x1)
 {
 	double l = x1 - x0;
 	return x==x1 ? x : fmod(fmod(x-x0, l) + l, l) + x0;
+}
+
+double Interp::ShiftMir(double x, double x0, double x1)
+// shift x into range [x0,x1] assumed to be mirrorly tiled
+{
+	if      (x < x0) return ShiftMir(2*x0-x, x0, x1);
+	else if (x1 < x) return ShiftMir(2*x1-x, x0, x1);
+	return x;
 }
 
 int Interp::BiSearch(double x, const double *xs, int i0, int in)
@@ -56,9 +64,9 @@ double Interp::InterpNode(double x_, double y_, double z_, const Scla &q, int st
 	int k0 = stgtyp==3, kn = ms.Nz;
 
 	// shift target position into meaningful range
-	double x = Shift(x_, ms.x(1), ms.x(ms.Nx));
-	double y = Shift(y_, ms.y(1), ms.y(ms.Ny));
-	double z = Shift(z_, ms.z(1), ms.z(ms.Nz));
+	double x = ShiftPrd(x_, ms.x(1), ms.x(ms.Nx));
+	double y = ShiftMir(y_, ms.y(1), ms.y(ms.Ny));
+	double z = ShiftPrd(z_, ms.z(1), ms.z(ms.Nz));
 
 	// binary search for the interpolation range
 	int im = BiSearch(x, corx, i0, in), ip = im + 1;

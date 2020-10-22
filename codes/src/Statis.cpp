@@ -295,7 +295,7 @@ long int Statis::GetLogpos(const char *path, int tstep)
 	FILE *fp;
 	char str[1024];
 	long int pos = 0;
-	int n = 0;
+	double n = 0;
 	double t = 0.0;
 
 	sprintf(str, "%sLOG.dat", path?path:"");
@@ -308,7 +308,7 @@ long int Statis::GetLogpos(const char *path, int tstep)
 		while ( n < tstep ) {
 			pos = ftell(fp);
 			if ( ! fgets(str, 1024, fp) ) break; // reach the end of file
-			sscanf(str, "%i\t%lf", &n, &t);	// if str is empty line or spaces, n and t will not be assigned
+			sscanf(str, "%lf\t%lf", &n, &t);	// if str is empty line or spaces, n and t will not be assigned
 		}
 		fclose(fp);
 	}
@@ -323,7 +323,7 @@ double Statis::GetLogTime(const char *path, int tstep, double mpg[3])
 	char str[1024];
 	sprintf(str, "%sLOG.dat", path?path:"");
 
-	int n;
+	double n;
 	double t = 0;
 	double ener, tau21, tau22, tau23;
 
@@ -331,7 +331,7 @@ double Statis::GetLogTime(const char *path, int tstep, double mpg[3])
 		FILE *fp = fopen(str, "r");
 		fseek(fp, pos, SEEK_SET);
 		if(fgets(str, 1024, fp))
-			sscanf(str, "%i\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf",
+			sscanf(str, "%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf",
 				&n, &t, &ener, &tau21, &tau22, &tau23, mpg, mpg+1, mpg+2);
 		fclose(fp);
 	}

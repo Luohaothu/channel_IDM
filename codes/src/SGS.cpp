@@ -414,7 +414,7 @@ void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &veldns, double rs
 
 		double x = ms.xc(i) * rsclx, dx = ms.dx(i) * rsclx;
 		double z = ms.zc(k) * rsclx, dz = ms.dz(k) * rsclx;
-		double y = Filter::WallRscl(ms.yc(j), rsclx, ms0), dy = 0;
+		double y = Filter::WallRscl(ms.yc(j), rsclx), dy = 0;
 
 		tau11(i,j,k) = pow(Filter::FilterNodeU(x,y,z,dx,dy,dz,u), 2.) - Filter::FilterNodeA(x,y,z,dx,dy,dz,uu);
 		tau22(i,j,k) = pow(Filter::FilterNodeV(x,y,z,dx,dy,dz,v), 2.) - Filter::FilterNodeA(x,y,z,dx,dy,dz,vv);
@@ -480,7 +480,7 @@ void SGS::SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, doub
 
 		double x = ms.x (i) * rsclx, dx = ms.hx(i) * rsclx;
 		double z = ms.zc(k) * rsclx, dz = ms.dz(k) * rsclx;
-		double y = Filter::WallRscl(ms.y(j), rsclx, ms0), dy = 0;
+		double y = Filter::WallRscl(ms.y(j), rsclx), dy = 0;
 
 		if (i>0 && j>0) tau12(i,j,k) = (
 			Filter::FilterNodeU(x,y,z,dx,dy,dz,u) *
@@ -489,7 +489,7 @@ void SGS::SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, doub
 
 		x = ms.xc(i) * rsclx; dx = ms.dx(i) * rsclx;
 		z = ms.z (k) * rsclx; dz = ms.hz(k) * rsclx;
-		y = Filter::WallRscl(ms.y(j), rsclx, ms0); dy = 0;
+		y = Filter::WallRscl(ms.y(j), rsclx); dy = 0;
 
 		if (j>0 && k>0) tau23(i,j,k) = (
 			Filter::FilterNodeV(x,y,z,dx,dy,dz,v) *
@@ -499,7 +499,7 @@ void SGS::SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, doub
 #ifndef DIRTY_TRICK_SGS_
 		x = ms.x (i) * rsclx; dx = ms.hx(i) * rsclx;
 		z = ms.z (k) * rsclx; dz = ms.hz(k) * rsclx;
-		y = Filter::WallRscl(ms.yc(j), rsclx, ms0); dy = 0;
+		y = Filter::WallRscl(ms.yc(j), rsclx); dy = 0;
 
 		if (i>0 && k>0) tau13(i,j,k) = (
 			Filter::FilterNodeU(x,y,z,dx,dy,dz,u) *
@@ -542,7 +542,7 @@ void SGS::SubGridNormalStress(Vctr &normal, const Vctr &veldns, double rsclx, do
 
 		double x = ms.xc(i) * rsclx, dx = ms.dx(i) * rsclx;
 		double z = ms.zc(k) * rsclx, dz = ms.dz(k) * rsclx;
-		double y = Filter::WallRscl(ms.yc(j), rsclx, ms0), dy = 0;
+		double y = Filter::WallRscl(ms.yc(j), rsclx), dy = 0;
 
 		tau11(i,j,k) = (
 			pow(Filter::FilterNodeU(x,y,z,dx,dy,dz,u), 2.) -
