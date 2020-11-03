@@ -108,6 +108,41 @@ void Bcond::ChannelDirichlet(Boundaries &bc, Boundaries &sbc, const Mesh &ms, co
 	}}
 }
 
+void Bcond::ChannelCompatible(Boundaries &bc, Boundaries &sbc, const Vctr &vel, const Vctr &vel0)
+{
+	const Mesh &ms = vel.ms;
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
+
+	Bcond::ChannelDirichlet(bc, sbc, ms, vel0);
+
+	int m = ms.Ny-1;
+	double blender = 0.5; // blender=0 means the following operation has no effect, however, blender=1 will cause boundary V to be invariant in time
+	double vm3 = 0, vm4 = 0;
+
+	// blend the current boundary V with that compatible-in-divergence with U & W at last time step
+	#pragma omp parallel for reduction(+: vm3, vm4)
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+		bc.vb3(i,k) *= 1. - blender;
+		bc.vb4(i,k) *= 1. - blender;
+		bc.vb3(i,k) += blender * (v(i,2,k) + ms.dy(1) * ((u(ms.ipa(i),1,k) - u(i,1,k)) / ms.dx(i) + (w(i,1,ms.kpa(k)) - w(i,1,k)) / ms.dz(k)));
+		bc.vb4(i,k) += blender * (v(i,m,k) - ms.dy(m) * ((u(ms.ipa(i),m,k) - u(i,m,k)) / ms.dx(i) + (w(i,m,ms.kpa(k)) - w(i,m,k)) / ms.dz(k)));
+
+		vm3 += bc.vb3(i,k) / ((ms.Nx-1) * (ms.Nz-1));
+		vm4 += bc.vb4(i,k) / ((ms.Nx-1) * (ms.Nz-1));
+	}}
+
+	// remove plane mean of V
+	#pragma omp parallel for
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+		bc.vb3(i,k) -= vm3;
+		bc.vb4(i,k) -= vm4;
+	}}
+}
+
 void Bcond::ChannelRobin(Boundaries &bc, Boundaries &sbc, const Mesh &ms)
 {
 	double dy0 = ms.dy(0), dyn = ms.dy(ms.Ny);

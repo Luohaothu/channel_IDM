@@ -124,9 +124,9 @@ void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0, double Re
 
 	Bcond::ChannelDirichlet(bc_, sbc_, ms, PIO::BoundaryPredict(get_vel(), solver0.get_vel(), Ret, rsclx, rsclu));
 	// Bcond::ChannelDirichlet(bc_, sbc_, ms, solver0.get_vel(), rsclx, rsclu);
-	// Bcond::ChannelRobin(bc_, sbc_, get_vel(), vis_, solver0.get_vel(), solver0.get_vis());
 
 	CalcFb(fb_, mpg_);
+	// fb_[1] *= 2; // accerate convergence
 
 	IDM::calc(fld_, fldh_, vis_, fb_, bc_, sbc_, dt);
 

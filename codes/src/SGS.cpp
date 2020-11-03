@@ -294,7 +294,7 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 		double bt2 = beta[0]*beta[1] + beta[1]*beta[2] + beta[0]*beta[2]
 		           - beta[3]*beta[3] - beta[4]*beta[4] - beta[5]*beta[5];
 
-		nut(i,j,k) = sqrt(bt2 / gr2);
+		nut(i,j,k) = sqrt(bt2 / gr2); // assign PI^g to nut
 
 		// PI^g * S:S =  PI^g * SijSij
 		double sr2 = pow(s11(i,j,k), 2.)
@@ -362,7 +362,14 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 	}}}
 }
 
-	nut *= fmin(fmax(-.5/Re*sum1/sum2, 0), .5); // PI^g has been assigned to nut
+	double Cv = -.5/Re * sum1/sum2;
+	
+	// Cv is recommended to be recorded since it does not take much space, and is really helpful in debugging
+	FILE *fp = fopen("Cv.dat", "a");
+	fprintf(fp, "%.6e\n", Cv);
+	fclose(fp);
+
+	nut *= fmin(Cv>0 ? Cv : .07, .5); // In case of negative model coefficient, use 0.07 suggested by Vreman (2004)
 
 	// set boundary eddy viscosity
 	Bcond::SetBoundaryY(nut, 1); // homogeneous Neumann
