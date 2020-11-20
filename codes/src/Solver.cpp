@@ -196,17 +196,22 @@ void Solver::InitFrom(Flow &fld, const Flow &fld0)
 
 void Solver::CalcVis(Flow &vis, const Vctr &vel, double Re, int sgstyp)
 {
-	Scla &nuc = vis.GetScl().Set(0);
+	Scla &nuc = vis.GetScl();
 
-	// static SGS sgs(vis.ms);
-
-	switch (sgstyp) {
-	case 2: SGS::Smargorinsky (nuc, vel, Re, .18); break;
-	case 3: SGS::DynamicSmarg (nuc, vel         ); break;
-	case 4: SGS::DynamicVreman(nuc, vel, Re     ); break;
+	if (sgstyp <= 1) {
+		nuc.Set(1./Re);
 	}
+	else {
+		static SGS sgs(nuc.ms);
 
-	nuc += 1./Re;
+		switch (sgstyp) {
+		case 2: sgs.Smargorinsky (nuc, vel, Re, .18); break;
+		case 3: sgs.DynamicSmarg (nuc, vel         ); break;
+		case 4: sgs.DynamicVreman(nuc, vel, Re     ); break;
+		}
+
+		nuc += 1./Re;
+	}
 
 	vis.CellCenter2Edge();
 }

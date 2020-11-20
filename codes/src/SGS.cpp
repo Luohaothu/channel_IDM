@@ -5,11 +5,11 @@
 using namespace std;
 
 
-// SGS::SGS(const Mesh &ms):
-// s11(ms), s22(ms), s33(ms), s12(ms), s23(ms), s13(ms),
-// m11(ms), m22(ms), m33(ms), m12(ms), m23(ms), m13(ms),
-// l11(ms), l22(ms), l33(ms), l12(ms), l23(ms), l13(ms)
-// {}
+SGS::SGS(const Mesh &ms):
+s11(ms), s22(ms), s33(ms), s12(ms), s23(ms), s13(ms),
+m11(ms), m22(ms), m33(ms), m12(ms), m23(ms), m13(ms),
+l11(ms), l22(ms), l33(ms), l12(ms), l23(ms), l13(ms)
+{}
 
 // note: MUST NOT filter and assign values to an array in the same transverse
 
@@ -69,10 +69,8 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 	const Scla &v = vel[2];
 	const Scla &w = vel[3];
 
-	Scla s11(ms), s22(ms), s33(ms), s12(ms), s23(ms), s13(ms);
-	Scla m11(ms), m22(ms), m33(ms), m12(ms), m23(ms), m13(ms);
-	Scla l11(ms), l22(ms), l33(ms), l12(ms), l23(ms), l13(ms);
-	Scla &uf=l11, &vf=l22, &wf=l33, &uc=l12, &vc=l23, &wc=l13;
+	Scla &uf=l11, &vf=l22, &wf=l33;
+	Scla &uc=l12, &vc=l23, &wc=l13;
 
 	/***** solve Mij *****/
 
@@ -232,17 +230,10 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 	const Scla &v = vel[2];
 	const Scla &w = vel[3];
 
-	// Scla &g11 = m11, &g12 = m22, &g13 = m33;
-	// Scla &g21 = m12, &g22 = m23, &g23 = m13;
-	// Scla &g31 = l11, &g32 = l22, &g33 = l33;
-	// Scla &pss = l12, &gg  = l23;
-
-	Scla s11(ms), s22(ms), s33(ms);
-	Scla s12(ms), s23(ms), s13(ms);
-	Scla g11(ms), g12(ms), g13(ms);
-	Scla g21(ms), g22(ms), g23(ms);
-	Scla g31(ms), g32(ms), g33(ms);
-	Scla pss(ms), gg(ms);
+	Scla &g11 = m11, &g12 = m22, &g13 = m33;
+	Scla &g21 = m12, &g22 = m23, &g23 = m13;
+	Scla &g31 = l11, &g32 = l22, &g33 = l33;
+	Scla &pss = l12, &gg  = l23;
 
 	double sum1 = 0;
 	double sum2 = 0;

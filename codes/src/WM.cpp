@@ -117,6 +117,12 @@ void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, doubl
 		ReynoldsStressDefect(1,     vel, veldns, Re, Ret, rsclx, rsclu) -
 		ReynoldsStressDefect(ms.Ny, vel, veldns, Re, Ret, rsclx, rsclu) );
 
+	r12dfc = fmin(r12dfc, 0); // positive mean SGS stress is forbiden
+
+	FILE* fp = fopen("r12dfc.dat", "a");
+	fprintf(fp, "%.6e\n", r12dfc);
+	fclose(fp);
+
 	// rescale kinematic viscosity
 	const double y = ms.y(1), y3 = ms.yc(0), y4 = ms.yc(1);
 	const double rsclvis = 1.; //fabs((y4-y3) / (1-fabs(y-1)) / log((1-fabs(y4-1))/(1-fabs(y3-1))));

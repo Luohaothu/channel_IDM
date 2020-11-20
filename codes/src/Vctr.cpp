@@ -140,7 +140,6 @@ const double* Vctr::Gradient(int i, int j, int k) const
 	int ipjp, jpkp, ipkp; ms.ppx(i,j,k,ipjp,jpkp,ipkp);
 	int ipjm, jpkm, ipkm; ms.pmx(i,j,k,ipjm,jpkm,ipkm);
 	int imjp, jmkp, imkp; ms.mpx(i,j,k,imjp,jmkp,imkp);
-	int imjm, jmkm, imkm; ms.mmx(i,j,k,imjm,jmkm,imkm);
 
 	double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
 	double dxp, dyp, dzp; ms.dpx(i,j,k,dxp,dyp,dzp);

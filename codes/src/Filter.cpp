@@ -262,13 +262,17 @@ double Filter::TestFilter(int i, int j, int k, const Scla &q)
 {
 	const Mesh &ms = q.ms;
 
-	int id =              ms.idx(i,j,k);
-	int ip, jp, kp;       ms.ipx(i,j,k,ip,jp,kp);
-	int im, jm, km;       ms.imx(i,j,k,im,jm,km);
-	int ipjp, jpkp, ipkp; ms.ppx(i,j,k,ipjp,jpkp,ipkp);
-	int ipjm, jpkm, ipkm; ms.pmx(i,j,k,ipjm,jpkm,ipkm);
-	int imjp, jmkp, imkp; ms.mpx(i,j,k,imjp,jmkp,imkp);
-	int imjm, jmkm, imkm; ms.mmx(i,j,k,imjm,jmkm,imkm);
+	int ip = ms.ipa(i), im = ms.ima(i);
+	int kp = ms.kpa(k), km = ms.kma(k);
+	int id = ms.idx(i,j,k);
+	int imkm = ms.idx(im,j,km);
+	int ipkp = ms.idx(ip,j,kp);
+	int imkp = ms.idx(im,j,kp);
+	int ipkm = ms.idx(ip,j,km);
+	ip = ms.idx(ip,j,k);
+	im = ms.idx(im,j,k);
+	kp = ms.idx(i,j,kp);
+	km = ms.idx(i,j,km);
 
 	// Simpson's rule
 	return 4./9  *   q[id]
