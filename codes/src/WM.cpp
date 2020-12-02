@@ -24,6 +24,43 @@ void WM::UniformWallShear(Flow &vis, const Vctr &vel, double tau12)
 	}}}
 }
 
+void WM::LogLawWallShear(Flow &vis, const Vctr &vel, double Ret)
+// determine the local wall shear by log-law, as proposed by Piomelli et al. (1989)
+{
+	const Mesh &ms = vis.ms;
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
+
+	Scla &nuz = vis.GetVec(3);
+	Scla &nux = vis.GetVec(1);
+
+	const double kappa = .41;
+	const double B     = 5.3;
+	const double theta = 13. * PI/180;
+
+	double y = ms.yc(2);
+	double law = 1. / (log(y * Ret) / kappa + B);
+	double dlt = y / tan(theta);
+
+	#pragma omp parallel for collapse(3)
+	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+
+		double yyy = j==1 ? y : 2-y;
+		double sgn = j==1 ? 1 : -1;
+
+		double tau12 = sgn * law * Interp::InterpNodeU(dlt+ms.x(i),yyy,ms.zc(k),u);
+		double tau23 = sgn * law * Interp::InterpNodeW(dlt+ms.xc(i),yyy,ms.z(k),w);
+
+		const double *sr = vel.ShearStrain(i,j,k);
+
+		nuz(i,j,k) = fmin(fmax(.5 * tau12 / sr[0], -.1), .1);
+		nux(i,j,k) = fmin(fmax(.5 * tau23 / sr[1], -.1), .1);
+	}}}
+}
+
 
 double ReynoldsStressDefect(int j, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 // calculate Reynolds stress R12 - R12^r at Z-edge of layer j

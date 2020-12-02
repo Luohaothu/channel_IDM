@@ -130,7 +130,8 @@ void ChannelDirichlet(Boundaries &bc, Boundaries &sbc, const Mesh &ms, const Vct
 void ChannelCompatible(Boundaries &bc, Boundaries &sbc, const Vctr &vel, const Vctr &vel0);
 
 // Channel: homogeneous Robin BC ( u - l du/dy = 0 ) on both walls
-void ChannelRobin(Boundaries &bc, Boundaries &sbc, const Mesh &ms);
+void ChannelRobin(Boundaries &bc, Boundaries &sbc, const Mesh &ms, double lu=.008, double lv=-1, double lw=-1);
+void ChannelRobin(Boundaries &bc, Boundaries &sbc, const Vctr &vel, const Flow &vis, double tau12);
 void ChannelRobin(Boundaries &bc, Boundaries &sbc, const Vctr &vel, const Flow &vis, const Vctr &vel0, const Flow &vis0);
 
 // Channel half: no-slip on bottom wall; v=0, du/dy=dw/dy=0 on top boundary
