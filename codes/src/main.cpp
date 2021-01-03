@@ -39,7 +39,7 @@ int main()
 	// computation begins
 	int tstep = Initiate(solver, para);
 
-	solver.set_mpg(-1.736e-3, 0, 0);
+	solver.set_mpg(-1., 0, 0);
 	
 	if (tstep == 0) Output(para, solver, tstep);
 
@@ -85,11 +85,11 @@ int main()
 	int tstep1 = Initiate(solver1, para1);
 
 
-	solver0.set_mpg(-1.,       0, 0); solver1.set_mpg(-1.,        0, 0); // Ret specified by XINDAT
 	solver0.set_mpg(-2.9e-3,   0, 0); solver1.set_mpg(-2.9e-3,    0, 0); // Ret 540
 	solver0.set_mpg(-1.736e-3, 0, 0); solver1.set_mpg(-2.5e-3,    0, 0); // Ret 1000
 	solver0.set_mpg(-8.65e-4,  0, 0); solver1.set_mpg(-2.114e-3,  0, 0); // Ret 2000
 	solver0.set_mpg(-8.65e-4,  0, 0); solver1.set_mpg(-1.9753e-3, 0, 0); // Ret 4000 (MFU 2000)
+	solver0.set_mpg(-1.,       0, 0); solver1.set_mpg(-1.,        0, 0); // Ret specified by XINDAT
 
 	
 	if (tstep0 == 0) Output(para0, solver0, tstep0);

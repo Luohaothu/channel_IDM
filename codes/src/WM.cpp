@@ -117,7 +117,7 @@ void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, doubl
 		ReynoldsStressDefect(1,     vel, veldns, Re, Ret, rsclx, rsclu) -
 		ReynoldsStressDefect(ms.Ny, vel, veldns, Re, Ret, rsclx, rsclu) );
 
-	r12dfc = fmin(r12dfc, 0); // positive mean SGS stress is forbiden
+	// r12dfc = fmin(r12dfc, 0); // positive mean SGS stress is forbiden
 
 	FILE* fp = fopen("r12dfc.dat", "a");
 	fprintf(fp, "%.6e\n", r12dfc);

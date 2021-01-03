@@ -93,6 +93,18 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 	vo.fftxz();
 	wo.fftxz();
 
+
+	// // keep the random perturbation of vo constant in time and random in space
+	// static bool randinput = true;
+	// static double randtable[1024*1024];
+	// if (randinput) {
+	// 	FILE* fp = fopen("randtable", "rb");
+	// 	fread(randtable, sizeof(double), 1024*1024, fp);
+	// 	fclose(fp);
+	// 	randinput = false;
+	// }
+
+	
 	#pragma omp parallel
 	{
 		#pragma omp for collapse(2)
@@ -127,6 +139,32 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 				vo(2*i,2,k) = 0; vo(2*i+1,2,k) = 0;
 				wo(2*i,2,k) = 0; wo(2*i+1,2,k) = 0;
 			}
+			// // offset vOL by half channel width (and/or length) to break the correlation between u & v
+			// else if (k%2 ^ i%2) {
+			// 	vo(2*i,1,k) *= -1; vo(2*i+1,1,k) *= -1;
+			// 	vo(2*i,2,k) *= -1; vo(2*i+1,2,k) *= -1;
+			// } // test shows that <uLvL> is not sufficiently eliminated in this way
+			// // randomly perturb the phase (keeping energy spectra unchanged) to interrupt the correlation between u & v
+			// else {
+			// 	double phi=k*PI, vr, vi;
+				
+			// 	phi = 2*PI * randtable[k*mso.Nxc+i];
+			// 	vr = vo(2*i,  1,k);
+			// 	vi = vo(2*i+1,1,k);
+
+			// 	vo(2*i,  1,k) = vr * cos(phi) - vi * sin(phi);
+			// 	vo(2*i+1,1,k) = vr * sin(phi) + vi * cos(phi);
+
+			// 	phi = 2*PI * randtable[k*mso.Nxc+i+(mso.Nz-1)*mso.Nxc];
+			// 	vr = vo(2*i,  2,k);
+			// 	vi = vo(2*i+1,2,k);
+
+			// 	vo(2*i,  2,k) = vr * cos(phi) - vi * sin(phi);
+			// 	vo(2*i+1,2,k) = vr * sin(phi) + vi * cos(phi);
+
+			// 	// if (i==10 && k==10) cout << "1 " << phi << endl;
+			// 	// if (i==5 && k==5) cout << "0 " << phi << endl;
+			// }
 		}}
 	}
 
@@ -136,6 +174,17 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 
 	Bcond::SetBoundaryX(velo);
 	Bcond::SetBoundaryZ(velo);
+
+
+	// // check large-scale Reynolds stress
+	// double uv = 0;
+	// for (int k=1; k<mso.Nz; k++) {
+	// for (int i=1; i<mso.Nx; i++) {
+	// 	uv += uo(i,0,k) * vo(i,1,k) - uo(i,2,k) * vo(i,2,k);
+	// }}
+	// uv /= 2. * (mso.Nx-1) * (mso.Nz-1);
+	// cout << uv << endl;
+
 
 #ifdef MODULATION
 	// modulation
