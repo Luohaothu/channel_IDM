@@ -82,11 +82,11 @@ void Solver::evolve(double Re, double dt, int sgstyp)
 
 	CalcVis(vis_, get_vel(), Re, sgstyp);
 
-	WM::LogLawWallShear(vis_, get_vel(), Re);
+	// WM::LogLawWallShear(vis_, get_vel(), Re);
 
-	Bcond::ChannelNoSlip(bc_, sbc_, ms);
+	// Bcond::ChannelNoSlip(bc_, sbc_, ms);
 	// Bcond::ChannelRobin(bc_, sbc_, get_vel(), vis_, 1.);
-	// Bcond::ChannelHalf(bc_, sbc_, ms);
+	Bcond::ChannelHalf(bc_, sbc_, ms);
 
 	CalcFb(fb_, mpg_);
 
@@ -123,7 +123,7 @@ void Solver::evolve(double Re, double dt, int sgstyp, Solver &solver0, double Re
 
 	CalcVis(vis_, get_vel(), Re, sgstyp);
 
-	WM::OffWallSGS(vis_, get_vel(), solver0.get_vel(), Re, Ret, rsclx, rsclu);
+	WM::OffWallSubGridUniform(vis_, get_vel(), solver0.get_vel(), Re, Ret, rsclx, rsclu);
 
 	Bcond::ChannelDirichlet(bc_, sbc_, ms, PIO::BoundaryPredict(get_vel(), solver0.get_vel(), Ret, rsclx, rsclu));
 	// Bcond::ChannelDirichlet(bc_, sbc_, ms, solver0.get_vel(), rsclx, rsclu);

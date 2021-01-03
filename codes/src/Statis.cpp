@@ -37,6 +37,201 @@ Statis::~Statis()
 }
 
 
+double Statis::ReynoldsStress(int j, const Vctr &vel)
+/* compute the Reynolds stress R12 on the edge for a channel flow */
+{
+	const Mesh &ms = vel.ms;
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
+
+	double rs = 0;
+	double um = 0, ua;
+	double vm = 0, va;
+
+	#pragma omp parallel for reduction(+: rs,um,vm) collapse(2)
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+
+		ua = .5/ms.hy(j) * (u(i,j,k) * ms.dy(j-1) + u(i,ms.jma(j),k) * ms.dy(j));
+		va = .5/ms.hx(i) * (v(i,j,k) * ms.dx(i-1) + v(ms.ima(i),j,k) * ms.dx(i));
+
+		rs += ua * va;
+		um += ua;
+		vm += va;
+	}}
+
+	double weight = 1. / (ms.Nx-1.) / (ms.Nz-1.);
+
+	rs -= weight * um * vm;
+	rs *= weight;
+
+	return rs;
+}
+
+const double* Statis::ReynoldsShearStresses(int j, const Vctr &vel)
+/* compute three Reynolds shear stresses on the edges for a channel flow */
+{
+	const Mesh &ms = vel.ms;
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
+
+	double rs12=0, um12=0, vm12=0, wa;
+	double rs23=0, vm23=0, wm23=0, ua;
+	double rs13=0, um13=0, wm13=0, va;
+
+	#pragma omp parallel for reduction(+: rs12,rs23,rs13,um12,vm12,vm23,wm23,um13,wm13) collapse(2)
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+		// interpolate to Z-edge
+		ua = .5/ms.hy(j) * (u(i,j,k) * ms.dy(j-1) + u(i,ms.jma(j),k) * ms.dy(j));
+		va = .5/ms.hx(i) * (v(i,j,k) * ms.dx(i-1) + v(ms.ima(i),j,k) * ms.dx(i));
+
+		rs12 += ua * va;
+		um12 += ua;
+		vm12 += va;
+
+		// interpolate to X-edge
+		va = .5/ms.hz(k) * (v(i,j,k) * ms.dz(k-1) + v(i,j,ms.kma(k)) * ms.dz(k));
+		wa = .5/ms.hy(j) * (w(i,j,k) * ms.dy(j-1) + w(i,ms.jma(j),k) * ms.dy(j));
+
+		rs23 += va * wa;
+		vm23 += ua;
+		wm23 += va;
+
+		// interpolate to Y_edge
+		ua = .5/ms.hz(k) * (u(i,j,k) * ms.dz(k-1) + u(i,j,ms.kma(k)) * ms.dz(k));
+		wa = .5/ms.hx(i) * (w(i,j,k) * ms.dx(i-1) + w(ms.ima(i),j,k) * ms.dx(i));
+
+		rs13 += ua * wa;
+		um13 += ua;
+		wm13 += wa;
+	}}
+
+	double weight = 1. / (ms.Nx-1.) / (ms.Nz-1.);
+
+	rs12 -= weight * um12 * vm12;  rs12 *= weight;
+	rs23 -= weight * vm23 * wm23;  rs23 *= weight;
+	rs13 -= weight * um13 * wm13;  rs13 *= weight;
+
+	static double rs[3];
+	rs[0] = rs12;
+	rs[1] = rs23;
+	rs[2] = rs13;
+
+	return rs;
+}
+
+const double* Statis::ReynoldsNormalStresses(int j, const Vctr &vel)
+/* compute three Reynolds normal stresses on cell centers for a channel flow */
+{
+	const Mesh &ms = vel.ms;
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
+
+	double rs11=0, um=0, ua;
+	double rs22=0, vm=0, va;
+	double rs33=0, wm=0, wa;
+
+	#pragma omp parallel for reduction(+: rs11,rs22,rs33,um,vm,wm) collapse(2)
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+		// interpolate to cell centers
+		ua = .5 * (u(i,j,k) + u(ms.ipa(i),j,k));
+		va = .5 * (v(i,j,k) + v(i,ms.jpa(j),k));
+		wa = .5 * (w(i,j,k) + w(i,j,ms.kpa(k)));
+
+		rs11 += ua * ua;  um += ua;
+		rs22 += va * va;  vm += va;
+		rs33 += wa * wa;  wm += wa;
+	}}
+
+	double weight = 1. / (ms.Nx-1.) / (ms.Nz-1.);
+
+	rs11 -= weight * um * um;  rs11 *= weight;
+	rs22 -= weight * vm * vm;  rs22 *= weight;
+	rs33 -= weight * wm * wm;  rs33 *= weight;
+
+	static double rs[3];
+	rs[0] = rs11;
+	rs[1] = rs22;
+	rs[2] = rs33;
+
+	return rs;
+}
+
+const double* Statis::MeanVisShearStresses(int j, const Vctr &vel, const Flow &vis)
+// compute mean viscous (including kinetic and eddy viscosity) shear stresses on edges for a channel flow
+{
+	const Mesh &ms = vel.ms;
+
+	const Scla &u = vel[1], &nux = vis.SeeVec(1);
+	const Scla &v = vel[2], &nuy = vis.SeeVec(2);
+	const Scla &w = vel[3], &nuz = vis.SeeVec(3);
+
+	double tau12 = 0;
+	double tau23 = 0;
+	double tau13 = 0;
+
+	#pragma omp parallel for reduction(+: tau12,tau23,tau13) collapse(2)
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+
+		const double *sr = vel.ShearStrain(i,j,k);
+
+		tau12 += 2. * nuz(i,j,k) * sr[0];
+		tau23 += 2. * nux(i,j,k) * sr[1];
+		tau13 += 2. * nuy(i,j,k) * sr[2];
+	}}
+
+	double weight = 1. / (ms.Nx-1.) / (ms.Nz-1.);
+
+	static double tau[3];
+
+	tau[0] = tau12 * weight;
+	tau[1] = tau23 * weight;
+	tau[2] = tau13 * weight;
+
+	return tau;
+}
+
+const double* Statis::MeanVisNormalStresses(int j, const Vctr &vel, const Flow &vis)
+// compute mean viscous (including kinetic and eddy viscosity) normal stresses on cell centers for a channel flow
+{
+	const Mesh &ms = vel.ms;
+
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
+
+	double tau11 = 0;
+	double tau22 = 0;
+	double tau33 = 0;
+
+	#pragma omp parallel for reduction(+: tau11,tau22,tau33) collapse(2)
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+
+		double nu = vis.SeeScl()(i,j,k);
+
+		tau11 += 2. * nu * (u(ms.ipa(i),j,k) - u(i,j,k)) / ms.dx(i);
+		tau22 += 2. * nu * (v(i,ms.jpa(j),k) - v(i,j,k)) / ms.dy(j);
+		tau33 += 2. * nu * (w(i,j,ms.kpa(k)) - w(i,j,k)) / ms.dz(k);
+	}}
+
+	double weight = 1. / (ms.Nx-1.) / (ms.Nz-1.);
+
+	static double tau[3];
+
+	tau[0] = tau11 * weight;
+	tau[1] = tau22 * weight;
+	tau[2] = tau33 * weight;
+
+	return tau;
+}
+
 void Statis::Check(const Flow &fld, const Flow &vis, double Re, double dt)
 {
 	div_ = CheckDiv (fld.SeeVec(), divpos_);
@@ -94,50 +289,33 @@ void Statis::CheckTaub(const Vctr &vel, const Flow &vis, double taub[3])
 {
 	const Mesh &ms = vel.ms;
 
-	const Scla &u = vel[1], &nuz = vis.SeeVec(3);
-	const Scla &v = vel[2], &nuc = vis.SeeScl();
-	const Scla &w = vel[3], &nux = vis.SeeVec(1);
-
 	double tau21 = 0;
 	double tau22 = 0;
 	double tau23 = 0;
 
-	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
+	{ // lower boundary
+		const double *rss  = Statis::ReynoldsShearStresses (1, vel);
+		const double *rsn  = Statis::ReynoldsNormalStresses(1, vel);
+		const double *taus = Statis::MeanVisShearStresses  (1, vel, vis);
+		const double *taun = Statis::MeanVisNormalStresses (1, vel, vis);
 
-		// mean velocity on real boundary
-		double um = .5/ms.hy(j) * (u.meanxz(j) * ms.dy(j-1) + u.meanxz(ms.jma(j)) * ms.dy(j));
-		double wm = .5/ms.hy(j) * (w.meanxz(j) * ms.dy(j-1) + w.meanxz(ms.jma(j)) * ms.dy(j));
-		double vm = v.meanxz(j);
+		tau21 += .5 * (taus[0] - rss[0]);
+		tau22 += .5 * (taun[1] - rsn[1]); // use yc[1] to approximate stress at y[1]
+		tau23 += .5 * (taus[1] - rss[1]);
+	}{ // upper boundary
+		const double *rss  = Statis::ReynoldsShearStresses (ms.Ny,   vel);
+		const double *rsn  = Statis::ReynoldsNormalStresses(ms.Ny-1, vel);
+		const double *taus = Statis::MeanVisShearStresses  (ms.Ny,   vel, vis);
+		const double *taun = Statis::MeanVisNormalStresses (ms.Ny-1, vel, vis);
 
-		for (int k=1; k<ms.Nz; k++) {
-		for (int i=1; i<ms.Nx; i++) {
-
-			int id =              ms.idx(i,j,k);
-			int ip, jp, kp;       ms.ipx(i,j,k,ip,jp,kp);
-			int im, jm, km;       ms.imx(i,j,k,im,jm,km);
-			double hxc, hyc, hzc; ms.hcx(i,j,k,hxc,hyc,hzc);
-			double dxc, dyc, dzc; ms.dcx(i,j,k,dxc,dyc,dzc);
-			double dxm, dym, dzm; ms.dmx(i,j,k,dxm,dym,dzm);
-
-			double s21 = .5 * ((u[id]-u[jm]) / hyc + (v[id]-v[im]) / hxc);
-			double s23 = .5 * ((w[id]-w[jm]) / hyc + (v[id]-v[km]) / hzc);
-			double s22 = j==1? (v[jp]-v[id]) / dyc : (v[id]-v[jm]) / dym;
-
-			double r21 = (.5/hyc * (u[id]*dym + u[jm]*dyc) - um)
-			           * (.5/hxc * (v[id]*dxm + v[im]*dxc) - vm);
-			double r23 = (.5/hyc * (w[id]*dym + w[jm]*dyc) - wm)
-			           * (.5/hzc * (v[id]*dzm + v[km]*dzc) - vm);
-			double r22 = pow(v[id] - vm, 2.);
-
-			tau21 += (j==1 ? 1 : -1) * (2.*nuz[id] * s21 - r21);
-			tau23 += (j==1 ? 1 : -1) * (2.*nux[id] * s23 - r23);
-			tau22 += 1./hyc * (nuc[id]*dym + nuc[jm]*dyc) * s22 - r22;
-		}}
+		tau21 -= .5 * (taus[0] - rss[0]);
+		tau22 += .5 * (taun[1] - rsn[1]); // use yc[Ny-1] to approximate stress at y[Ny]
+		tau23 -= .5 * (taus[1] - rss[1]);
 	}
 
-	taub[0] = .5/((ms.Nx-1)*(ms.Nz-1)) * tau21;
-	taub[1] = .5/((ms.Nx-1)*(ms.Nz-1)) * tau22;
-	taub[2] = .5/((ms.Nx-1)*(ms.Nz-1)) * tau23;
+	taub[0] = tau21;
+	taub[1] = tau22;
+	taub[2] = tau23;
 }
 
 double Statis::CheckProf(const Flow &fld, const Flow &vis, double velm[3])
