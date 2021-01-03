@@ -44,10 +44,10 @@ def get_samples(para, yp, tskip=1):
 
 	for t in tsteps:
 		print('reading step %i'%t)
-		for jj in [j, ny-j]:
-			uset.append( get_fluc_plus(basic.Field(para).read_fluc('U%08i.bin'%t)[jj]) )
-			vset.append( get_fluc_plus(basic.Field(para).read_fluc('V%08i.bin'%t)[jj]) * (1 if jj==j else -1) )
-			wset.append( get_fluc_plus(basic.Field(para).read_fluc('W%08i.bin'%t)[jj]) )
+
+		uset.append( get_fluc_plus(basic.Field(para).read_fluc('U%08i.bin'%t)[[j,ny-j]]) )
+		vset.append( get_fluc_plus(basic.Field(para).read_fluc('V%08i.bin'%t)[[j,ny-j]] * np.reshape([1,-1], [-1,1,1])) )
+		wset.append( get_fluc_plus(basic.Field(para).read_fluc('W%08i.bin'%t)[[j,ny-j]]) )
 
 	return [np.ravel(_) for _ in (uset, vset, wset)]
 
@@ -114,7 +114,7 @@ if __name__ == '__main__':
 	para = basic.DataSetInfo('/mnt/TurbNAS/whn/cases_OFW/group2/data8_DSM2000_dx100/test/')
 	para.scale_inner()
 
-	us, vs, ws, pdf_uv, pdf_uw = get_jpdf(para, yp=50, tskip=1)
+	us, vs, ws, pdf_uv, pdf_uw = get_jpdf(para, yp=1200, tskip=1)
 
 	write_jpdf('jpdf_uv.dat', us, vs, pdf_uv, casename='DSM2000')
 	write_jpdf('jpdf_uw.dat', us, ws, pdf_uw, casename='DSM2000')
