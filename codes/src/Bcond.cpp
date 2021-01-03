@@ -143,17 +143,17 @@ void Bcond::ChannelCompatible(Boundaries &bc, Boundaries &sbc, const Vctr &vel, 
 	}}
 }
 
-void Bcond::ChannelRobin(Boundaries &bc, Boundaries &sbc, const Mesh &ms)
+void Bcond::ChannelRobin(Boundaries &bc, Boundaries &sbc, const Mesh &ms, double lu, double lv_, double lw_)
+// slip boundary condition (Bea et al. 2019) with specified slip lengths
 {
 	double dy0 = ms.dy(0), dyn = ms.dy(ms.Ny);
 	double dy1 = ms.dy(1), dym = ms.dy(ms.Ny-1);
 
+	double lv = lv_<0 ? lu : lv_;
+	double lw = lw_<0 ? lu : lw_;
+
 	for (int k=0; k<=ms.Nz; k++) {
 	for (int i=0; i<=ms.Nx; i++) {
-
-		double lu = 0.008;
-		double lv = 0.008;
-		double lw = 0.008;
 
 		bc.ub3(i,k) = bc.vb3(i,k) = bc.wb3(i,k) = 0;
 		bc.ub4(i,k) = bc.vb4(i,k) = bc.wb4(i,k) = 0;
@@ -164,6 +164,51 @@ void Bcond::ChannelRobin(Boundaries &bc, Boundaries &sbc, const Mesh &ms)
 		sbc.vb3(i,k) = - lv / (dy1 + lv);
 		sbc.vb4(i,k) = - lv / (dym + lv);
 	}}
+}
+
+void Bcond::ChannelRobin(Boundaries &bc, Boundaries &sbc, const Vctr &vel, const Flow &vis, double tau12)
+// slip boundary condition condition with optimal slip lengths determined by mean wall shear (Eq. 3.2 of Bae et al. 2019)
+{
+	const Mesh &ms = vel.ms;
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &nuz = vis.SeeVec(3);
+
+	// compute optimal slip length
+	double sum1 = 0, sum2 = 0, dudy, dvdy, dvdx;
+
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+		dudy = (u(i,1,k) - u(i,        0,k)) / ms.hy(1);
+		dvdx = (v(i,1,k) - v(ms.ima(i),1,k)) / ms.hx(i);
+		dvdy = (v(i,2,k) - v(i,        1,k)) / ms.dy(1);
+
+		sum1 += nuz(i,1,k) * (dudy + dvdx);
+		sum2 += dudy * dvdy;
+
+		dudy = (u(i,ms.Ny,k) - u(i,        ms.Ny-1,k)) / ms.hy(ms.Ny);
+		dvdx = (v(i,ms.Ny,k) - v(ms.ima(i),ms.Ny,  k)) / ms.hx(i);
+		dvdy = (v(i,ms.Ny,k) - v(i,        ms.Ny-1,k)) / ms.dy(ms.Ny-1);
+
+		sum1 -= nuz(i,ms.Ny,k) * (dudy + dvdx);
+		sum2 -= dudy * dvdy;
+	}}
+
+	sum1 /= 2. * (ms.Nx-1) * (ms.Nz-1);
+	sum2 /= 2. * (ms.Nx-1) * (ms.Nz-1);
+
+	double lu = sqrt(fmin(fmax((sum1 - tau12)/sum2, 0), 1));
+	double lv = lu;
+	double lw = lu;
+
+	// lu = lv = lw = 0.0106;
+
+	FILE *fp = fopen("sliplen.dat", "a");
+	fprintf(fp, "%.6e\n", lu);
+	fclose(fp);
+
+	// apply slip length to the boundary condition
+	Bcond::ChannelRobin(bc, sbc, ms, lu, lv, lw);
 }
 
 void Bcond::ChannelRobin(Boundaries &bc, Boundaries &sbc,

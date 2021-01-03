@@ -15,6 +15,13 @@ public:
 	void WriteProfile(const char *path, int tstep=-1) const;
 	void WriteLogfile(const char *path, int tstep, double time, const double mpg[3]) const;
 	static double GetLogTime(const char *path, int tstep, double mpg[3]);
+
+
+	static double ReynoldsStress(int j, const Vctr &vel);
+	static const double* ReynoldsShearStresses (int j, const Vctr &vel);
+	static const double* ReynoldsNormalStresses(int j, const Vctr &vel);
+	static const double* MeanVisShearStresses  (int j, const Vctr &vel, const Flow &vis);
+	static const double* MeanVisNormalStresses (int j, const Vctr &vel, const Flow &vis);
 	
 private:
 	double div_; int divpos_[3];
@@ -33,7 +40,11 @@ private:
 
 	static double CheckDiv(const Vctr &vel, int pos[3]);
 	static double CheckCfl(const Vctr &vel, double dt, int pos[3]);
-	static void CheckTaub(const Vctr &vel, const Flow &vis, double taub[3]);
+	static void  CheckTaub(const Vctr &vel, const Flow &vis, double taub[3]);
 
 	static long int GetLogpos(const char *path, int tstep);
 };
+
+
+
+

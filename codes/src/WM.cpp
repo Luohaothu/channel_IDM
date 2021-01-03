@@ -4,6 +4,7 @@
 #include "Filter.h"
 #include "Bcond.h"
 #include "PIO.h"
+#include "Statis.h"
 
 using namespace std;
 
@@ -25,83 +26,45 @@ void WM::UniformWallShear(Flow &vis, const Vctr &vel, double tau12)
 }
 
 
-double ReynoldsStressDefect(int j, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
-// calculate Reynolds stress R12 - R12^r at Z-edge of layer j
+void WM::LogLawWallShear(Flow &vis, const Vctr &vel, double Ret)
+// determine the local wall shear by log-law, as proposed by Piomelli et al. (1989)
 {
-	const Mesh &ms= vel.ms, &ms0= veldns.ms;
-	const Scla &u = vel[1], &u0 = veldns[1];
-	const Scla &v = vel[2], &v0 = veldns[2];
+	const Mesh &ms = vis.ms;
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
 
-	// the wall normal position on which stresses act
-	const double y = ms.y(j);
-	const double y0 = Filter::WallRscl(y, rsclx); // position in DNS field with y^+ matched
+	Scla &nuz = vis.GetVec(3);
+	Scla &nux = vis.GetVec(1);
 
-	double r12dns = 0; // DNS Reynolds stress
-	double r12les = 0; // LES resolved Reynolds
+	const double kappa = .41;
+	const double B     = 5.3;
+	const double theta = 13. * PI/180;
 
-	// calculate reference (DNS) Reynolds shear stress
-	int j3 = Interp::BiSearch(y0, ms0.yc(), 0, ms0.Ny);
-	int j4 = j3 + 1;
+	double y = ms.yc(2);
+	double law = 1. / (log(y * Ret) / kappa + B);
+	double dlt = y / tan(theta);
 
-	double um3 = 0, vm3 = 0, y3 = ms0.yc(j3);
-	double um4 = 0, vm4 = 0, y4 = ms0.yc(j4);
-
-	#pragma omp parallel for reduction(+: r12dns,um3,vm3,um4,vm4)
-	for (int k=1; k<ms0.Nz; k++) {
-	for (int i=1; i<ms0.Nx; i++) {
-
-		double ua3 = .5 * (u0(i,j3,k) + u0(ms0.ipa(i),j3,k));
-		double va3 = .5 * (v0(i,j3,k) + v0(i,ms0.jpa(j3),k));
-		double ua4 = .5 * (u0(i,j4,k) + u0(ms0.ipa(i),j4,k));
-		double va4 = .5 * (v0(i,j4,k) + v0(i,ms0.jpa(j4),k));
-
-		um3 += ua3; vm3 += va3;
-		um4 += ua4; vm4 += va4;
-		r12dns += (ua3*va3 * (y4-y0) + ua4*va4 * (y0-y3)) / (y4-y3);
-	}}
-
-	double weight = 1. / (ms0.Nx-1.) / (ms0.Nz-1.);
-
-	r12dns -= weight * (um3*vm3 * (y4-y0) + um4*vm4 * (y0-y3)) / (y4-y3);
-	r12dns *= weight * rsclu * rsclu;
-	r12dns += pow(Ret/Re, 2.) * (1 - fabs(y-1.)) * (1 - rsclx);
-
-	// calculate resolved Reynolds stress
-	double um = 0;
-	double vm = 0;
-
-	#pragma omp parallel for reduction(+: r12les,um,vm)
+	#pragma omp parallel for collapse(3)
+	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
 
-		double ua = .5/ms.hy(j) * (u(i,j,k) * ms.dy(j-1) + u(i,ms.jma(j),k) * ms.dy(j));
-		double va = .5/ms.hx(i) * (v(i,j,k) * ms.dx(i-1) + v(ms.ima(i),j,k) * ms.dx(i));
+		double yyy = j==1 ? y : 2-y;
+		double sgn = j==1 ? 1 : -1;
 
-		um += ua;
-		vm += va;
-		r12les += ua * va;
-	}}
+		double tau12 = sgn * law * Interp::InterpNodeU(dlt+ms.x(i),yyy,ms.zc(k),u);
+		double tau23 = sgn * law * Interp::InterpNodeW(dlt+ms.xc(i),yyy,ms.z(k),w);
 
-	weight = 1. / (ms.Nx-1.) / (ms.Nz-1.);
+		const double *sr = vel.ShearStrain(i,j,k);
 
-	r12les -= weight * um * vm;
-	r12les *= weight;
-
-	return r12dns - r12les;
+		nuz(i,j,k) = fmin(fmax(.5 * tau12 / sr[0], -.1), .1);
+		nux(i,j,k) = fmin(fmax(.5 * tau23 / sr[1], -.1), .1);
+	}}}
 }
 
 
-void ProcessBoundaryVis(Flow &vis)
-{
-	Scla &nuc = vis.GetScl();
-	Bcond::SetBoundaryY(nuc, 1); // homogeneous Neumann
-	Bcond::SetBoundaryX(nuc, 3); // periodic
-	Bcond::SetBoundaryZ(nuc, 3); // periodic
-	vis.CellCenter2Edge();
-}
-
-
-void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
+void WM::OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 {
 	const Mesh &ms = vis.ms;
 
@@ -147,8 +110,7 @@ void OffWallSubGridUniform(Flow &vis, const Vctr &vel, const Vctr &veldns, doubl
 }
 
 
-
-void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
+void WM::OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 // supply sgs stress 12 & 23 on off-wall boundary through viscosity
 {
 	const Mesh &ms = vis.ms;
@@ -215,7 +177,7 @@ void OffWallSubGridShear(Flow &vis, const Vctr &vel, const Vctr &veldns, double 
 }
 
 
-void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
+void WM::OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 //  modify eddy viscosity near off-wall boundary by sgs dissipation
 {
 	const Mesh &ms = vis.ms;
@@ -280,7 +242,13 @@ void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, d
 
 
 	// rescale eddy viscosity by Reynolds stress defect
-	ProcessBoundaryVis(vis);
+	{
+		Scla &nuc = vis.GetScl();
+		Bcond::SetBoundaryY(nuc, 1); // homogeneous Neumann
+		Bcond::SetBoundaryX(nuc, 3); // periodic
+		Bcond::SetBoundaryZ(nuc, 3); // periodic
+		vis.CellCenter2Edge();
+	}
 
 	double t12sgs = 0;
 	double r12dfc = 0;
@@ -313,15 +281,13 @@ void OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veldns, d
 		nuc(i,j,k) = 1./Re + rscldsp * (nuc(i,j,k)-1./Re);
 	}}}
 
-	ProcessBoundaryVis(vis);
-}
-
-
-void WM::OffWallSGS(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
-{
-	OffWallSubGridUniform(vis, vel, veldns, Re, Ret, rsclx, rsclu);
-	// OffWallSubGridShear      (vis, vel, veldns, Re, Ret, rsclx, rsclu);
-	// OffWallSubGridDissipation(vis, vel, veldns, Re, Ret, rsclx, rsclu);
+	{
+		Scla &nuc = vis.GetScl();
+		Bcond::SetBoundaryY(nuc, 1); // homogeneous Neumann
+		Bcond::SetBoundaryX(nuc, 3); // periodic
+		Bcond::SetBoundaryZ(nuc, 3); // periodic
+		vis.CellCenter2Edge();
+	}
 
 	// note: when OffWallSubGridDissipation is used in conjuction with OffWallSubGridShear,
 	// the boundary processing at the end of OffWallSubGridDissipation should be commented
@@ -332,50 +298,52 @@ void WM::OffWallSGS(Flow &vis, const Vctr &vel, const Vctr &veldns, double Re, d
 
 
 
-
-
 void WM::debug_ShowBoundaryShear(const Vctr &vel, const Flow &vis)
 {
 	const Mesh &ms = vel.ms;
-	const Scla &u = vel[1];
-	const Scla &v = vel[2];
-	const Scla &nuz = vis.SeeVec(3);
 
 	double shearrey = 0;
 	double shearvis = 0;
 
 	for (int j=1; j<=ms.Ny; j+=ms.Ny-1) {
-
-		double um = 0;
-		double vm = 0;
-		double r12 = 0;
-		double t12 = 0;
-
-		for (int k=1; k<ms.Nz; k++) {
-		for (int i=1; i<ms.Nx; i++) {
-
-			double ua = .5/ms.hy(j) * (u(i,j,k) * ms.dy(j-1) + u(i,ms.jma(j),k) * ms.dy(j));
-			double va = .5/ms.hx(i) * (v(i,j,k) * ms.dx(i-1) + v(ms.ima(i),j,k) * ms.dx(i));
-
-			um += ua;
-			vm += va;
-			r12 += ua * va;
-			t12 += 2 * nuz(i,j,k) * vel.ShearStrain(i,j,k)[0];
-		}}
-
-		double weight = 1. / (ms.Nx-1.) / (ms.Nz-1.);
-
-		r12 -= weight * um * vm;
-		r12 *= weight;
-		t12 *= weight;
-
-		shearrey += (j==1 ? 1 : -1) * .5 * ( - r12);
-		shearvis += (j==1 ? 1 : -1) * .5 * t12;
+		shearrey += (j==1 ? -1 : 1) * .5 * Statis::ReynoldsStress(j, vel);
+		shearvis += (j==1 ? 1 : -1) * .5 * Statis::MeanVisShearStresses (j, vel, vis)[0];
 	}
 
 	cout << shearvis + shearrey << '\t' << shearrey << '\t' << shearvis << endl << endl;
 }
 
+
+
+double WM::ReynoldsStressDefect(int j, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
+// calculate Reynolds stress R12 - R12^r at Z-edge of layer j
+{
+	const Mesh &ms = vel.ms;
+	const Mesh &ms0= veldns.ms;
+
+	// the wall normal position on which stresses act
+	const double y = ms.y(j);
+	const double y0 = Filter::WallRscl(y, rsclx); // position in DNS field with y^+ matched
+
+	// calculate reference (DNS) Reynolds shear stress
+	int j3 = Interp::BiSearch(y0, ms0.y(), 1, ms0.Ny);
+	int j4 = j3 + 1;
+
+	double y3 = ms0.y(j3);
+	double y4 = ms0.y(j4);
+
+	double r12dns = (
+		Statis::ReynoldsStress(j3, veldns) * (y4-y0)
+	  + Statis::ReynoldsStress(j4, veldns) * (y0-y3)) / (y4-y3);
+	
+	r12dns *= rsclu * rsclu;
+	r12dns += pow(Ret/Re, 2.) * (1 - fabs(y-1.)) * (1 - rsclx);
+
+	// LES resolved Reynolds
+	double r12les = Statis::ReynoldsStress(j, vel);
+
+	return r12dns - r12les;
+}
 
 
 
@@ -402,7 +370,7 @@ void OffWallSubGridShear_from_inner(Flow &vis, const Vctr &vel, const Vctr &veld
 		double weight0 = (j>1 ? -1 : 1) * .5;
 		double weight1 = (j>1 ? -1 : 1) * .5 / (ms.Nx-1.) / (ms.Nz-1.);
 
-		r12dfc += weight0 * ReynoldsStressDefect(j, vel, veldns, Re, Ret, rsclx, rsclu);
+		r12dfc += weight0 * WM::ReynoldsStressDefect(j, vel, veldns, Re, Ret, rsclx, rsclu);
 
 		#pragma omp parallel for reduction(+: t12sgs)
 		for (int k=1; k<ms.Nz; k++)
