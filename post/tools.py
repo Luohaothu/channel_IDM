@@ -69,6 +69,17 @@ class Tools:
 		return gma
 
 	@staticmethod
+	def flipk(q):
+		''' fold all energy to the [:Nz//2+1,:Nx//2+1] range
+		    Nx must be even, as required by hft, Nz can be even or odd  '''
+		nzcu = int(np.ceil(q.shape[-2]/2))
+		nzcd = q.shape[-2]//2
+		p = np.copy((q.T[:,:nzcd+1]).T)
+		p.T[:,1:nzcu] += q.T[:,:nzcd:-1]
+		p.T[1:-1] *= 2
+		return p
+
+	@staticmethod
 	def chasing3(a, b, c, d):
 		''' alternate direction method for tri-diag equation,
 			dimensions other than 0 are batch dimensions for d '''

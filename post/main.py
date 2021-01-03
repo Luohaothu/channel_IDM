@@ -5,13 +5,13 @@ from budgets import Budgets
 
 
 para = DataSetInfo("mytest/")
-para.scale_velo(para.utau)
+para.scale_inner()
 
 stas = Statis(para)
 # bgts = Budgets(para)
 
 stas.calc_statis()
-stas.flipy()
+# stas.flipy()
 
 # bgts.dissipation()
 # bgts.flipy()
@@ -32,7 +32,7 @@ with open(para.postpath+"wallscale.txt", 'w') as fp:
 
 
 casename = para.datapath.split('/')[-2]
-jrange = range(0, para.Ny//2+1) #range(1, para.Ny) #
+jrange = range(1, para.Ny+1) # range(0, para.Ny//2+1) #
 krange = range(1, para.Nzc)
 irange = range(1, para.Nxc)
 
@@ -76,16 +76,23 @@ np.savetxt(para.postpath+"profiles.dat", data, header=header, comments='')
 
 
 
-write_channel(para.postpath + 'Euu.bin', stas.Euu[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
-write_channel(para.postpath + 'Evv.bin', stas.Evv[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
-write_channel(para.postpath + 'Eww.bin', stas.Eww[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
-write_channel(para.postpath + 'Epp.bin', stas.Epp[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.pc*para.lc)**2)
-write_channel(para.postpath + 'Euvr.bin', stas.Euv.real[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
-write_channel(para.postpath + 'Euvi.bin', stas.Euv.imag[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
-write_channel(para.postpath + 'Evwr.bin', stas.Evw.real[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
-write_channel(para.postpath + 'Evwi.bin', stas.Evw.imag[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
-write_channel(para.postpath + 'Euwr.bin', stas.Euw.real[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
-write_channel(para.postpath + 'Euwi.bin', stas.Euw.imag[jrange] / (4*np.pi**2/para.Lx/para.Lz) / (para.uc*para.lc)**2)
+if 'raw' not in listdir(para.postpath): system('mkdir %sraw'%para.postpath)
+
+para.kx[:para.Nxc].astype(np.float64).tofile(para.postpath + 'raw/kxs.bin')
+para.kz.           astype(np.float64).tofile(para.postpath + 'raw/kzs.bin')
+para.yc[jrange].   astype(np.float64).tofile(para.postpath + 'raw/ys.bin')
+
+write_channel(para.postpath + 'raw/Euu.bin', stas.Euu[jrange])
+write_channel(para.postpath + 'raw/Evv.bin', stas.Evv[jrange])
+write_channel(para.postpath + 'raw/Eww.bin', stas.Eww[jrange])
+write_channel(para.postpath + 'raw/Epp.bin', stas.Epp[jrange])
+write_channel(para.postpath + 'raw/Euvr.bin', stas.Euv.real[jrange])
+write_channel(para.postpath + 'raw/Euvi.bin', stas.Euv.imag[jrange])
+write_channel(para.postpath + 'raw/Evwr.bin', stas.Evw.real[jrange])
+write_channel(para.postpath + 'raw/Evwi.bin', stas.Evw.imag[jrange])
+write_channel(para.postpath + 'raw/Euwr.bin', stas.Euw.real[jrange])
+write_channel(para.postpath + 'raw/Euwi.bin', stas.Euw.imag[jrange])
+
 stas.flipk()
 
 
