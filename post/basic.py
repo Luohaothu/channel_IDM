@@ -13,13 +13,15 @@ def write_channel(pame, q):
 	ny, nz, nx = q.shape
 	info = np.zeros(nx*nz, q.dtype)
 	info.dtype = np.int32
-	info[:3] = nx, ny, nz
+	info[:3] = nx, nz, ny
 	info.dtype = q.dtype
 	np.concatenate((info, q), axis=None).astype(np.float64).tofile(pame)
 
-def read_channel(pame):
-	nx, ny, nz = np.fromfile(pame, np.int32, 3)
+def read_channel(pame, fmt=1):
+	nx, nz, ny = np.fromfile(pame, np.int32, 3)
+	if fmt==2: nx, ny, nz = np.fromfile(pame, np.int32, 3)
 	q = np.fromfile(pame, np.float64, ).reshape([ny+1, nz, nx])
+	if fmt==2: write_channel(pame, q[1:]) # reorganize files of old format upon reading
 	return q[1:]
 
 ###########################

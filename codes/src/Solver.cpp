@@ -41,44 +41,13 @@ void Solver::init(const Flow &fld)
 
 // #define TIME_TEST_SLV_
 
-#ifdef TIME_TEST_SLV_
-
-#include <sys/time.h>
-int cnt = 0;
-struct timeval time0, time1;
-double t_vis=0, t_bc=0, t_fb=0, t_idm=0, t_mpg=0, t_setbc=0;
+#ifndef TIME_TEST_SLV_
 
 void Solver::evolve(double Re, double dt, int sgstyp)
 {
 	set_time(time_+dt);
 
-	cout << ++ cnt << endl;
 
-	gettimeofday(&time0, NULL);	CalcVis(vis_, get_vel(), Re, sgstyp);		gettimeofday(&time1, NULL);	t_vis += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
-	gettimeofday(&time0, NULL);	Bcond::ChannelNoSlip(bc_, sbc_, ms);		gettimeofday(&time1, NULL);	t_bc  += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
-	gettimeofday(&time0, NULL);	CalcFb(fb_, mpg_);							gettimeofday(&time1, NULL);	t_fb  += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
-	gettimeofday(&time0, NULL);	IDM::calc(fld_,fldh_,vis_,fb_,bc_,sbc_,dt);	gettimeofday(&time1, NULL);	t_idm += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
-	gettimeofday(&time0, NULL);	CalcMpg(mpg_, get_vel(), get_velh(), dt);	gettimeofday(&time1, NULL);	t_mpg += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
-	gettimeofday(&time0, NULL);	Bcond::SetBoundaryY(get_vel(), bc_, sbc_);
-								Bcond::SetBoundaryX(get_vel());
-								Bcond::SetBoundaryZ(get_vel());				gettimeofday(&time1, NULL);	t_setbc+=(time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
-	if (cnt == 10) {
-		cout << endl << endl
-			 << "total:\t"  << 1./cnt * (t_vis+t_bc+t_fb+t_idm+t_mpg+t_setbc) << endl
-			 << "t_vis:\t"  << t_vis  / t_idm << endl
-			 << "t_bc:\t"   << t_bc   / t_idm << endl
-			 << "t_fb:\t"   << t_fb   / t_idm << endl
-			 << "t_mpg:\t"  << t_mpg  / t_idm << endl
-			 << "t_setbc:\t"<< t_setbc/ t_idm << endl << endl;
-		exit(0);
-	}
-}
-
-#else
-
-void Solver::evolve(double Re, double dt, int sgstyp)
-{
-	set_time(time_+dt);
 
 	CalcVis(vis_, get_vel(), Re, sgstyp);
 
@@ -407,6 +376,42 @@ void Solver::debug_Output(const char path[]) const
 }
 
 
+
+
+#ifdef TIME_TEST_SLV_
+
+#include <sys/time.h>
+int cnt = 0;
+struct timeval time0, time1;
+double t_vis=0, t_bc=0, t_fb=0, t_idm=0, t_mpg=0, t_setbc=0;
+
+void Solver::evolve(double Re, double dt, int sgstyp)
+{
+	set_time(time_+dt);
+
+	cout << ++ cnt << endl;
+
+	gettimeofday(&time0, NULL);	CalcVis(vis_, get_vel(), Re, sgstyp);		gettimeofday(&time1, NULL);	t_vis += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
+	gettimeofday(&time0, NULL);	Bcond::ChannelNoSlip(bc_, sbc_, ms);		gettimeofday(&time1, NULL);	t_bc  += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
+	gettimeofday(&time0, NULL);	CalcFb(fb_, mpg_);							gettimeofday(&time1, NULL);	t_fb  += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
+	gettimeofday(&time0, NULL);	IDM::calc(fld_,fldh_,vis_,fb_,bc_,sbc_,dt);	gettimeofday(&time1, NULL);	t_idm += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
+	gettimeofday(&time0, NULL);	CalcMpg(mpg_, get_vel(), get_velh(), dt);	gettimeofday(&time1, NULL);	t_mpg += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
+	gettimeofday(&time0, NULL);	Bcond::SetBoundaryY(get_vel(), bc_, sbc_);
+								Bcond::SetBoundaryX(get_vel());
+								Bcond::SetBoundaryZ(get_vel());				gettimeofday(&time1, NULL);	t_setbc+=(time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
+	if (cnt == 10) {
+		cout << endl << endl
+			 << "total:\t"  << 1./cnt * (t_vis+t_bc+t_fb+t_idm+t_mpg+t_setbc) << endl
+			 << "t_vis:\t"  << t_vis  / t_idm << endl
+			 << "t_bc:\t"   << t_bc   / t_idm << endl
+			 << "t_fb:\t"   << t_fb   / t_idm << endl
+			 << "t_mpg:\t"  << t_mpg  / t_idm << endl
+			 << "t_setbc:\t"<< t_setbc/ t_idm << endl << endl;
+		exit(0);
+	}
+}
+
+#endif
 
 
 

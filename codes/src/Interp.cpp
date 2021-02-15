@@ -7,7 +7,7 @@ double Interp::ShiftPrd(double x, double x0, double x1)
 // shift x into range [x0,x1)
 {
 	double l = x1 - x0;
-	return x==x1 ? x : fmod(fmod(x-x0, l) + l, l) + x0;
+	return fmod(fmod(x-x0, l) + l, l) + x0;
 }
 
 double Interp::ShiftMir(double x, double x0, double x1)

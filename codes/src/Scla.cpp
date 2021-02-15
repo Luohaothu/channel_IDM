@@ -465,17 +465,17 @@ void Scla::FileIO(const char *path, const char *name, char mode) const
 
 	// write domain information at the beginning
 	int n1 = Nx+1;
-	int n2 = Ny+1;
-	int n3 = Nz+1;
+	int n2 = Nz+1;
+	int n3 = Ny+1;
 	if (mode == 'w') {
 		fwrite(&n1, sizeof(int), 1, fp);
 		fwrite(&n2, sizeof(int), 1, fp);
 		fwrite(&n3, sizeof(int), 1, fp);
 	}
 	// data begin after the info section
-	fseek(fp, sizeof(double) * (Nx+1)*(Nz+1), SEEK_SET);
-	if (mode == 'w') fwrite(q_, sizeof(double) * (Nx+1)*(Nz+1), Ny+1, fp);
-	if (mode == 'r') fread (q_, sizeof(double) * (Nx+1)*(Nz+1), Ny+1, fp);
+	fseek(fp, sizeof(double) * n1*n2, SEEK_SET);
+	if (mode == 'w') fwrite(q_, sizeof(double) * n1*n2, n3, fp);
+	if (mode == 'r') fread (q_, sizeof(double) * n1*n2, n3, fp);
 
 	fclose(fp);
 }
