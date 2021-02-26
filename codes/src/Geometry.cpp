@@ -2,10 +2,9 @@
 
 using namespace std;
 
-static double hyptan(int i, double gma, int N, double L);
-static double get_dymin(double gma, int N, double L);
-static double newton_iter(double tgt, double (*pfun)(double, int, double), int N, double L);
 
+template <typename Func>
+static double newton_iter(Func pfun, double gma0 = 1.);
 
 
 Geometry::Geometry(int Nx, int Ny, int Nz, double Lx, double Ly, double Lz):
@@ -115,6 +114,26 @@ void Geometry::InitMesh(double dy_min, const char *path)
 	zc[0] = z[1]; zc[Nz] = z[Nz];
 }
 
+void Geometry_prdz::InitMesh(double dy_min, const char *path)
+{
+	Geometry::InitMesh(dy_min, path);
+	// configure boundary zc so that its differencing position is equivalent to the periodic node
+	zc[0] = z[1] - (z[Nz] - zc[Nz-1]);
+	zc[Nz]= z[Nz]+ (zc[1] - z[1]);
+}
+
+void Geometry_prdxz::InitMesh(double dy_min, const char *path)
+{
+	Geometry::InitMesh(dy_min, path);
+
+	xc[0] = x[1] - (x[Nx] - xc[Nx-1]);
+	xc[Nx]= x[Nx]+ (xc[1] - x[1]);
+
+	zc[0] = z[1] - (z[Nz] - zc[Nz-1]);
+	zc[Nz]= z[Nz]+ (zc[1] - z[1]);
+}
+
+
 void Geometry::InitInterval()
 {
 	for (int i=1; i<Nx; i++) dx[i] = x[i+1] - x[i];
@@ -138,20 +157,11 @@ void Geometry::InitInterval()
 	hz[0] = 0;
 }
 
-void Geometry::InitWaveNumber()
-{
-	double dx = Lx / (Nx-1);
-	double dz = Lz / (Nz-1);
-
-	for (int i=0; i<Nx-1; i++) {
-		kx [i] = 2.*PI/Lx * (i - (Nx-1) * (i>=Nxc));
-		kx2[i] = 2./dx/dx * (1 - cos(kx[i] * dx));
-	}
-	for (int k=0; k<Nz-1; k++) {
-		kz [k] = 2.*PI/Lz * (k - (Nz-1) * (k>=Nzc));
-		kz2[k] = 2./dz/dz * (1 - cos(kz[k] * dz));
-	}
-}
+// ***** periodic x ***** //
+// ima(1) = Nx-1, ipa(Nx-1) = 1
+// ***** non-periodic x ***** //
+// ima(1) = 0, ipa(Nx-1) = Nx
+// ************************** //
 
 void Geometry::InitIndices()
 {
@@ -178,6 +188,63 @@ void Geometry::InitIndices()
 	kma[0] = kpa[Nz] = 1/INFTSM;
 }
 
+void Geometry_prdz::InitIndices()
+{
+	Geometry::InitIndices();
+
+	for (int k=1; k<Nz; k++) {
+		kma[k] = k==1 ? Nz-1 : k-1;
+		kpa[k] = k==Nz-1 ? 1 : k+1;
+	}
+}
+
+void Geometry_prdxz::InitIndices()
+{
+	Geometry::InitIndices();
+
+	for (int i=1; i<Nx; i++) {
+		ima[i] = i==1 ? Nx-1 : i-1;
+		ipa[i] = i==Nx-1 ? 1 : i+1;
+	}
+	for (int k=1; k<Nz; k++) {
+		kma[k] = k==1 ? Nz-1 : k-1;
+		kpa[k] = k==Nz-1 ? 1 : k+1;
+	}
+}
+
+
+void Geometry_prdz::InitWaveNumber()
+{
+	double dx = Lx / (Nx-1);
+	double dz = Lz / (Nz-1);
+
+	for (int i=0; i<Nx-1; i++) {
+		kx [i] = 2.*PI/Lx * (i - (Nx-1) * (i>=Nxc));
+		kx2[i] = 2./dx/dx * (1 - cos(kx[i] * dx));
+	}
+	for (int k=0; k<Nz-1; k++) {
+		kz [k] = 2.*PI/Lz * (k - (Nz-1) * (k>=Nzc));
+		kz2[k] = 2./dz/dz * (1 - cos(kz[k] * dz));
+	}
+
+	for (int i=1; i<Nx; i++)
+		kx2[i] = 2./dx/dx * (1 - cos(PI*(i-1)/(Nx-1)));
+}
+
+void Geometry_prdxz::InitWaveNumber()
+{
+	double dx = Lx / (Nx-1);
+	double dz = Lz / (Nz-1);
+
+	for (int i=0; i<Nx-1; i++) {
+		kx [i] = 2.*PI/Lx * (i - (Nx-1) * (i>=Nxc));
+		kx2[i] = 2./dx/dx * (1 - cos(kx[i] * dx));
+	}
+	for (int k=0; k<Nz-1; k++) {
+		kz [k] = 2.*PI/Lz * (k - (Nz-1) * (k>=Nzc));
+		kz2[k] = 2./dz/dz * (1 - cos(kz[k] * dz));
+	}
+}
 
 
 
@@ -185,19 +252,32 @@ void Geometry::InitMeshY(double dy_min)
 /* generate grid points for y-direction
    dy_min >0 for two-sided hyperbolic tangent, <0 one-sided, =0 uniform */
 {
-	if (INFTSM < dy_min && dy_min < Ly/(Ny-1.)) {
-		double gma = newton_iter(dy_min, get_dymin, Ny, Ly);
-		for (int j=1; j<=Ny; j++)
-			y[j] = hyptan(j, gma, Ny, Ly);
-	}
-	else if (INFTSM < -dy_min && -dy_min < Ly/(Ny-1.)) {
-		double gma = newton_iter(-dy_min, get_dymin, 2*Ny-1, 2*Ly);
-		for (int j=1; j<=Ny; j++)
-			y[j] = hyptan(j, gma, 2*Ny-1, 2*Ly); // 1 + Ly * tanh(gma * ((j-1)/(Ny-1) - 1)) / tanh(gma);
-	}
-	else
+	if (fabs(dy_min) <= INFTSM || Ly/(Ny-1.) <= fabs(dy_min)) {
+		// uniform
 		for (int j=1; j<=Ny; j++)
 			y[j] = 1 + Ly * ((j-1)/(Ny-1.) - .5);
+		return;
+	}
+
+	class HyperTangent
+	{
+	public:
+		const int N;
+		const double L;
+		HyperTangent(int N, double L): N(N), L(L) {};
+		double operator()(double gma, int i) {
+			// generate grid points with hyperbolic tangent distribution
+			return 1 + .5*L * tanh(gma * (2.*(i-1)/(N-1) - 1)) / tanh(gma);
+		};
+	} hyptan(
+		dy_min > 0 ? Ny : 2*Ny-1, // one-sided: 1 + Ly * tanh(gma * ((i-1)/(Ny-1) - 1)) / tanh(gma);
+		dy_min > 0 ? Ly : 2*Ly );
+
+	double gma = newton_iter( // a lambda function is used here
+		[&hyptan, &dy_min](double g) { return hyptan(g,2) - hyptan(g,1) - fabs(dy_min); });
+
+	for (int j=1; j<=Ny; j++)
+		y[j] = hyptan(gma, j);
 }
 
 void Geometry::InitMeshY(const char *path)
@@ -282,29 +362,15 @@ void Geometry::WriteMesh(const char *path) const
 
 
 
-
-
-double hyptan(int i, double gma, int N, double L)
-/* generate grid points with hyperbolic tangent distribution */
+template <typename Func>
+double newton_iter(Func pfun, double gma0)
+// iteratively optimize the residual function pfun(gma) towards 0
 {
-	return 1 + .5*L * tanh(gma * (2.*(i-1)/(N-1) - 1)) / tanh(gma);
-	// return .5*L * (1 + tanh(gma * (2.*(i-1)/(N-1) - 1)) / tanh(gma));
-}
-
-double get_dymin(double gma, int N, double L)
-{
-	return hyptan(2, gma, N, L)
-		 - hyptan(1, gma, N, L);
-}
-
-double newton_iter(double tgt, double (*pfun)(double, int, double), int N, double L)
-{
-	double F, grad, gma = 1, dgma = .1;
-	double F0 = pfun(gma-dgma, N, L) - tgt;
+	double gma = gma0, dgma = .1*gma;
+	double grad, F, F0 = pfun(gma-dgma);
 
 	for (int n=0; n<100; n++) {
-		F = pfun(gma, N, L) - tgt;
-
+		F = pfun(gma);
 		grad = (F-F0) / dgma; if (! grad) break;
 		dgma = -F / grad;     if (! dgma) break;
 		gma += dgma;
@@ -312,8 +378,6 @@ double newton_iter(double tgt, double (*pfun)(double, int, double), int N, doubl
 	}
 	return gma;
 }
-
-
 
 
 

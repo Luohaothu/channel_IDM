@@ -140,6 +140,9 @@ void ChannelHalf(Boundaries &bc, Boundaries &sbc, const Mesh &ms);
 // TBL: no-slip on bottom wall; u=U, dv/dy=dw/dy=0 on top boundary
 void TblCycling(Boundaries &bc, Boundaries &sbc, const Mesh &ms, double ufree);
 
+// TBL: no-slip on bottom wall; u=U, dv/dy=dw/dy=0 on top boundary; du/dt + C du/dx = 0 on exit
+void TblDevelop(Boundaries &bc, Boundaries &sbc, const Vctr &vel, double ufree, double dt);
+
 } // namespace Bcond
 
 

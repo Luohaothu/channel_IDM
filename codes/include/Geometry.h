@@ -21,7 +21,6 @@ public:
 	
 	void InitMesh(double dy_min, const char *path=NULL);
 	void InitInterval();
-	void InitWaveNumber();
 	void InitIndices();
 
 	void WriteMeshY(const char *path) const;
@@ -49,67 +48,24 @@ private:
 	void AlignBoundaryYc(const Geometry &geo);
 };
 
-// ***** periodic x ***** //
-// ima(1) = Nx-1, ipa(Nx-1) = 1
-// imu(1) = Nx-1, ipu(Nx-1) = 1
-// ***** non-periodic x ***** //
-// ima(1) = 0, ipa(Nx-1) = Nx
-// imu(2) = 1, ipu(Nx-1) = Nx
-// ************************** //
 
 class Geometry_prdz: public Geometry
 {
 public:
 	using Geometry::Geometry;
-
-	void InitMesh(double dy_min, const char *path=NULL)
-	{
-		Geometry::InitMesh(dy_min, path);
-		// configure boundary zc so that its differencing position is equivalent to the periodic node
-		zc[0] = z[1] - (z[Nz] - zc[Nz-1]);
-		zc[Nz]= z[Nz]+ (zc[1] - z[1]);
-	};
-
-	void InitIndices()
-	{
-		Geometry::InitIndices();
-
-		for (int k=1; k<Nz; k++) {
-			kma[k] = k==1 ? Nz-1 : k-1;
-			kpa[k] = k==Nz-1 ? 1 : k+1;
-		}
-	};
+	void InitMesh(double dy_min, const char *path=NULL);
+	void InitIndices();
+	void InitWaveNumber();
 };
+
 
 class Geometry_prdxz: public Geometry
 {
 public:
 	using Geometry::Geometry;
-
-	void InitMesh(double dy_min, const char *path=NULL)
-	{
-		Geometry::InitMesh(dy_min, path);
-
-		xc[0] = x[1] - (x[Nx] - xc[Nx-1]);
-		xc[Nx]= x[Nx]+ (xc[1] - x[1]);
-
-		zc[0] = z[1] - (z[Nz] - zc[Nz-1]);
-		zc[Nz]= z[Nz]+ (zc[1] - z[1]);
-	};
-
-	void InitIndices()
-	{
-		Geometry::InitIndices();
-
-		for (int i=1; i<Nx; i++) {
-			ima[i] = i==1 ? Nx-1 : i-1;
-			ipa[i] = i==Nx-1 ? 1 : i+1;
-		}
-		for (int k=1; k<Nz; k++) {
-			kma[k] = k==1 ? Nz-1 : k-1;
-			kpa[k] = k==Nz-1 ? 1 : k+1;
-		}
-	};
+	void InitMesh(double dy_min, const char *path=NULL);
+	void InitIndices();
+	void InitWaveNumber();
 };
 
 

@@ -24,6 +24,8 @@ Nz(ms.Nz)
 	fcr_z = new fftw_plan[Ny+1];
 	frc_xz= new fftw_plan[Ny+1];
 	fcr_xz= new fftw_plan[Ny+1];
+	frR_x = new fftw_plan[(Ny+1)*(Nz+1)];
+	fRr_x = new fftw_plan[(Ny+1)*(Nz+1)];
 
 	for (int j=0; j<=Ny; j++) {
 
@@ -41,6 +43,13 @@ Nz(ms.Nz)
 
 		frc_xz[j] = fftw_plan_dft_r2c_2d(Nz-1, Nx-1, r, c, FFTW_MEASURE);
 		fcr_xz[j] = fftw_plan_dft_c2r_2d(Nz-1, Nx-1, c, r, FFTW_MEASURE);
+
+		for (int k=0; k<=Nz; k++) {
+			r = &q_[ms.idx(1,j,k)];
+
+			frR_x[j*(Nz+1)+k] = fftw_plan_r2r_1d(Nx-1, r, r, FFTW_REDFT10, FFTW_MEASURE);
+			fRr_x[j*(Nz+1)+k] = fftw_plan_r2r_1d(Nx-1, r, r, FFTW_REDFT01, FFTW_MEASURE);
+		}
 	}
 }
 
@@ -53,6 +62,10 @@ Scla::~Scla()
 		fftw_destroy_plan(fcr_z[j]);
 		fftw_destroy_plan(frc_xz[j]);
 		fftw_destroy_plan(fcr_xz[j]);
+		for (int k=0; k<=Nz; k++) {
+			fftw_destroy_plan(frR_x[j*(Nz+1)+k]);
+			fftw_destroy_plan(fRr_x[j*(Nz+1)+k]);
+		}
 		delete[] fft_temp[j];
 	}
 	delete[] frc_x;
@@ -61,6 +74,8 @@ Scla::~Scla()
 	delete[] fcr_z;
 	delete[] frc_xz;
 	delete[] fcr_xz;
+	delete[] frR_x;
+	delete[] fRr_x;
 	delete[] fft_temp;
 	delete[] q_;
 }
@@ -156,6 +171,39 @@ void Scla::ifftz()
 		fftw_execute(fcr_z[j]);
 		for (int k=1; k<Nz; k++)
 			q_[ms.idx(i,j,k)] = temp[k-1] / (Nz-1);
+	}}
+}
+
+void Scla::dctxz()
+{
+	this->dctx();
+	this->fftz();
+}
+
+void Scla::idctxz()
+{
+	this->ifftz();
+	this->idctx();
+}
+
+void Scla::dctx()
+{
+	#pragma omp parallel for
+	for (int j=0; j<=Ny; j++) {
+	for (int k=0; k<=Nz; k++) {
+		fftw_execute(frR_x[j*(Nz+1)+k]);
+		for (int i=1; i<Nx; i++)
+			q_[ms.idx(i,j,k)] /= 2;
+	}}
+}
+void Scla::idctx()
+{
+	#pragma omp parallel for
+	for (int j=0; j<=Ny; j++) {
+	for (int k=0; k<=Nz; k++) {
+		fftw_execute(fRr_x[j*(Nz+1)+k]);
+		for (int i=1; i<Nx; i++)
+			q_[ms.idx(i,j,k)] /= Nx-1;
 	}}
 }
 

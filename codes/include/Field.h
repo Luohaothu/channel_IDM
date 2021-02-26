@@ -41,6 +41,12 @@ public:
 	void fftxz();
 	void ifftxz();
 
+	void dctx();
+	void idctx();
+
+	void dctxz();
+	void idctxz();
+
 	// arithmetic mean (simple averaging)
 	double meanz(int i, int j) const;
 	double meanxz(int j=0) const;
@@ -115,6 +121,9 @@ private:
 	// array of 2D fft plans
 	fftw_plan *fcr_xz;
 	fftw_plan *frc_xz;
+	// array of x-direction dct plans
+	fftw_plan *frR_x;
+	fftw_plan *fRr_x;
 
 	static void set(double &b, double a) {b =  a;};
 	static void add(double &b, double a) {b += a;};
