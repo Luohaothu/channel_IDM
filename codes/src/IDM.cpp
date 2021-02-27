@@ -30,10 +30,10 @@ void IDM::calc(Flow &fld, Flow &fldh,
 	// dpcalc
 	#pragma omp parallel
 	rhsdp(dp, velh, bc, sbc, dt); // rdp (which shares memory with dp)
-	dp.fftxz();                   // rdp->frdp
+	dp.dctxz();                   // rdp->frdp
 	#pragma omp parallel
-	getfdp(dp, sbc, p.meanxz(1)); // frdp->fdp
-	dp.ifftxz();                  // fdp->dp
+	getfdp(dp, sbc, p.meanxz(fld.ms.Ny-1)); // frdp->fdp
+	dp.idctxz();                  // fdp->dp
 
 	// upcalc
 	#pragma omp parallel
@@ -115,9 +115,9 @@ void IDM::urhs1(Scla &ruh,
 	double api, aci, ami, apj, acj, amj, apk, ack, amk;
 	double l11un, l12vn, l13wn, m11un, m12vn, m13wn, pressg;
 
-	bool   ifb3, ifb4;
-	double ubc3, ubc4, vbc3, vbc4;
-	double sbu3, sbu4, sbv3, sbv4;
+	bool   ifb1, ifb2, ifb3, ifb4;
+	double ubc1, ubc2, ubc3, ubc4, vbc3, vbc4;
+	double sbu1, sbu2, sbu3, sbu4, sbv3, sbv4;
 
 	const Mesh &ms = ruh.ms;
 	const Scla &u = fld.SeeVec(1), &nux = vis.SeeVec(1);
@@ -128,27 +128,24 @@ void IDM::urhs1(Scla &ruh,
 	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hym,hyp,hyc=ms.hy(j,hym,hyp);
 	for (int k=1; k<ms.Nz; k++) { double dzm,dzp,dzc=ms.dz(k,dzm,dzp), hzm,hzp,hzc=ms.hz(k,hzm,hzp);
-	for (int i=1; i<ms.Nx; i++) { double dxm,dxp,dxc=ms.dx(i,dxm,dxp), hxm,hxp,hxc=ms.hx(i,hxm,hxp);
+	for (int i=2; i<ms.Nx; i++) { double dxm,dxp,dxc=ms.dx(i,dxm,dxp), hxm,hxp,hxc=ms.hx(i,hxm,hxp);
 
 		int id =              ms.idx(i,j,k);
 		int ip, jp, kp;       ms.ipx(i,j,k,ip,jp,kp);
 		int im, jm, km;       ms.imx(i,j,k,im,jm,km);
 		int imjp, jmkp, imkp; ms.mpx(i,j,k,imjp,jmkp,imkp);
 
-		double mbcy = 0;
+		double mbcx = 0, mbcy = 0; // mbcx is the mbc induced by differencing in direction x (by operator M^1)
 
-		if (ifb3 = (j==1)) {
-			ubc3 = bc.ub3(i,k);
-			sbu3 = sbc.ub3(i,k);
-			vbc3 = .5/hxc * ( bc.vb3(i,k) * dxm +  bc.vb3(ms.ima(i),k) * dxc);
-			sbv3 = .5/hxc * (sbc.vb3(i,k) * dxm + sbc.vb3(ms.ima(i),k) * dxc);
-		}
-		if (ifb4 = (j==ms.Ny-1)) {
-			ubc4 = bc.ub4(i,k);
-			sbu4 = sbc.ub4(i,k);
-			vbc4 = .5/hxc * ( bc.vb4(i,k) * dxm +  bc.vb4(ms.ima(i),k) * dxc);
-			sbv4 = .5/hxc * (sbc.vb4(i,k) * dxm + sbc.vb4(ms.ima(i),k) * dxc);
-		}
+		if (ifb1 = (i==2)      ) { ubc1 = bc.ub1(j,k); sbu1 = sbc.ub1(j,k); }
+		if (ifb2 = (i==ms.Nx-1)) { ubc2 = bc.ub2(j,k); sbu2 = sbc.ub2(j,k); }
+		if (ifb3 = (j==1)      ) { ubc3 = bc.ub3(i,k); sbu3 = sbc.ub3(i,k); }
+		if (ifb4 = (j==ms.Ny-1)) { ubc4 = bc.ub4(i,k); sbu4 = sbc.ub4(i,k); }
+
+		if (ifb3) { vbc3 = .5/hxc * ( bc.vb3(i,k) * dxm +  bc.vb3(ms.ima(i),k) * dxc);
+		            sbv3 = .5/hxc * (sbc.vb3(i,k) * dxm + sbc.vb3(ms.ima(i),k) * dxc); }
+		if (ifb4) { vbc4 = .5/hxc * ( bc.vb4(i,k) * dxm +  bc.vb4(ms.ima(i),k) * dxc);
+		            sbv4 = .5/hxc * (sbc.vb4(i,k) * dxm + sbc.vb4(ms.ima(i),k) * dxc); }
 
 		// interpolate viscosity & velocity at step n to 6 neighbour points around ruh[id]
 		vis1 = nuc[im]; vis2 = nuc[id];
@@ -191,10 +188,18 @@ void IDM::urhs1(Scla &ruh,
 		ack = .25/dzc *(w2*dzp/hzp - w1*dzm/hzc) - ack;
 		amk =-.25/hzc * w1                       - amk;
 
-		mbcy-= ifb4 * apj * ubc4 + ifb3 * amj * ubc3;
-		acj -= ifb4 * apj * sbu4 + ifb3 * amj * sbu3;
-		apj -= ifb4 * apj;
-		amj -= ifb3 * amj;
+		if (ifb1 || ifb2 || ifb3 || ifb4) {
+			// boundary coefficients
+			mbcx-= ifb2 * api * ubc2 + ifb1 * ami * ubc1;
+			mbcy-= ifb4 * apj * ubc4 + ifb3 * amj * ubc3;
+
+			aci -= ifb2 * api * sbu2 + ifb1 * ami * sbu1;
+			acj -= ifb4 * apj * sbu4 + ifb3 * amj * sbu3;
+			api -= ifb2 * api;
+			apj -= ifb4 * apj;
+			ami -= ifb1 * ami;
+			amj -= ifb3 * amj;
+		}
 
 		m11un =	api*u[ip] + aci*u[id] + ami*u[im]
 		      + apj*u[jp] + acj*u[id] + amj*u[jm]
@@ -204,17 +209,20 @@ void IDM::urhs1(Scla &ruh,
 		u2 = .5/hyp * (u[id]*dyp + u[jp]*dyc);
 		u1 = .5/hyc * (u[id]*dym + u[jm]*dyc);
 
-		mbcy -= .5/dyc * (
-			  ifb4 * (u2*vbc4 - vis4/hxc * (bc.vb4(i,k)-bc.vb4(ms.ima(i),k)))
-			- ifb3 * (u1*vbc3 - vis3/hxc * (bc.vb3(i,k)-bc.vb3(ms.ima(i),k))) );
+		if (ifb3 || ifb4) {
+			mbcy -= .5/dyc * (
+				ifb4 * (u2*vbc4 - vis4/hxc * (bc.vb4(i,k)-bc.vb4(ms.ima(i),k))) -
+				ifb3 * (u1*vbc3 - vis3/hxc * (bc.vb3(i,k)-bc.vb3(ms.ima(i),k))) );
 
-		u1 += ifb4 * u2 * sbv4; vis3 += ifb4 * vis4 * sbv4;
-		u2 += ifb3 * u1 * sbv3; vis4 += ifb3 * vis3 * sbv3;
-		u1 -= ifb3 * u1;        vis3 -= ifb3 * vis3;
-		u2 -= ifb4 * u2;        vis4 -= ifb4 * vis4;
+			u1 += ifb4 * u2 * sbv4; vis3 += ifb4 * vis4 * sbv4;
+			u2 += ifb3 * u1 * sbv3; vis4 += ifb3 * vis3 * sbv3;
+			u2 -= ifb4 * u2;        vis4 -= ifb4 * vis4;
+			u1 -= ifb3 * u1;        vis3 -= ifb3 * vis3;
+			// put part of M's boundary midification into L: L\~ - M = L\~ - (N - L) = (L + L\~)/2 - [ N - (L + L\~)/2 ]
+			l12vn += .5 * (.5/hxc/dyc * (vis4 * (v[jp]-v[imjp]) - vis3 * (v[id]-v[im])) - l12vn);
+		}
 
-		m12vn = .5/dyc * (u2*v2 - u1*v1)
-		      - .5/hxc/dyc * (vis4 * (v[jp]-v[imjp]) - vis3 * (v[id]-v[im]));
+		m12vn = .5/dyc * (u2*v2 - u1*v1) - l12vn;
 
 		// m13wn
 		u2 = .5/hzp * (u[id]*dzp + u[kp]*dzc);
@@ -228,7 +236,7 @@ void IDM::urhs1(Scla &ruh,
 		// R_1 with boundary modification
 		ruh[id] = (l11un + l12vn + l13wn)
 		        - (m11un + m12vn + m13wn)
-		        - pressg + fbx[id] + mbcy;
+		        - pressg + fbx[id] + mbcx + mbcy;
 	}}}
 }
 
@@ -241,9 +249,9 @@ void IDM::urhs2(Scla &rvh,
 	double api, aci, ami, apj, acj, amj, apk, ack, amk;
 	double l21un, l22vn, l23wn, m21un, m22vn, m23wn, pressg;
 
-	bool   ifb3, ifb4;
-	double vbc3, vbc4;
-	double sbv3, sbv4;
+	bool   ifb1, ifb2, ifb3, ifb4;
+	double ubc1, ubc2, vbc1, vbc2, vbc3, vbc4;
+	double sbu1, sbu2, sbv1, sbv2, sbv3, sbv4;
 
 	const Mesh &ms = rvh.ms;
 	const Scla &u = fld.SeeVec(1), &nux = vis.SeeVec(1);
@@ -262,16 +270,17 @@ void IDM::urhs2(Scla &rvh,
 		int ip, jp, kp; ms.ipx(i,j,k,ip,jp,kp);
 		int im, jm, km; ms.imx(i,j,k,im,jm,km);
 
-		double mbcy = 0;
+		double mbcx = 0, mbcy = 0;
 
-		if (ifb3 = (j==2)) {
-			vbc3 = bc.vb3(i,k);
-			sbv3 = sbc.vb3(i,k);
-		}
-		if (ifb4 = (j==ms.Ny-1)) {
-			vbc4 = bc.vb4(i,k);
-			sbv4 = sbc.vb4(i,k);
-		}
+		if (ifb1 = (i==1)      ) { vbc1 = bc.vb1(j,k); sbv1 = sbc.vb1(j,k); }
+		if (ifb2 = (i==ms.Nx-1)) { vbc2 = bc.vb2(j,k); sbv2 = sbc.vb2(j,k); }
+		if (ifb3 = (j==2)      ) { vbc3 = bc.vb3(i,k); sbv3 = sbc.vb3(i,k); }
+		if (ifb4 = (j==ms.Ny-1)) { vbc4 = bc.vb4(i,k); sbv4 = sbc.vb4(i,k); }
+
+		if (ifb1) { ubc1 = .5/hyc * ( bc.ub1(j,k) * dym +  bc.ub1(ms.jma(j),k) * dyc);
+		            sbu1 = .5/hyc * (sbc.ub1(j,k) * dym + sbc.ub1(ms.jma(j),k) * dyc); }
+		if (ifb2) { ubc2 = .5/hyc * ( bc.ub2(j,k) * dym +  bc.ub2(ms.jma(j),k) * dyc);
+		            sbu2 = .5/hyc * (sbc.ub2(j,k) * dym + sbc.ub2(ms.jma(j),k) * dyc); }
 
 		// interpolate viscosity & velocity at step n to 6 neighbour points around rvh[id]
 		vis1 = nuz[id]; vis2 = nuz[ip];
@@ -314,10 +323,17 @@ void IDM::urhs2(Scla &rvh,
 		ack = .25/dzc *(w2*dzp/hzp - w1*dzm/hzc) - ack;
 		amk =-.25/hzc * w1                       - amk;
 
-		mbcy-= ifb4 * apj * vbc4 + ifb3 * amj * vbc3;
-		acj -= ifb4 * apj * sbv4 + ifb3 * amj * sbv3;
-		apj -= ifb4 * apj;
-		amj -= ifb3 * amj;
+		if (ifb1 || ifb2 || ifb3 || ifb4) {
+			mbcx-= ifb2 * api * vbc2 + ifb1 * ami * vbc1;
+			mbcy-= ifb4 * apj * vbc4 + ifb3 * amj * vbc3;
+
+			aci -= ifb2 * api * sbv2 + ifb1 * ami * sbv1;
+			acj -= ifb4 * apj * sbv4 + ifb3 * amj * sbv3;
+			api -= ifb2 * api;
+			apj -= ifb4 * apj;
+			ami -= ifb1 * ami;
+			amj -= ifb3 * amj;
+		}
 
 		m22vn =	api*v[ip] + aci*v[id] + ami*v[im]
 		      + apj*v[jp] + acj*v[id] + amj*v[jm]
@@ -326,11 +342,26 @@ void IDM::urhs2(Scla &rvh,
 		// m21un
 		v2 = .5/hxp * (v[id]*dxp + v[ip]*dxc);
 		v1 = .5/hxc * (v[id]*dxm + v[im]*dxc);
+
+		if (ifb1 || ifb2) {
+			mbcx -= .5/dxc * (
+				ifb2 * (v2*ubc2 - vis2/hyc * (bc.ub2(j,k)-bc.ub2(ms.jma(j),k))) -
+				ifb1 * (v1*ubc1 - vis1/hyc * (bc.ub1(j,k)-bc.ub1(ms.jma(j),k))) );
+
+			v1 += ifb2 * v2 * sbu2; vis1 += ifb2 * vis2 * sbu2;
+			v2 += ifb1 * v1 * sbu1; vis2 += ifb1 * vis1 * sbu1;
+			v2 -= ifb2 * v2;        vis2 -= ifb2 * vis2;
+			v1 -= ifb1 * v1;        vis1 -= ifb1 * vis1;
+			// put part of M's boundary midification into L: L\~ - M = L\~ - (N - L) = (L + L\~)/2 - [ N - (L + L\~)/2 ]
+			l21un += .5 * (.5/hyc/dxc * (vis2 * (u[ip]-u[ipjm]) - vis1 * (u[id]-u[jm])) - l21un);
+		}
+
 		m21un = .5/dxc * (v2*u2 - v1*u1) - l21un;
 
 		// m23wn
 		v2 = .5/hzp * (v[id]*dzp + v[kp]*dzc);
 		v1 = .5/hzc * (v[id]*dzm + v[km]*dzc);
+
 		m23wn = .5/dzc * (v2*w2 - v1*w1) - l23wn;
 
 		// pressure gradient term
@@ -339,7 +370,7 @@ void IDM::urhs2(Scla &rvh,
 		// R_2 with boundary modification
 		rvh[id] = (l21un + l22vn + l23wn)
 		        - (m21un + m22vn + m23wn)
-		        - pressg + fby[id] + mbcy;
+		        - pressg + fby[id] + mbcx + mbcy;
 	}}}
 }
 
@@ -352,9 +383,9 @@ void IDM::urhs3(Scla &rwh,
 	double api, aci, ami, apj, acj, amj, apk, ack, amk;
 	double l31un, l32vn, l33wn, m31un, m32vn, m33wn, pressg;
 
-	bool   ifb3, ifb4;
-	double vbc3, vbc4, wbc3, wbc4;
-	double sbv3, sbv4, sbw3, sbw4;
+	bool   ifb1, ifb2, ifb3, ifb4;
+	double ubc1, ubc2, vbc3, vbc4, wbc1, wbc2, wbc3, wbc4;
+	double sbu1, sbu2, sbv3, sbv4, sbw1, sbw2, sbw3, sbw4;
 
 	const Mesh &ms = rwh.ms;
 	const Scla &u = fld.SeeVec(1), &nux = vis.SeeVec(1);
@@ -372,20 +403,21 @@ void IDM::urhs3(Scla &rwh,
 		int im, jm, km;       ms.imx(i,j,k,im,jm,km);
 		int ipjm, jpkm, ipkm; ms.pmx(i,j,k,ipjm,jpkm,ipkm);
 
-		double mbcy = 0;
+		double mbcx = 0, mbcy = 0;
 
-		if (ifb3 = (j==1)) {
-			wbc3 = bc.wb3(i,k);
-			sbw3 = sbc.wb3(i,k);
-			vbc3 = .5/hzc * ( bc.vb3(i,k) * dzm +  bc.vb3(i,ms.kma(k)) * dzc);
-			sbv3 = .5/hzc * (sbc.vb3(i,k) * dzm + sbc.vb3(i,ms.kma(k)) * dzc);
-		}
-		if (ifb4 = (j==ms.Ny-1)) {
-			wbc4 = bc.wb4(i,k);
-			sbw4 = sbc.wb4(i,k);
-			vbc4 = .5/hzc * ( bc.vb4(i,k) * dzm +  bc.vb4(i,ms.kma(k)) * dzc);
-			sbv4 = .5/hzc * (sbc.vb4(i,k) * dzm + sbc.vb4(i,ms.kma(k)) * dzc);
-		}
+		if (ifb1 = (i==1)      ) { wbc1 = bc.wb1(j,k); sbw1 = sbc.wb1(j,k); }
+		if (ifb2 = (i==ms.Nx-1)) { wbc2 = bc.wb2(j,k); sbw2 = sbc.wb2(j,k); }
+		if (ifb3 = (j==1)      ) { wbc3 = bc.wb3(i,k); sbw3 = sbc.wb3(i,k); }
+		if (ifb4 = (j==ms.Ny-1)) { wbc4 = bc.wb4(i,k); sbw4 = sbc.wb4(i,k); }
+
+		if (ifb1) { ubc1 = .5/hzc * ( bc.ub1(j,k) * dzm +  bc.ub1(j,ms.kma(k)) * dzc);
+		            sbu1 = .5/hzc * (sbc.ub1(j,k) * dzm + sbc.ub1(j,ms.kma(k)) * dzc); }
+		if (ifb2) { ubc2 = .5/hzc * ( bc.ub2(j,k) * dzm +  bc.ub2(j,ms.kma(k)) * dzc);
+		            sbu2 = .5/hzc * (sbc.ub2(j,k) * dzm + sbc.ub2(j,ms.kma(k)) * dzc); }
+		if (ifb3) { vbc3 = .5/hzc * ( bc.vb3(i,k) * dzm +  bc.vb3(i,ms.kma(k)) * dzc);
+		            sbv3 = .5/hzc * (sbc.vb3(i,k) * dzm + sbc.vb3(i,ms.kma(k)) * dzc); }
+		if (ifb4) { vbc4 = .5/hzc * ( bc.vb4(i,k) * dzm +  bc.vb4(i,ms.kma(k)) * dzc);
+		            sbv4 = .5/hzc * (sbc.vb4(i,k) * dzm + sbc.vb4(i,ms.kma(k)) * dzc); }
 
 		// interpolate viscosity and velocity at step n to the position needed
 		vis1 = nuy[id]; vis2 = nuy[ip];
@@ -428,10 +460,17 @@ void IDM::urhs3(Scla &rwh,
 		ack = .5 /hzc *(w2 - w1)                 - ack;
 		amk =-.5 /hzc * w1                       - amk;
 
-		mbcy-= ifb4 * apj * wbc4 + ifb3 * amj * wbc3;
-		acj -= ifb4 * apj * sbw4 + ifb3 * amj * sbw3;
-		apj -= ifb4 * apj;
-		amj -= ifb3 * amj;
+		if (ifb1 || ifb2 || ifb3 || ifb4) {
+			mbcx-= ifb2 * api * wbc2 + ifb1 * ami * wbc1;
+			mbcy-= ifb4 * apj * wbc4 + ifb3 * amj * wbc3;
+
+			aci -= ifb2 * api * sbw2 + ifb1 * ami * sbw1;
+			acj -= ifb4 * apj * sbw4 + ifb3 * amj * sbw3;
+			api -= ifb2 * api;
+			apj -= ifb4 * apj;
+			ami -= ifb1 * ami;
+			amj -= ifb3 * amj;
+		}
 
 		m33wn =	api*w[ip] + aci*w[id] + ami*w[im]
 		      + apj*w[jp] + acj*w[id] + amj*w[jm]
@@ -441,21 +480,38 @@ void IDM::urhs3(Scla &rwh,
 		w2 = .5/hyp * (w[id]*dyp + w[jp]*dyc);
 		w1 = .5/hyc * (w[id]*dym + w[jm]*dyc);
 
-		mbcy -= .5/dyc * (
-			  ifb4 * (w2*vbc4 - vis4/hzc * (bc.vb4(i,k)-bc.vb4(i,ms.kma(k))))
-			- ifb3 * (w1*vbc3 - vis3/hzc * (bc.vb3(i,k)-bc.vb3(i,ms.kma(k)))) );
+		if (ifb3 || ifb4) {
+			mbcy -= .5/dyc * (
+				  ifb4 * (w2*vbc4 - vis4/hzc * (bc.vb4(i,k)-bc.vb4(i,ms.kma(k))))
+				- ifb3 * (w1*vbc3 - vis3/hzc * (bc.vb3(i,k)-bc.vb3(i,ms.kma(k)))) );
 
-		w1 += ifb4 * w2 * sbv4; vis3 += ifb4 * vis4 * sbv4;
-		w2 += ifb3 * w1 * sbv3; vis4 += ifb3 * vis3 * sbv3;
-		w2 -= ifb4 * w2;        vis4 -= ifb4 * vis4;
-		w1 -= ifb3 * w1;        vis3 -= ifb3 * vis3;
+			w1 += ifb4 * w2 * sbv4; vis3 += ifb4 * vis4 * sbv4;
+			w2 += ifb3 * w1 * sbv3; vis4 += ifb3 * vis3 * sbv3;
+			w2 -= ifb4 * w2;        vis4 -= ifb4 * vis4;
+			w1 -= ifb3 * w1;        vis3 -= ifb3 * vis3;
+			// put part of M's boundary midification into L: L\~ - M = L\~ - (N - L) = (L + L\~)/2 - [ N - (L + L\~)/2 ]
+			l32vn += .5 * (.5/hzc/dyc * (vis4 * (v[jp]-v[jpkm]) - vis3 * (v[id]-v[km])) - l32vn);
+		}
 
-		m32vn = .5/dyc * (w2*v2 - w1*v1)
-		      - .5/hzc/dyc * (vis4 * (v[jp]-v[jpkm]) - vis3 * (v[id]-v[km]));
+		m32vn = .5/dyc * (w2*v2 - w1*v1) - l32vn;
 
 		// m31un
 		w2 = .5/hxp * (w[id]*dxp + w[ip]*dxc);
 		w1 = .5/hxc * (w[id]*dxm + w[im]*dxc);
+
+		if (ifb1 || ifb2) {
+			mbcx -= .5/dxc * (
+				ifb2 * (w2*ubc2 - vis2/hzc * (bc.ub2(j,k)-bc.ub2(j,ms.kma(k)))) -
+				ifb1 * (w1*ubc1 - vis1/hzc * (bc.ub1(j,k)-bc.ub1(j,ms.kma(k)))) );
+
+			w1 += ifb2 * w2 * sbu2; vis1 += ifb2 * vis2 * sbu2;
+			w2 += ifb1 * w1 * sbu1; vis2 += ifb1 * vis1 * sbu1;
+			w2 -= ifb2 * w2;        vis2 -= ifb2 * vis2;
+			w1 -= ifb1 * w1;        vis1 -= ifb1 * vis1;
+			// put part of M's boundary midification into L: L\~ - M = L\~ - (N - L) = (L + L\~)/2 - [ N - (L + L\~)/2 ]
+			l31un = .5 * (.5/hzc/dxc * (vis2 * (u[ip]-u[ipkm]) - vis1 * (u[id]-u[km])) - l31un);
+		}
+
 		m31un = .5/dxc * (w2*u2 - w1*u1) - l31un;
 
 		// pressure gradient term
@@ -464,7 +520,7 @@ void IDM::urhs3(Scla &rwh,
 		// R_3 with boundary modification
 		rwh[id] = (l31un + l32vn + l33wn)
 		        - (m31un + m32vn + m33wn)
-		        - pressg + fbz[id] + mbcy;
+		        - pressg + fbz[id] + mbcx + mbcy;
 	}}}
 }
 
@@ -475,6 +531,9 @@ void IDM::getuh1(Vctr &velh,
 {
 	double u1, u2, v1, v2, w1, w2;
 	double vis1, vis2, vis3, vis4, vis5, vis6;
+
+	bool   ifb1, ifb2, ifb3, ifb4;
+	double sbu1, sbu2, sbu3, sbu4;
 
 	const Mesh &ms = velh.ms;
 	
@@ -489,7 +548,7 @@ void IDM::getuh1(Vctr &velh,
 	double *am = new double[max(max(ms.Nx, ms.Ny), ms.Nz)];
 	double *ar = new double[max(max(ms.Nx, ms.Ny), ms.Nz)];
 
-	Matrix matx(ms.Nx-1);
+	Matrix matx(ms.Nx-2);
 	Matrix maty(ms.Ny-1);
 	Matrix matz(ms.Nz-1);
 
@@ -497,13 +556,10 @@ void IDM::getuh1(Vctr &velh,
 	#pragma omp barrier
 	#pragma omp for
 	for (int k=1; k<ms.Nz; k++) {
-	for (int i=1; i<ms.Nx; i++) {
+	for (int i=2; i<ms.Nx; i++) {
 
 		double dxm, dxp, dxc = ms.dx(i,dxm,dxp);
 		double hxc = ms.hx(i);
-
-		double sbu3 = sbc.ub3(i,k);
-		double sbu4 = sbc.ub4(i,k);
 
 		for (int j=1; j<ms.Ny; j++) {
 
@@ -515,8 +571,8 @@ void IDM::getuh1(Vctr &velh,
 			double dym, dyp, dyc = ms.dy(j,dym,dyp);
 			double hym, hyp, hyc = ms.hy(j,hym,hyp);
 
-			bool ifb3 = (j==1);
-			bool ifb4 = (j==ms.Ny-1);
+			if (ifb3 = (j==1)      ) sbu3 = sbc.ub3(i,k);
+			if (ifb4 = (j==ms.Ny-1)) sbu4 = sbc.ub4(i,k);
 
 			v1 = .5/hxc * (v[id]*dxm + v[im]  *dxc);
 			v2 = .5/hxc * (v[jp]*dxm + v[imjp]*dxc);
@@ -527,7 +583,7 @@ void IDM::getuh1(Vctr &velh,
 			ac[j] = ( .25/dyc *(v2*dyp/hyp - v1*dym/hyc) + .5/dyc *(vis4/hyp + vis3/hyc) ) * dt + 1;
 			am[j] = (-.25/hyc * v1                       - .5/dyc * vis3/hyc             ) * dt;
 
-			ac[j] -= ifb4 * ap[j] * sbu4 + ifb3 * am[j] * sbu3;
+			if (ifb3 || ifb4) ac[j] -= ifb4 * ap[j] * sbu4 + ifb3 * am[j] * sbu3;
 
 			ar[j] = dt * uh[id];
 		}
@@ -542,7 +598,7 @@ void IDM::getuh1(Vctr &velh,
 	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
-		for (int i=1; i<ms.Nx; i++) {
+		for (int i=2; i<ms.Nx; i++) {
 
 			int id = ms.idx(i,j,k);
 			int im = ms.idx(ms.ima(i),j,k);
@@ -550,6 +606,9 @@ void IDM::getuh1(Vctr &velh,
 
 			double dxm, dxp, dxc = ms.dx(i,dxm,dxp);
 			double hxm, hxp, hxc = ms.hx(i,hxm,hxp);
+
+			if (ifb1 = (i==2)      ) sbu1 = sbc.ub1(j,k);
+			if (ifb2 = (i==ms.Nx-1)) sbu2 = sbc.ub2(j,k);
 
 			u1 = .5 * (u[id] + u[im]);
 			u2 = .5 * (u[id] + u[ip]);
@@ -560,19 +619,21 @@ void IDM::getuh1(Vctr &velh,
 			ac[i] = ( .5/hxc *(u2 - u1) + 1./hxc *(vis2/dxc + vis1/dxm) ) * dt + 1;
 			am[i] = (-.5/hxc * u1       - 1./hxc * vis1/dxm             ) * dt;
 
+			if (ifb1 || ifb2) ac[i] -= ifb2 * ap[i] * sbu2 + ifb1 * am[i] * sbu1;
+
 			ar[i] = uh[id];
 		}
 
-		matx.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
+		matx.tdma(&am[2], &ac[2], &ap[2], &ar[2]);
 
-		for (int i=1; i<ms.Nx; i++) uh(i,j,k) = ar[i];
+		for (int i=2; i<ms.Nx; i++) uh(i,j,k) = ar[i];
 	}}
 
 	// ( I + dt M_11^3 )
 	#pragma omp barrier
 	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) {
-	for (int i=1; i<ms.Nx; i++) {
+	for (int i=2; i<ms.Nx; i++) {
 
 		double dxm, dxp, dxc = ms.dx(i,dxm,dxp);
 		double hxc = ms.hx(i);
@@ -618,6 +679,9 @@ void IDM::getuh2(Vctr &velh,
 	double u1, u2, v1, v2, w1, w2, l21uh, m21uh;
 	double vis1, vis2, vis3, vis4, vis5, vis6;
 
+	bool   ifb1, ifb2, ifb3, ifb4;
+	double sbu1, sbu2, sbv1, sbv2, sbv3, sbv4;
+
 	const Mesh &ms = velh.ms;
 	const Scla &uh = velh[1];
 	
@@ -645,9 +709,6 @@ void IDM::getuh2(Vctr &velh,
 		double dxm, dxp, dxc = ms.dx(i,dxm,dxp);
 		double hxm, hxp, hxc = ms.hx(i,hxm,hxp);
 
-		double sbv3 = sbc.vb3(i,k);
-		double sbv4 = sbc.vb4(i,k);
-
 		for (int j=2; j<ms.Ny; j++) {
 
 			int id   =      ms.idx(i,j,k);
@@ -658,8 +719,10 @@ void IDM::getuh2(Vctr &velh,
 			double dym, dyp, dyc = ms.dy(j,dym,dyp);
 			double hyc = ms.hy(j);
 
-			bool ifb3 = (j==2);
-			bool ifb4 = (j==ms.Ny-1);
+			if (ifb1 = (i==1)      ) sbu1 = .5/hyc * (sbc.ub1(j,k) * dym + sbc.ub1(ms.jma(j),k) * dyc);
+			if (ifb2 = (i==ms.Nx-1)) sbu2 = .5/hyc * (sbc.ub2(j,k) * dym + sbc.ub2(ms.jma(j),k) * dyc);
+			if (ifb3 = (j==2)      ) sbv3 = sbc.vb3(i,k);
+			if (ifb4 = (j==ms.Ny-1)) sbv4 = sbc.vb4(i,k);
 		
 			v2 = .5 * (v[id] + v[jp]);
 			v1 = .5 * (v[id] + v[jm]);
@@ -670,13 +733,20 @@ void IDM::getuh2(Vctr &velh,
 			ac[j] = ( .5/hyc*(v2 - v1) + 1./hyc *(vis4/dyc + vis3/dym) ) * dt + 1;
 			am[j] = (-.5/hyc* v1       - 1./hyc * vis3/dym             ) * dt;
 
-			ac[j] -= ifb4 * ap[j] * sbv4 + ifb3 * am[j] * sbv3;
+			if (ifb3 || ifb4) ac[j] -= ifb4 * ap[j] * sbv4 + ifb3 * am[j] * sbv3;
 
 			// m21uh
 			v2 = .5/hxp * (v[id]*dxp + v[ip]*dxc);
 			v1 = .5/hxc * (v[id]*dxm + v[im]*dxc);
 			vis1 = nuz[id];
 			vis2 = nuz[ip];
+
+			if (ifb1 || ifb2) {
+				v1 += ifb2 * v2 * sbu2; vis1 += ifb2 * vis2 * sbu2;
+				v2 += ifb1 * v1 * sbu1; vis2 += ifb1 * vis1 * sbu1;
+				v1 -= ifb1 * v1;        vis1 -= ifb1 * vis1;
+				v2 -= ifb2 * v2;        vis2 -= ifb2 * vis2;
+			}
 
 			u2 = .5/hyc * (uh[ip]*dym + uh[ipjm]*dyc);
 			u1 = .5/hyc * (uh[id]*dym + uh[jm]  *dyc);
@@ -707,6 +777,9 @@ void IDM::getuh2(Vctr &velh,
 			double dxm, dxp, dxc = ms.dx(i,dxm,dxp);
 			double hxm, hxp, hxc = ms.hx(i,hxm,hxp);
 
+			if (ifb1 = (i==1)      ) sbv1 = sbc.vb1(j,k);
+			if (ifb2 = (i==ms.Nx-1)) sbv2 = sbc.vb2(j,k);
+
 			u2 = .5/hyc * (u[ip]*dym + u[ipjm]*dyc);
 			u1 = .5/hyc * (u[id]*dym + u[jm]  *dyc);
 			vis1 = nuz[id];
@@ -715,6 +788,8 @@ void IDM::getuh2(Vctr &velh,
 			ap[i] = ( .25/hxp * u2                       - .5/dxc * vis2/hxp             ) * dt;
 			ac[i] = ( .25/dxc *(u2*dxp/hxp - u1*dxm/hxc) + .5/dxc *(vis2/hxp + vis1/hxc) ) * dt + 1;
 			am[i] = (-.25/hxc * u1                       - .5/dxc * vis1/hxc             ) * dt;
+
+			if (ifb1 || ifb2) ac[i] -= ifb2 * ap[i] * sbv2 + ifb1 * am[i] * sbv1;
 
 			ar[i] = vh[id];
 		}
@@ -772,6 +847,9 @@ void IDM::getuh3(Vctr &velh,
 	double m31uh, m32vh, m23wh, m12vh, m13wh;
 	double vis1, vis2, vis3, vis4, vis5, vis6;
 
+	bool   ifb1, ifb2, ifb3, ifb4;
+	double sbu1, sbu2, sbv3, sbv4, sbw1, sbw2, sbw3, sbw4;
+
 	const Mesh &ms = velh.ms;
 
 	Scla &uh = velh[1];
@@ -797,10 +875,6 @@ void IDM::getuh3(Vctr &velh,
 	#pragma omp for
 	for (int k=1; k<ms.Nz; k++) { double dzm,dzp,dzc=ms.dz(k,dzm,dzp), hzc=ms.hz(k);
 	for (int i=1; i<ms.Nx; i++) { double dxm,dxp,dxc=ms.dx(i,dxm,dxp), hxm,hxp,hxc=ms.hx(i,hxm,hxp);
-
-		double sbv3 = sbc.vb3(i,k), sbw3 = sbc.wb3(i,k);
-		double sbv4 = sbc.vb4(i,k), sbw4 = sbc.wb4(i,k);
-
 		for (int j=1; j<ms.Ny; j++) {
 
 			int id =              ms.idx(i,j,k);
@@ -812,8 +886,10 @@ void IDM::getuh3(Vctr &velh,
 			double dym, dyp, dyc = ms.dy(j,dym,dyp);
 			double hym, hyp, hyc = ms.hy(j,hym,hyp);
 
-			bool ifb3 = (j==1);
-			bool ifb4 = (j==ms.Ny-1);
+			if (ifb1 = (i==1)      ) { sbu1 = .5/hzc * (sbc.ub1(j,k) * dzm + sbc.ub1(j,ms.kma(k)) * dzc); }
+			if (ifb2 = (i==ms.Nx-1)) { sbu2 = .5/hzc * (sbc.ub2(j,k) * dzm + sbc.ub2(j,ms.kma(k)) * dzc); }
+			if (ifb3 = (j==1)      ) { sbv3 = sbc.vb3(i,k); sbw3 = sbc.wb3(i,k); }
+			if (ifb4 = (j==ms.Ny-1)) { sbv4 = sbc.vb4(i,k); sbw4 = sbc.wb4(i,k); }
 
 			v2 = .5/hzc * (v[jp]*dzm + v[jpkm]*dzc);
 			v1 = .5/hzc * (v[id]*dzm + v[km]  *dzc);
@@ -824,13 +900,20 @@ void IDM::getuh3(Vctr &velh,
 			ac[j] = ( .25/dyc *(v2*dyp/hyp - v1*dym/hyc) + .5/dyc *(vis4/hyp + vis3/hyc) ) * dt + 1;
 			am[j] = (-.25/hyc * v1                       - .5/dyc * vis3/hyc             ) * dt;
 
-			ac[j] -= ifb4 * ap[j] * sbw4 + ifb3 * am[j] * sbw3;
+			if (ifb3 || ifb4) ac[j] -= ifb4 * ap[j] * sbw4 + ifb3 * am[j] * sbw3;
 
 			// m31uh
 			w2 = .5/hxp * (w[id]*dxp + w[ip]*dxc);
 			w1 = .5/hxc * (w[id]*dxm + w[im]*dxc);
 			vis1 = nuy[id];
 			vis2 = nuy[ip];
+
+			if (ifb1 || ifb2) {
+				w1 += ifb2 * w2 * sbu2; vis1 += ifb2 * vis2 * sbu2;
+				w2 += ifb1 * w1 * sbu1; vis2 += ifb1 * vis1 * sbu1;
+				w2 -= ifb2 * w2;        vis2 -= ifb2 * vis2;
+				w1 -= ifb1 * w1;        vis1 -= ifb1 * vis1;
+			}
 
 			u2 = .5/hzc * (uh[ip]*dzm + uh[ipkm]*dzc);
 			u1 = .5/hzc * (uh[id]*dzm + uh[km]  *dzc);
@@ -842,10 +925,12 @@ void IDM::getuh3(Vctr &velh,
 			w2 = .5/hyp * (w[id]*dyp + w[jp]*dyc);
 			w1 = .5/hyc * (w[id]*dym + w[jm]*dyc);
 
-			w1 += ifb4 * w2 * sbv4; vis3 += ifb4 * vis4 * sbv4;
-			w2 += ifb3 * w1 * sbv3; vis4 += ifb3 * vis3 * sbv3;
-			w2 -= ifb4 * w2;        vis4 -= ifb4 * vis4;
-			w1 -= ifb3 * w1;        vis3 -= ifb3 * vis3;
+			if (ifb3 || ifb4) {
+				w1 += ifb4 * w2 * sbv4; vis3 += ifb4 * vis4 * sbv4;
+				w2 += ifb3 * w1 * sbv3; vis4 += ifb3 * vis3 * sbv3;
+				w2 -= ifb4 * w2;        vis4 -= ifb4 * vis4;
+				w1 -= ifb3 * w1;        vis3 -= ifb3 * vis3;
+			}
 
 			v2 = .5/hzc * (vh[jp]*dzm + vh[jpkm]*dzc);
 			v1 = .5/hzc * (vh[id]*dzm + vh[km]  *dzc);
@@ -880,6 +965,9 @@ void IDM::getuh3(Vctr &velh,
 			double dxm, dxp, dxc = ms.dx(i,dxm,dxp);
 			double hxm, hxp, hxc = ms.hx(i,hxm,hxp);
 
+			if (ifb1 = (i==1)      ) sbw1 = sbc.wb1(j,k);
+			if (ifb2 = (i==ms.Nx-1)) sbw2 = sbc.wb2(j,k);
+
 			u2 = .5/hzc * (u[ip]*dzm + u[ipkm]*dzc);
 			u1 = .5/hzc * (u[id]*dzm + u[km]  *dzc);
 			vis1 = nuy[id];
@@ -888,6 +976,8 @@ void IDM::getuh3(Vctr &velh,
 			ap[i] = ( .25/hxp * u2                       - .5/dxc * vis2/hxp             ) * dt;
 			ac[i] = ( .25/dxc *(u2*dxp/hxp - u1*dxm/hxc) + .5/dxc *(vis2/hxp + vis1/hxc) ) * dt + 1;
 			am[i] = (-.25/hxc * u1                       - .5/dxc * vis1/hxc             ) * dt;
+
+			if (ifb1 || ifb2) ac[i] -= ifb2 * ap[i] * sbw2 + ifb1 * am[i] * sbw1;
 
 			ar[i] = wh[id];
 		}
@@ -972,12 +1062,9 @@ void IDM::getuh3(Vctr &velh,
 		int ip, jp, kp;       ms.ipx(i,j,k,ip,jp,kp);
 		int im, jm, km;       ms.imx(i,j,k,im,jm,km);
 		int imjp, jmkp, imkp; ms.mpx(i,j,k,imjp,jmkp,imkp);
-
-		bool ifb3 = (j==1);
-		bool ifb4 = (j==ms.Ny-1);
 		
-		double sbv3 = .5/hxc * (sbc.vb3(i,k) * dxm + sbc.vb3(ms.ima(i),k) * dxc);
-		double sbv4 = .5/hxc * (sbc.vb4(i,k) * dxm + sbc.vb4(ms.ima(i),k) * dxc);
+		if (ifb3 = (j==1)      ) sbv3 = .5/hxc * (sbc.vb3(i,k) * dxm + sbc.vb3(ms.ima(i),k) * dxc);
+		if (ifb4 = (j==ms.Ny-1)) sbv4 = .5/hxc * (sbc.vb4(i,k) * dxm + sbc.vb4(ms.ima(i),k) * dxc);
 
 		// m12vh
 		u2 = .5/hyp * (u[id]*dyp + u[jp]*dyc);
@@ -985,13 +1072,15 @@ void IDM::getuh3(Vctr &velh,
 		vis3 = nuz[id];
 		vis4 = nuz[jp];
 
+		if (ifb3 || ifb4) {
+			u1 += ifb4 * u2 * sbv4; vis3 += ifb4 * vis4 * sbv4;
+			u2 += ifb3 * u1 * sbv3; vis4 += ifb3 * vis3 * sbv3;
+			u1 -= ifb3 * u1;        vis3 -= ifb3 * vis3;
+			u2 -= ifb4 * u2;        vis4 -= ifb4 * vis4;
+		}
+
 		v1 = .5/hxc * (vh[id]*dxm + vh[im]  *dxc);
 		v2 = .5/hxc * (vh[jp]*dxm + vh[imjp]*dxc);
-
-		u1 += ifb4 * u2 * sbv4; vis3 += ifb4 * vis4 * sbv4;
-		u2 += ifb3 * u1 * sbv3; vis4 += ifb3 * vis3 * sbv3;
-		u1 -= ifb3 * u1;        vis3 -= ifb3 * vis3;
-		u2 -= ifb4 * u2;        vis4 -= ifb4 * vis4;
 
 		l12vh = .5/hxc/dyc * (vis4 * (vh[jp]-vh[imjp]) - vis3 * (vh[id]-vh[im]));
 		m12vh = .5/dyc * (u2*v2 - u1*v1) - l12vh;
@@ -1037,30 +1126,27 @@ void IDM::rhsdp(Scla &rdp,
 	const Scla &vh = velh[2];
 	const Scla &wh = velh[3];
 
-	bool   ifb3, ifb4;
-	double vbc3, vbc4;
-	double sbv3, sbv4;
+	bool   ifb1, ifb2, ifb3, ifb4;
+	double ubc1, ubc2, vbc3, vbc4;
+	double sbu1, sbu2, sbv3, sbv4;
 
-	#pragma omp for
+	#pragma omp for collapse(3)
 	for (int j=1; j<ms.Ny; j++) { double dyc=ms.dy(j);
 	for (int k=1; k<ms.Nz; k++) { double dzc=ms.dz(k);
 	for (int i=1; i<ms.Nx; i++) { double dxc=ms.dx(i);
 
-		int id =              ms.idx(i,j,k);
-		int ip, jp, kp;       ms.ipx(i,j,k,ip,jp,kp);
+		int id =        ms.idx(i,j,k);
+		int ip, jp, kp; ms.ipx(i,j,k,ip,jp,kp);
 
-		if (ifb3 = (j==1)) {
-			vbc3 = bc.vb3(i,k);
-			sbv3 = sbc.vb3(i,k);
-		}
-		if (ifb4 = (j==ms.Ny-1)) {
-			vbc4 = bc.vb4(i,k);
-			sbv4 = sbc.vb4(i,k);
-		}
+		if (ifb1 = (i==1)      ) { ubc1 = bc.ub1(j,k); sbu1 = sbc.ub1(j,k); }
+		if (ifb2 = (i==ms.Nx-1)) { ubc2 = bc.ub2(j,k); sbu2 = sbc.ub2(j,k); }
+		if (ifb3 = (j==1)      ) { vbc3 = bc.vb3(i,k); sbv3 = sbc.vb3(i,k); }
+		if (ifb4 = (j==ms.Ny-1)) { vbc4 = bc.vb4(i,k); sbv4 = sbc.vb4(i,k); }
 
 		// ( Du^h - cbc ) / dt
 		rdp[id] = 1./dt * (
-			1./dxc * ( uh[ip]-uh[id] )
+			1./dxc * ( uh[ip] * (1 + ifb1*sbu1 - ifb2) + ifb2*ubc2 
+			         - uh[id] * (1 + ifb2*sbu2 - ifb1) - ifb1*ubc1 )
 		+	1./dyc * ( vh[jp] * (1 + ifb3*sbv3 - ifb4) + ifb4*vbc4
 			         - vh[id] * (1 + ifb4*sbv4 - ifb3) - ifb3*vbc3 )
 		+	1./dzc * ( wh[kp]-wh[id] ) );
@@ -1080,9 +1166,9 @@ void IDM::getfdp(Scla &fdp, const Boundaries &sbc, double refp)
 
 	Matrix maty(ms.Ny-1);
 
-	#pragma omp for
-	for (int k=0; k<ms.Nz-1; k++) { // i, k begin from 0 in fourier space
-	for (int i=0; i<ms.Nxc; i++) { // negative k_x need not solve
+	#pragma omp for collapse(2)
+	for (int k=0; k<ms.Nzc; k++) { // k begin from 0 in fourier space
+	for (int i=1; i<ms.Nx;  i++) {
 
 		double sbv3 = sbc.vb3(i,k);
 		double sbv4 = sbc.vb4(i,k);
@@ -1100,18 +1186,23 @@ void IDM::getfdp(Scla &fdp, const Boundaries &sbc, double refp)
 				             + (1 + ifb4*sbv4 - ifb3) / hyc ) - ms.kx2(i) - ms.kz2(k);
 			am[j] = 1./dyc *   (1 + ifb4*sbv4 - ifb3) / hyc;
 
-			ar[j] = fdp[ms.idfxz(2*i  ,j,k)];
-			ai[j] = fdp[ms.idfxz(2*i+1,j,k)];
+			ar[j] = fdp(i,j,2*k);
+			ai[j] = fdp(i,j,2*k+1);
 		}
 
 		// set reference pressure P(kx=0,kz=0,j=1) to 0
 		// fdp(kx=0,kz=0,j=1) = -Nxz * fp(kx=0,kz=0,j=1) ==> <dp(j=1)> = - <p(j=1)>
-		if (k==0 && i==0) {
-			ap[1] = 0;
-			ac[1] = 1;
-			am[1] = 0;
-			ar[1] = - (ms.Nx-1)*(ms.Nz-1) * refp;
-			ai[1] = 0;
+		if (k==0 && i==1) {
+			// ap[1] = 0;
+			// ac[1] = 1;
+			// am[1] = 0;
+			// ar[1] = - (ms.Nx-1)*(ms.Nz-1) * refp;
+			// ai[1] = 0;
+			ap[ms.Ny-1] = 0;
+			ac[ms.Ny-1] = 1;
+			am[ms.Ny-1] = 0;
+			ar[ms.Ny-1] = - (ms.Nx-1)*(ms.Nz-1) * refp;
+			ai[ms.Ny-1] = 0;
 		}
 
 		maty.tdma(&am[1], &ac[1], &ap[1], &ar[1]);
@@ -1119,8 +1210,8 @@ void IDM::getfdp(Scla &fdp, const Boundaries &sbc, double refp)
 
 		for (int j=1; j<ms.Ny; j++) {
 
-			fdp[ms.idfxz(2*i  ,j,k)] = ar[j];
-			fdp[ms.idfxz(2*i+1,j,k)] = ai[j];
+			fdp(i,j,2*k)   = ar[j];
+			fdp(i,j,2*k+1) = ai[j];
 		}
 	}}
 	/* note:
@@ -1148,21 +1239,21 @@ void IDM::update(Flow &fld, Flow &fldh, double dt)
 	Scla &w = fld.GetVec(3), &wh = fldh.GetVec(3);
 	Scla &p = fld.GetScl(),  &dp = fldh.GetScl();
 
-	#pragma omp for
+	#pragma omp for collapse(3)
 	for (int j=1; j<ms.Ny; j++) { double hyc=ms.hy(j);
 	for (int k=1; k<ms.Nz; k++) { double hzc=ms.hz(k);
 	for (int i=1; i<ms.Nx; i++) { double hxc=ms.hx(i);
 
-		int id =              ms.idx(i,j,k);
-		int im, jm, km;       ms.imx(i,j,k,im,jm,km);
+		int id =        ms.idx(i,j,k);
+		int im, jm, km; ms.imx(i,j,k,im,jm,km);
 
 		// store time derivative in intermediate variables
-		if (i>0) uh[id] = (uh[id]-u[id]) / dt - (dp[id]-dp[im]) / hxc;
+		if (i>1) uh[id] = (uh[id]-u[id]) / dt - (dp[id]-dp[im]) / hxc;
 		if (j>1) vh[id] = (vh[id]-v[id]) / dt - (dp[id]-dp[jm]) / hyc;
 		if (k>0) wh[id] = (wh[id]-w[id]) / dt - (dp[id]-dp[km]) / hzc;
 		
 		// update fields
-		if (i>0) u[id] += uh[id] * dt;
+		if (i>1) u[id] += uh[id] * dt;
 		if (j>1) v[id] += vh[id] * dt;
 		if (k>0) w[id] += wh[id] * dt;
 	}}}

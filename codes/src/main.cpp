@@ -8,7 +8,7 @@ using namespace std;
 
 
 /***** computation mode *****/
-# define AUXIMAIN // DEFAULT //
+# define DEFAULT // AUXIMAIN //
 
 
 void Config(int n, const Para &para);
@@ -22,7 +22,7 @@ int main()
 {
 	Para para("");
 
-	Geometry_prdxz geo(para.Nx,para.Ny,para.Nz, para.Lx,para.Ly,para.Lz);
+	Geometry_prdz geo(para.Nx,para.Ny,para.Nz, para.Lx,para.Ly,para.Lz);
 
 	geo.InitMesh(para.dy_min);
 	geo.InitInterval();
@@ -39,7 +39,7 @@ int main()
 	// computation begins
 	int tstep = Initiate(solver, para);
 
-	solver.set_mpg(-1., 0, 0);
+	solver.set_mpg(0, 0, 0);
 	
 	if (tstep == 0) Output(para, solver, tstep);
 
@@ -165,7 +165,7 @@ void Output(Para &para, Solver &solver, int tstep)
 	if (tstep % para.nwrite == 0) {
 		solver.get_fld ().WriteField(para.fieldpath, tstep, "");
 		solver.get_fldh().WriteField(para.fieldpath, tstep, "T");
-		// solver.get_fld().WriteTecplot(para.fieldpath, tstep, solver.getTime());
+		solver.get_fld().WriteTecplot(para.fieldpath, 0, solver.get_time());
 		cout << "Files successfully written for step " << tstep << endl;
 	}
 	if (tstep % para.nprint == 0) {

@@ -49,6 +49,7 @@ private:
 	// ***** initiation ***** //
 	static void InitFrom(Flow &fld, const Flow &fld0);
 	static void InitChannel(Flow &fld, Boundaries &bc, Boundaries &sbc, double energy);
+	static void InitTbl(Flow &fld, Boundaries &bc, Boundaries &sbc, double energy);
 
 	// ***** construct viscosity ***** //
 	static void CalcVis(Flow &vis, const Vctr &vel, double Re, int sgstyp);

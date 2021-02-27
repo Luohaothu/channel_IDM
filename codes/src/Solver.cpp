@@ -28,7 +28,8 @@ time_(0)
 
 void Solver::init(double energy)
 {
-	InitChannel(fld_, bc_, sbc_, energy);
+	// InitChannel(fld_, bc_, sbc_, energy);
+	InitTbl(fld_, bc_, sbc_, energy);
 }
 
 void Solver::init(const Flow &fld)
@@ -55,14 +56,15 @@ void Solver::evolve(double Re, double dt, int sgstyp)
 
 	// Bcond::ChannelNoSlip(bc_, sbc_, ms);
 	// Bcond::ChannelRobin(bc_, sbc_, get_vel(), vis_, 1.);
-	Bcond::ChannelHalf(bc_, sbc_, ms);
+	// Bcond::ChannelHalf(bc_, sbc_, ms);
+	Bcond::TblDevelop(bc_, sbc_, get_vel(), 1., dt);
 
 	CalcFb(fb_, mpg_);
 
 	IDM::calc(fld_, fldh_, vis_, fb_, bc_, sbc_, dt);
 
+	Bcond::SetBoundaryX(get_vel(), bc_, sbc_);
 	Bcond::SetBoundaryY(get_vel(), bc_, sbc_);
-	Bcond::SetBoundaryX(get_vel());
 	Bcond::SetBoundaryZ(get_vel());
 
 	// CalcMpg(mpg_, get_vel(), get_velh(), dt);
@@ -139,7 +141,26 @@ void Solver::InitChannel(Flow &fld, Boundaries &bc, Boundaries &sbc, double ener
 	Bcond::ChannelNoSlip(bc, sbc, ms);
 	Bcond::SetBoundaryX(fld.GetVec());
 	Bcond::SetBoundaryZ(fld.GetVec());
+}
+
+void Solver::InitTbl(Flow &fld, Boundaries &bc, Boundaries &sbc, double energy)
+// initiate flow field (U, V, W, P, including all boundaries) from laminar with random fluctions
+{
+	const Mesh &ms = fld.ms;
+
+	Scla &u = fld.GetVec(1);
+	Scla &v = fld.GetVec(2);
+	Scla &w = fld.GetVec(3);
+
+	// impose initial profile
+	for (int j=0; j<=ms.Ny; j++)
+		u.AddLyr(fmin(10*ms.yc(j), 1.), j);
+
+	Bcond::TblDevelop(bc, sbc, fld.SeeVec(), 1., 1);
+
+	Bcond::SetBoundaryX(fld.GetVec(), bc, sbc);
 	Bcond::SetBoundaryY(fld.GetVec(), bc, sbc);
+	Bcond::SetBoundaryZ(fld.GetVec());
 }
 
 void Solver::InitFrom(Flow &fld, const Flow &fld0)
