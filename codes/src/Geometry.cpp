@@ -101,9 +101,9 @@ void Geometry::InitMesh(double dy_min, const char *path)
 	if (path) InitMeshY(path);
 	else      InitMeshY(dy_min);
 
-	x[0] = 0; // set useless points to 0
-	z[0] = 0;
-	y[0] = 0;
+	x[0] = 1; // point 0 indicate whether the direction is periodic
+	z[0] = 1; // 0 for periodic, 1 for non-periodic
+	y[0] = 1; // initiate to non-periodic by default
 
 	for (int i=1; i<Nx; i++) xc[i] = .5 * (x[i] + x[i+1]);
 	for (int j=1; j<Ny; j++) yc[j] = .5 * (y[j] + y[j+1]);
@@ -117,6 +117,8 @@ void Geometry::InitMesh(double dy_min, const char *path)
 void Geometry_prdz::InitMesh(double dy_min, const char *path)
 {
 	Geometry::InitMesh(dy_min, path);
+	// indicate the periodicity of direction z
+	z[0] = 0;
 	// configure boundary zc so that its differencing position is equivalent to the periodic node
 	zc[0] = z[1] - (z[Nz] - zc[Nz-1]);
 	zc[Nz]= z[Nz]+ (zc[1] - z[1]);
@@ -126,6 +128,8 @@ void Geometry_prdxz::InitMesh(double dy_min, const char *path)
 {
 	Geometry::InitMesh(dy_min, path);
 
+	x[0] = z[0] = 0;
+	
 	xc[0] = x[1] - (x[Nx] - xc[Nx-1]);
 	xc[Nx]= x[Nx]+ (xc[1] - x[1]);
 

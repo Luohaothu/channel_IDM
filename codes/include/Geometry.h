@@ -84,6 +84,8 @@ public:
 	// indexing system
 	int idx(int i, int j, int k) const { return j*(Nx+1)*(Nz+1) + k*(Nx+1) + i; };
 	int idfxz(int i, int j, int k) const { return idx(0,j,0) + k*Nxr + i; };
+	int idfr(int i, int j, int k) const { return this->x(0) ? this->idx(i,j,2*k)   : this->idfxz(2*i,  j,k); };
+	int idfi(int i, int j, int k) const { return this->x(0) ? this->idx(i,j,2*k+1) : this->idfxz(2*i+1,j,k); };
 
 	int ima(int i) const { return geo.ima[i]; };
 	int jma(int j) const { return geo.jma[j]; };

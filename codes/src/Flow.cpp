@@ -51,6 +51,30 @@ void Flow::InitRand(double energy)
 	}
 }
 
+void Flow::CleanBoundary()
+{
+	for (int j=0; j<=Ny; j++) {
+	for (int k=0; k<=Nz; k++) {
+		v_[1](0,j,k) = v_[1](Nx,j,k) = v_[1]((bool)ms.x(0),j,k) = 0;
+		v_[2](0,j,k) = v_[2](Nx,j,k) = 0;
+		v_[3](0,j,k) = v_[3](Nx,j,k) = 0;
+		s_   (0,j,k) = s_   (Nx,j,k) = 0;
+	}}
+	for (int k=0; k<=Nz; k++) {
+	for (int i=0; i<=Nx; i++) {
+		v_[1](i,0,k) = v_[1](i,Ny,k) = 0;
+		v_[2](i,0,k) = v_[2](i,Ny,k) = v_[2](i,(bool)ms.y(0),k) = 0;
+		v_[3](i,0,k) = v_[3](i,Ny,k) = 0;
+		s_   (i,0,k) = s_   (i,Ny,k) = 0;
+	}}
+	for (int j=0; j<=ms.Ny; j++) {
+	for (int i=0; i<=ms.Nx; i++) {
+		v_[1](i,j,0) = v_[1](i,j,ms.Nz) = 0;
+		v_[2](i,j,0) = v_[2](i,j,ms.Nz) = 0;
+		v_[3](i,j,0) = v_[3](i,j,ms.Nz) = v_[3](i,j,(bool)ms.z(0)) = 0;
+		s_   (i,j,0) = s_   (i,j,ms.Nz) = 0;
+	}}
+}
 
 /***** file IO operations *****/
 

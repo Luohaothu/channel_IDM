@@ -192,6 +192,8 @@ public:
 		s_.CellCenter2EdgeZ(v_[3]);
 	};
 
+	void CleanBoundary();
+
 	// IO functions
 	Flow& ReadField(const char *path, int tstep, const char *suffix);
 	void WriteField(const char *path, int tstep, const char *suffix) const;

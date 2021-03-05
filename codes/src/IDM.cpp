@@ -4,10 +4,6 @@
 using namespace std;
 
 
-// #define TIME_TEST_IDM_
-
-#ifndef TIME_TEST_IDM_
-
 void IDM::calc(Flow &fld, Flow &fldh,
 	const Flow &vis, const Vctr &fb, const Boundaries &bc, const Boundaries &sbc, double dt)
 {
@@ -22,6 +18,10 @@ void IDM::calc(Flow &fld, Flow &fldh,
 		urhs1(fldh.GetVec(1), fld, vis, fb[1], bc, sbc);
 		urhs2(fldh.GetVec(2), fld, vis, fb[2], bc, sbc);
 		urhs3(fldh.GetVec(3), fld, vis, fb[3], bc, sbc);
+
+		#pragma omp single
+		fldh.CleanBoundary();
+		
 		getuh1(fldh.GetVec(), vel, vis, sbc, dt);
 		getuh2(fldh.GetVec(), vel, vis, sbc, dt);
 		getuh3(fldh.GetVec(), vel, vis, sbc, dt);
@@ -30,85 +30,27 @@ void IDM::calc(Flow &fld, Flow &fldh,
 	// dpcalc
 	#pragma omp parallel
 	rhsdp(dp, velh, bc, sbc, dt); // rdp (which shares memory with dp)
-	dp.dctxz();                   // rdp->frdp
+	
+	if (fld.ms.x(0)) dp.dctxz(); // rdp->frdp
+	else             dp.fftxz();
+
 	#pragma omp parallel
 	getfdp(dp, sbc, p.meanxz(fld.ms.Ny-1)); // frdp->fdp
-	dp.idctxz();                  // fdp->dp
+
+	if (fld.ms.x(0)) dp.idctxz(); // fdp->dp
+	else             dp.ifftxz();
 
 	// upcalc
 	#pragma omp parallel
 	update(fld, fldh, dt);
 }
 
-#else
-
-#include <sys/time.h>
-int cnt = 0;
-struct timeval time0, time1;
-double t_urhs=0, t_getuh=0, t_getdp=0, t_update=0;
-
-void IDM::calc(Flow &fld, Flow &fldh,
-	const Flow &vis, const Vctr &fb, const Boundaries &bc, const Boundaries &sbc, double dt)
-{
-	const Vctr &velh = fldh.GetVec();
-	const Vctr &vel = fld.SeeVec();
-	const Scla &p = fld.SeeScl();
-	Scla &dp = fldh.GetScl();
-
-	cout << ++ cnt << endl;
-
-	gettimeofday(&time0, NULL);
-		// uhcalc
-		#pragma omp parallel
-		{
-			urhs1(fldh.GetVec(1), fld, vis, fb[1], bc, sbc);
-			urhs2(fldh.GetVec(2), fld, vis, fb[2], bc, sbc);
-			urhs3(fldh.GetVec(3), fld, vis, fb[3], bc, sbc);
-		}
-	gettimeofday(&time1, NULL); t_urhs += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
-
-	gettimeofday(&time0, NULL);
-		#pragma omp parallel
-		{
-			getuh1(fldh.GetVec(), vel, vis, sbc, dt);
-			getuh2(fldh.GetVec(), vel, vis, sbc, dt);
-			getuh3(fldh.GetVec(), vel, vis, sbc, dt);
-		}
-	gettimeofday(&time1, NULL); t_getuh += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
-
-	gettimeofday(&time0, NULL);
-		// dpcalc
-		#pragma omp parallel
-		rhsdp(dp, velh, bc, sbc, dt); // rdp (which shares memory with dp)
-		dp.fftxz();                   // rdp->frdp
-		#pragma omp parallel
-		getfdp(dp, sbc, p.meanxz(1)); // frdp->fdp
-		dp.ifftxz();                  // fdp->dp
-	gettimeofday(&time1, NULL); t_getdp += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
-
-	gettimeofday(&time0, NULL);
-		// upcalc
-		#pragma omp parallel
-		update(fld, fldh, dt);
-	gettimeofday(&time1, NULL); t_update += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
-		
-	if (cnt == 10) {
-		cout << endl << endl
-			 << "total:\t"    << 1./cnt * (t_urhs+t_getuh+t_getdp+t_update) << endl
-			 << "t_getuh:\t"  << t_getuh / t_urhs << endl
-			 << "t_getdp:\t"  << t_getdp / t_urhs << endl
-			 << "t_update:\t" << t_update/ t_urhs << endl << endl;
-		exit(0);
-	}
-}
-
-#endif
 
 /***** intermediate velocity computation *****/
 
 void IDM::urhs1(Scla &ruh,
 	const Flow &fld, const Flow &vis, const Scla &fbx, const Boundaries &bc, const Boundaries &sbc)
-/* compute right hand side R_1 for intermediate velocity at all non-wall grid points */
+/* compute right hand side R_1 for intermediate velocity at all no-boundary grid points */
 {
 	double u1, u2, v1, v2, w1, w2;
 	double vis1, vis2, vis3, vis4, vis5, vis6;
@@ -128,7 +70,7 @@ void IDM::urhs1(Scla &ruh,
 	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hym,hyp,hyc=ms.hy(j,hym,hyp);
 	for (int k=1; k<ms.Nz; k++) { double dzm,dzp,dzc=ms.dz(k,dzm,dzp), hzm,hzp,hzc=ms.hz(k,hzm,hzp);
-	for (int i=2; i<ms.Nx; i++) { double dxm,dxp,dxc=ms.dx(i,dxm,dxp), hxm,hxp,hxc=ms.hx(i,hxm,hxp);
+	for (int i=1; i<ms.Nx; i++) { double dxm,dxp,dxc=ms.dx(i,dxm,dxp), hxm,hxp,hxc=ms.hx(i,hxm,hxp);
 
 		int id =              ms.idx(i,j,k);
 		int ip, jp, kp;       ms.ipx(i,j,k,ip,jp,kp);
@@ -137,10 +79,10 @@ void IDM::urhs1(Scla &ruh,
 
 		double mbcx = 0, mbcy = 0; // mbcx is the mbc induced by differencing in direction x (by operator M^1)
 
-		if (ifb1 = (i==2)      ) { ubc1 = bc.ub1(j,k); sbu1 = sbc.ub1(j,k); }
-		if (ifb2 = (i==ms.Nx-1)) { ubc2 = bc.ub2(j,k); sbu2 = sbc.ub2(j,k); }
-		if (ifb3 = (j==1)      ) { ubc3 = bc.ub3(i,k); sbu3 = sbc.ub3(i,k); }
-		if (ifb4 = (j==ms.Ny-1)) { ubc4 = bc.ub4(i,k); sbu4 = sbc.ub4(i,k); }
+		if (ifb1 = (ms.x(0) && i==2)      ) { ubc1 = bc.ub1(j,k); sbu1 = sbc.ub1(j,k); }
+		if (ifb2 = (ms.x(0) && i==ms.Nx-1)) { ubc2 = bc.ub2(j,k); sbu2 = sbc.ub2(j,k); }
+		if (ifb3 = (ms.y(0) && j==1)      ) { ubc3 = bc.ub3(i,k); sbu3 = sbc.ub3(i,k); }
+		if (ifb4 = (ms.y(0) && j==ms.Ny-1)) { ubc4 = bc.ub4(i,k); sbu4 = sbc.ub4(i,k); }
 
 		if (ifb3) { vbc3 = .5/hxc * ( bc.vb3(i,k) * dxm +  bc.vb3(ms.ima(i),k) * dxc);
 		            sbv3 = .5/hxc * (sbc.vb3(i,k) * dxm + sbc.vb3(ms.ima(i),k) * dxc); }
@@ -242,7 +184,7 @@ void IDM::urhs1(Scla &ruh,
 
 void IDM::urhs2(Scla &rvh,
 	const Flow &fld, const Flow &vis, const Scla &fby, const Boundaries &bc, const Boundaries &sbc)
-/* compute right hand side R_2 for intermediate velocity at all non-wall grid points */
+/* compute right hand side R_2 for intermediate velocity at all non-boundary grid points */
 {
 	double u1, u2, v1, v2, w1, w2;
 	double vis1, vis2, vis3, vis4, vis5, vis6;
@@ -260,7 +202,7 @@ void IDM::urhs2(Scla &rvh,
 	const Scla &p = fld.SeeScl(),  &nuc = vis.SeeScl();
 
 	#pragma omp for
-	for (int j=2; j<ms.Ny; j++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hym,hyp,hyc=ms.hy(j,hym,hyp);
+	for (int j=1; j<ms.Ny; j++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hym,hyp,hyc=ms.hy(j,hym,hyp);
 	for (int k=1; k<ms.Nz; k++) { double dzm,dzp,dzc=ms.dz(k,dzm,dzp), hzm,hzp,hzc=ms.hz(k,hzm,hzp);
 	for (int i=1; i<ms.Nx; i++) { double dxm,dxp,dxc=ms.dx(i,dxm,dxp), hxm,hxp,hxc=ms.hx(i,hxm,hxp);
 
@@ -272,10 +214,10 @@ void IDM::urhs2(Scla &rvh,
 
 		double mbcx = 0, mbcy = 0;
 
-		if (ifb1 = (i==1)      ) { vbc1 = bc.vb1(j,k); sbv1 = sbc.vb1(j,k); }
-		if (ifb2 = (i==ms.Nx-1)) { vbc2 = bc.vb2(j,k); sbv2 = sbc.vb2(j,k); }
-		if (ifb3 = (j==2)      ) { vbc3 = bc.vb3(i,k); sbv3 = sbc.vb3(i,k); }
-		if (ifb4 = (j==ms.Ny-1)) { vbc4 = bc.vb4(i,k); sbv4 = sbc.vb4(i,k); }
+		if (ifb1 = (ms.x(0) && i==1)      ) { vbc1 = bc.vb1(j,k); sbv1 = sbc.vb1(j,k); }
+		if (ifb2 = (ms.x(0) && i==ms.Nx-1)) { vbc2 = bc.vb2(j,k); sbv2 = sbc.vb2(j,k); }
+		if (ifb3 = (ms.y(0) && j==2)      ) { vbc3 = bc.vb3(i,k); sbv3 = sbc.vb3(i,k); }
+		if (ifb4 = (ms.y(0) && j==ms.Ny-1)) { vbc4 = bc.vb4(i,k); sbv4 = sbc.vb4(i,k); }
 
 		if (ifb1) { ubc1 = .5/hyc * ( bc.ub1(j,k) * dym +  bc.ub1(ms.jma(j),k) * dyc);
 		            sbu1 = .5/hyc * (sbc.ub1(j,k) * dym + sbc.ub1(ms.jma(j),k) * dyc); }
@@ -376,7 +318,7 @@ void IDM::urhs2(Scla &rvh,
 
 void IDM::urhs3(Scla &rwh,
 	const Flow &fld, const Flow &vis, const Scla &fbz, const Boundaries &bc, const Boundaries &sbc)
-/* compute right hand side R_3 for intermediate velocity at all non-wall grid points */
+/* compute right hand side R_3 for intermediate velocity at all non-boundary grid points */
 {
 	double u1, u2, v1, v2, w1, w2;
 	double vis1, vis2, vis3, vis4, vis5, vis6;
@@ -405,10 +347,10 @@ void IDM::urhs3(Scla &rwh,
 
 		double mbcx = 0, mbcy = 0;
 
-		if (ifb1 = (i==1)      ) { wbc1 = bc.wb1(j,k); sbw1 = sbc.wb1(j,k); }
-		if (ifb2 = (i==ms.Nx-1)) { wbc2 = bc.wb2(j,k); sbw2 = sbc.wb2(j,k); }
-		if (ifb3 = (j==1)      ) { wbc3 = bc.wb3(i,k); sbw3 = sbc.wb3(i,k); }
-		if (ifb4 = (j==ms.Ny-1)) { wbc4 = bc.wb4(i,k); sbw4 = sbc.wb4(i,k); }
+		if (ifb1 = (ms.x(0) && i==1)      ) { wbc1 = bc.wb1(j,k); sbw1 = sbc.wb1(j,k); }
+		if (ifb2 = (ms.x(0) && i==ms.Nx-1)) { wbc2 = bc.wb2(j,k); sbw2 = sbc.wb2(j,k); }
+		if (ifb3 = (ms.y(0) && j==1)      ) { wbc3 = bc.wb3(i,k); sbw3 = sbc.wb3(i,k); }
+		if (ifb4 = (ms.y(0) && j==ms.Ny-1)) { wbc4 = bc.wb4(i,k); sbw4 = sbc.wb4(i,k); }
 
 		if (ifb1) { ubc1 = .5/hzc * ( bc.ub1(j,k) * dzm +  bc.ub1(j,ms.kma(k)) * dzc);
 		            sbu1 = .5/hzc * (sbc.ub1(j,k) * dzm + sbc.ub1(j,ms.kma(k)) * dzc); }
@@ -548,15 +490,15 @@ void IDM::getuh1(Vctr &velh,
 	double *am = new double[max(max(ms.Nx, ms.Ny), ms.Nz)];
 	double *ar = new double[max(max(ms.Nx, ms.Ny), ms.Nz)];
 
-	Matrix matx(ms.Nx-2);
+	Matrix matx(ms.Nx-1-(bool)ms.x(0));
 	Matrix maty(ms.Ny-1);
 	Matrix matz(ms.Nz-1);
 
 	// ( I + dt M_11^2 )
 	#pragma omp barrier
-	#pragma omp for
+	#pragma omp for collapse(2)
 	for (int k=1; k<ms.Nz; k++) {
-	for (int i=2; i<ms.Nx; i++) {
+	for (int i=1; i<ms.Nx; i++) {
 
 		double dxm, dxp, dxc = ms.dx(i,dxm,dxp);
 		double hxc = ms.hx(i);
@@ -571,8 +513,8 @@ void IDM::getuh1(Vctr &velh,
 			double dym, dyp, dyc = ms.dy(j,dym,dyp);
 			double hym, hyp, hyc = ms.hy(j,hym,hyp);
 
-			if (ifb3 = (j==1)      ) sbu3 = sbc.ub3(i,k);
-			if (ifb4 = (j==ms.Ny-1)) sbu4 = sbc.ub4(i,k);
+			if (ifb3 = (ms.y(0) && j==1)      ) sbu3 = sbc.ub3(i,k);
+			if (ifb4 = (ms.y(0) && j==ms.Ny-1)) sbu4 = sbc.ub4(i,k);
 
 			v1 = .5/hxc * (v[id]*dxm + v[im]  *dxc);
 			v2 = .5/hxc * (v[jp]*dxm + v[imjp]*dxc);
@@ -588,17 +530,18 @@ void IDM::getuh1(Vctr &velh,
 			ar[j] = dt * uh[id];
 		}
 
-		maty.tdma(&am[1], &ac[1], &ap[1], &ar[1]); // apj at j=Ny-1 and amj at j=1 are redundant in tdma, thus no need for explicit removal
-		
+		if (ms.y(0)) maty. tdma(&am[1], &ac[1], &ap[1], &ar[1]); // apj at j=Ny-1 and amj at j=1 are redundant in tdma, thus no need for explicit removal
+		else         maty.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
+
 		for (int j=1; j<ms.Ny; j++) uh(i,j,k) = ar[j];
 	}}
 
 	// ( I + dt M_11^1 )
 	#pragma omp barrier
-	#pragma omp for
+	#pragma omp for collapse(2)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
-		for (int i=2; i<ms.Nx; i++) {
+		for (int i=1; i<ms.Nx; i++) {
 
 			int id = ms.idx(i,j,k);
 			int im = ms.idx(ms.ima(i),j,k);
@@ -607,8 +550,8 @@ void IDM::getuh1(Vctr &velh,
 			double dxm, dxp, dxc = ms.dx(i,dxm,dxp);
 			double hxm, hxp, hxc = ms.hx(i,hxm,hxp);
 
-			if (ifb1 = (i==2)      ) sbu1 = sbc.ub1(j,k);
-			if (ifb2 = (i==ms.Nx-1)) sbu2 = sbc.ub2(j,k);
+			if (ifb1 = (ms.x(0) && i==2)      ) sbu1 = sbc.ub1(j,k);
+			if (ifb2 = (ms.x(0) && i==ms.Nx-1)) sbu2 = sbc.ub2(j,k);
 
 			u1 = .5 * (u[id] + u[im]);
 			u2 = .5 * (u[id] + u[ip]);
@@ -624,16 +567,17 @@ void IDM::getuh1(Vctr &velh,
 			ar[i] = uh[id];
 		}
 
-		matx.tdma(&am[2], &ac[2], &ap[2], &ar[2]);
+		if (ms.x(0)) matx. tdma(&am[2], &ac[2], &ap[2], &ar[2]);
+		else         matx.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
 
-		for (int i=2; i<ms.Nx; i++) uh(i,j,k) = ar[i];
+		for (int i=1; i<ms.Nx; i++) uh(i,j,k) = ar[i];
 	}}
 
 	// ( I + dt M_11^3 )
 	#pragma omp barrier
-	#pragma omp for
+	#pragma omp for collapse(2)
 	for (int j=1; j<ms.Ny; j++) {
-	for (int i=2; i<ms.Nx; i++) {
+	for (int i=1; i<ms.Nx; i++) {
 
 		double dxm, dxp, dxc = ms.dx(i,dxm,dxp);
 		double hxc = ms.hx(i);
@@ -660,7 +604,8 @@ void IDM::getuh1(Vctr &velh,
 			ar[k] = uh[id];
 		}
 
-		matz.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
+		if (ms.z(0)) matz. tdma(&am[1], &ac[1], &ap[1], &ar[1]);
+		else         matz.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
 
 		for (int k=1; k<ms.Nz; k++) uh(i,j,k) = ar[k];
 	}}
@@ -697,19 +642,19 @@ void IDM::getuh2(Vctr &velh,
 	double *ar = new double[max(max(ms.Nx, ms.Ny), ms.Nz)];
 
 	Matrix matx(ms.Nx-1);
-	Matrix maty(ms.Ny-2);
+	Matrix maty(ms.Ny-1-(bool)ms.y(0));
 	Matrix matz(ms.Nz-1);
 
 	// ( I + dt M_22^2 )
 	#pragma omp barrier
-	#pragma omp for
+	#pragma omp for collapse(2)
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
 
 		double dxm, dxp, dxc = ms.dx(i,dxm,dxp);
 		double hxm, hxp, hxc = ms.hx(i,hxm,hxp);
 
-		for (int j=2; j<ms.Ny; j++) {
+		for (int j=1; j<ms.Ny; j++) {
 
 			int id   =      ms.idx(i,j,k);
 			int ipjm =      ms.idx(ms.ipa(i),ms.jma(j),k);
@@ -719,10 +664,10 @@ void IDM::getuh2(Vctr &velh,
 			double dym, dyp, dyc = ms.dy(j,dym,dyp);
 			double hyc = ms.hy(j);
 
-			if (ifb1 = (i==1)      ) sbu1 = .5/hyc * (sbc.ub1(j,k) * dym + sbc.ub1(ms.jma(j),k) * dyc);
-			if (ifb2 = (i==ms.Nx-1)) sbu2 = .5/hyc * (sbc.ub2(j,k) * dym + sbc.ub2(ms.jma(j),k) * dyc);
-			if (ifb3 = (j==2)      ) sbv3 = sbc.vb3(i,k);
-			if (ifb4 = (j==ms.Ny-1)) sbv4 = sbc.vb4(i,k);
+			if (ifb1 = (ms.x(0) && i==1)      ) sbu1 = .5/hyc * (sbc.ub1(j,k) * dym + sbc.ub1(ms.jma(j),k) * dyc);
+			if (ifb2 = (ms.x(0) && i==ms.Nx-1)) sbu2 = .5/hyc * (sbc.ub2(j,k) * dym + sbc.ub2(ms.jma(j),k) * dyc);
+			if (ifb3 = (ms.y(0) && j==2)      ) sbv3 = sbc.vb3(i,k);
+			if (ifb4 = (ms.y(0) && j==ms.Ny-1)) sbv4 = sbc.vb4(i,k);
 		
 			v2 = .5 * (v[id] + v[jp]);
 			v1 = .5 * (v[id] + v[jm]);
@@ -757,15 +702,16 @@ void IDM::getuh2(Vctr &velh,
 			ar[j] = dt * (vh[id] - m21uh);
 		}
 
-		maty.tdma(&am[2], &ac[2], &ap[2], &ar[2]); // apj at j=Ny-1 and amj at j=1 are redundant in tdma, thus no need for explicit removal
+		if (ms.y(0)) maty. tdma(&am[2], &ac[2], &ap[2], &ar[2]); // apj at j=Ny-1 and amj at j=1 are redundant in tdma, thus no need for explicit removal
+		else         maty.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
 		
-		for (int j=2; j<ms.Ny; j++) vh(i,j,k) = ar[j];
+		for (int j=1; j<ms.Ny; j++) vh(i,j,k) = ar[j];
 	}}
 
 	// ( I + dt M_22^1 )
 	#pragma omp barrier
 	#pragma omp for
-	for (int j=2; j<ms.Ny; j++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hyc=ms.hy(j);
+	for (int j=1; j<ms.Ny; j++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hyc=ms.hy(j);
 	for (int k=1; k<ms.Nz; k++) {
 		for (int i=1; i<ms.Nx; i++) {
 
@@ -777,8 +723,8 @@ void IDM::getuh2(Vctr &velh,
 			double dxm, dxp, dxc = ms.dx(i,dxm,dxp);
 			double hxm, hxp, hxc = ms.hx(i,hxm,hxp);
 
-			if (ifb1 = (i==1)      ) sbv1 = sbc.vb1(j,k);
-			if (ifb2 = (i==ms.Nx-1)) sbv2 = sbc.vb2(j,k);
+			if (ifb1 = (ms.x(0) && i==1)      ) sbv1 = sbc.vb1(j,k);
+			if (ifb2 = (ms.x(0) && i==ms.Nx-1)) sbv2 = sbc.vb2(j,k);
 
 			u2 = .5/hyc * (u[ip]*dym + u[ipjm]*dyc);
 			u1 = .5/hyc * (u[id]*dym + u[jm]  *dyc);
@@ -794,7 +740,8 @@ void IDM::getuh2(Vctr &velh,
 			ar[i] = vh[id];
 		}
 
-		matx.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
+		if (ms.x(0)) matx. tdma(&am[1], &ac[1], &ap[1], &ar[1]);
+		else         matx.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
 
 		for (int i=1; i<ms.Nx; i++) vh(i,j,k) = ar[i];
 	}}
@@ -802,7 +749,7 @@ void IDM::getuh2(Vctr &velh,
 	// ( I + dt M_22^3 )
 	#pragma omp barrier
 	#pragma omp for
-	for (int j=2; j<ms.Ny; j++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hyc=ms.hy(j);
+	for (int j=1; j<ms.Ny; j++) { double dym,dyp,dyc=ms.dy(j,dym,dyp), hyc=ms.hy(j);
 	for (int i=1; i<ms.Nx; i++) {
 		for (int k=1; k<ms.Nz; k++) {
 
@@ -826,7 +773,8 @@ void IDM::getuh2(Vctr &velh,
 			ar[k] = vh[id];
 		}
 
-		matz.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
+		if (ms.z(0)) matz. tdma(&am[1], &ac[1], &ap[1], &ar[1]);
+		else         matz.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
 
 		for (int k=1; k<ms.Nz; k++) vh(i,j,k) = ar[k];
 	}}
@@ -868,7 +816,7 @@ void IDM::getuh3(Vctr &velh,
 
 	Matrix matx(ms.Nx-1);
 	Matrix maty(ms.Ny-1);
-	Matrix matz(ms.Nz-1);
+	Matrix matz(ms.Nz-1-(bool)ms.z(0));
 
 	// ( I + dt M_33^2 )
 	#pragma omp barrier
@@ -886,10 +834,10 @@ void IDM::getuh3(Vctr &velh,
 			double dym, dyp, dyc = ms.dy(j,dym,dyp);
 			double hym, hyp, hyc = ms.hy(j,hym,hyp);
 
-			if (ifb1 = (i==1)      ) { sbu1 = .5/hzc * (sbc.ub1(j,k) * dzm + sbc.ub1(j,ms.kma(k)) * dzc); }
-			if (ifb2 = (i==ms.Nx-1)) { sbu2 = .5/hzc * (sbc.ub2(j,k) * dzm + sbc.ub2(j,ms.kma(k)) * dzc); }
-			if (ifb3 = (j==1)      ) { sbv3 = sbc.vb3(i,k); sbw3 = sbc.wb3(i,k); }
-			if (ifb4 = (j==ms.Ny-1)) { sbv4 = sbc.vb4(i,k); sbw4 = sbc.wb4(i,k); }
+			if (ifb1 = (ms.x(0) && i==1)      ) { sbu1 = .5/hzc * (sbc.ub1(j,k) * dzm + sbc.ub1(j,ms.kma(k)) * dzc); }
+			if (ifb2 = (ms.x(0) && i==ms.Nx-1)) { sbu2 = .5/hzc * (sbc.ub2(j,k) * dzm + sbc.ub2(j,ms.kma(k)) * dzc); }
+			if (ifb3 = (ms.y(0) && j==1)      ) { sbv3 = sbc.vb3(i,k); sbw3 = sbc.wb3(i,k); }
+			if (ifb4 = (ms.y(0) && j==ms.Ny-1)) { sbv4 = sbc.vb4(i,k); sbw4 = sbc.wb4(i,k); }
 
 			v2 = .5/hzc * (v[jp]*dzm + v[jpkm]*dzc);
 			v1 = .5/hzc * (v[id]*dzm + v[km]  *dzc);
@@ -941,14 +889,15 @@ void IDM::getuh3(Vctr &velh,
 			ar[j] = dt * (wh[id] - m31uh - m32vh);
 		}
 
-		maty.tdma(&am[1], &ac[1], &ap[1], &ar[1]);
+		if (ms.y(0)) maty. tdma(&am[1], &ac[1], &ap[1], &ar[1]);
+		else         maty.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
 
 		for (int j=1; j<ms.Ny; j++) wh(i,j,k) = ar[j];
 	}}
 
 	// ( I + dt M_33^1 )
 	#pragma omp barrier
-	#pragma omp for
+	#pragma omp for collapse(2)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 
@@ -965,8 +914,8 @@ void IDM::getuh3(Vctr &velh,
 			double dxm, dxp, dxc = ms.dx(i,dxm,dxp);
 			double hxm, hxp, hxc = ms.hx(i,hxm,hxp);
 
-			if (ifb1 = (i==1)      ) sbw1 = sbc.wb1(j,k);
-			if (ifb2 = (i==ms.Nx-1)) sbw2 = sbc.wb2(j,k);
+			if (ifb1 = (ms.x(0) && i==1)      ) sbw1 = sbc.wb1(j,k);
+			if (ifb2 = (ms.x(0) && i==ms.Nx-1)) sbw2 = sbc.wb2(j,k);
 
 			u2 = .5/hzc * (u[ip]*dzm + u[ipkm]*dzc);
 			u1 = .5/hzc * (u[id]*dzm + u[km]  *dzc);
@@ -982,14 +931,15 @@ void IDM::getuh3(Vctr &velh,
 			ar[i] = wh[id];
 		}
 
-		matx.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
+		if (ms.x(0)) matx. tdma(&am[1], &ac[1], &ap[1], &ar[1]);
+		else         matx.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
 
 		for (int i=1; i<ms.Nx; i++) wh(i,j,k) = ar[i];
 	}}
 
 	// ( I + dt M_33^3 )
 	#pragma omp barrier
-	#pragma omp for
+	#pragma omp for collapse(2)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int i=1; i<ms.Nx; i++) {
 		for (int k=1; k<ms.Nz; k++) {
@@ -1013,7 +963,8 @@ void IDM::getuh3(Vctr &velh,
 			ar[k] = wh[id];
 		}
 
-		matz.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
+		if (ms.z(0)) matz. tdma(&am[2], &ac[2], &ap[2], &ar[2]);
+		else         matz.ctdma(&am[1], &ac[1], &ap[1], &ar[1]);
 
 		for (int k=1; k<ms.Nz; k++) wh(i,j,k) = ar[k];
 	}}
@@ -1063,8 +1014,8 @@ void IDM::getuh3(Vctr &velh,
 		int im, jm, km;       ms.imx(i,j,k,im,jm,km);
 		int imjp, jmkp, imkp; ms.mpx(i,j,k,imjp,jmkp,imkp);
 		
-		if (ifb3 = (j==1)      ) sbv3 = .5/hxc * (sbc.vb3(i,k) * dxm + sbc.vb3(ms.ima(i),k) * dxc);
-		if (ifb4 = (j==ms.Ny-1)) sbv4 = .5/hxc * (sbc.vb4(i,k) * dxm + sbc.vb4(ms.ima(i),k) * dxc);
+		if (ifb3 = (ms.y(0) && j==1)      ) sbv3 = .5/hxc * (sbc.vb3(i,k) * dxm + sbc.vb3(ms.ima(i),k) * dxc);
+		if (ifb4 = (ms.y(0) && j==ms.Ny-1)) sbv4 = .5/hxc * (sbc.vb4(i,k) * dxm + sbc.vb4(ms.ima(i),k) * dxc);
 
 		// m12vh
 		u2 = .5/hyp * (u[id]*dyp + u[jp]*dyc);
@@ -1102,13 +1053,13 @@ void IDM::getuh3(Vctr &velh,
 
 	// update intermediate velocity field
 	#pragma omp barrier
-	#pragma omp for
+	#pragma omp for collapse(2)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
 		int id = ms.idx(i,j,k);
 		uh[id] += u[id];
-		vh[id] += v[id] * (j!=1); // j=1 is boundary
+		vh[id] += v[id];
 		wh[id] += w[id];
 	}}}
 }
@@ -1130,7 +1081,7 @@ void IDM::rhsdp(Scla &rdp,
 	double ubc1, ubc2, vbc3, vbc4;
 	double sbu1, sbu2, sbv3, sbv4;
 
-	#pragma omp for collapse(3)
+	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) { double dyc=ms.dy(j);
 	for (int k=1; k<ms.Nz; k++) { double dzc=ms.dz(k);
 	for (int i=1; i<ms.Nx; i++) { double dxc=ms.dx(i);
@@ -1138,10 +1089,10 @@ void IDM::rhsdp(Scla &rdp,
 		int id =        ms.idx(i,j,k);
 		int ip, jp, kp; ms.ipx(i,j,k,ip,jp,kp);
 
-		if (ifb1 = (i==1)      ) { ubc1 = bc.ub1(j,k); sbu1 = sbc.ub1(j,k); }
-		if (ifb2 = (i==ms.Nx-1)) { ubc2 = bc.ub2(j,k); sbu2 = sbc.ub2(j,k); }
-		if (ifb3 = (j==1)      ) { vbc3 = bc.vb3(i,k); sbv3 = sbc.vb3(i,k); }
-		if (ifb4 = (j==ms.Ny-1)) { vbc4 = bc.vb4(i,k); sbv4 = sbc.vb4(i,k); }
+		if (ifb1 = (ms.x(0) && i==1)      ) { ubc1 = bc.ub1(j,k); sbu1 = sbc.ub1(j,k); }
+		if (ifb2 = (ms.x(0) && i==ms.Nx-1)) { ubc2 = bc.ub2(j,k); sbu2 = sbc.ub2(j,k); }
+		if (ifb3 = (ms.y(0) && j==1)      ) { vbc3 = bc.vb3(i,k); sbv3 = sbc.vb3(i,k); }
+		if (ifb4 = (ms.y(0) && j==ms.Ny-1)) { vbc4 = bc.vb4(i,k); sbv4 = sbc.vb4(i,k); }
 
 		// ( Du^h - cbc ) / dt
 		rdp[id] = 1./dt * (
@@ -1166,9 +1117,14 @@ void IDM::getfdp(Scla &fdp, const Boundaries &sbc, double refp)
 
 	Matrix maty(ms.Ny-1);
 
+	int i0, in, k0, kn;
+	// choose wavenumber range to solve by periodicity in x and/or z directions
+	if ( ms.x(0) && !ms.z(0)) { i0 = 1; in = ms.Nx; k0 = 0; kn = ms.Nzc; }
+	if (!ms.x(0) && !ms.z(0)) { i0 = 0; in = ms.Nxc;k0 = 0; kn = ms.Nz-1; }
+
 	#pragma omp for collapse(2)
-	for (int k=0; k<ms.Nzc; k++) { // k begin from 0 in fourier space
-	for (int i=1; i<ms.Nx;  i++) {
+	for (int k=k0; k<kn; k++) {
+	for (int i=i0; i<in; i++) {
 
 		double sbv3 = sbc.vb3(i,k);
 		double sbv4 = sbc.vb4(i,k);
@@ -1178,26 +1134,21 @@ void IDM::getfdp(Scla &fdp, const Boundaries &sbc, double refp)
 			double dyc = ms.dy(j);
 			double hym, hyp, hyc = ms.hy(j,hym,hyp);
 
-			bool ifb3 = (j==1);
-			bool ifb4 = (j==ms.Ny-1);
+			bool ifb3 = (ms.y(0) && j==1);
+			bool ifb4 = (ms.y(0) && j==ms.Ny-1);
 
 			ap[j] = 1./dyc *   (1 + ifb3*sbv3 - ifb4) / hyp;
 			ac[j] =-1./dyc * ( (1 + ifb3*sbv3 - ifb4) / hyp
 				             + (1 + ifb4*sbv4 - ifb3) / hyc ) - ms.kx2(i) - ms.kz2(k);
 			am[j] = 1./dyc *   (1 + ifb4*sbv4 - ifb3) / hyc;
 
-			ar[j] = fdp(i,j,2*k);
-			ai[j] = fdp(i,j,2*k+1);
+			ar[j] = fdp[ms.idfr(i,j,k)];
+			ai[j] = fdp[ms.idfi(i,j,k)];
 		}
 
 		// set reference pressure P(kx=0,kz=0,j=1) to 0
 		// fdp(kx=0,kz=0,j=1) = -Nxz * fp(kx=0,kz=0,j=1) ==> <dp(j=1)> = - <p(j=1)>
-		if (k==0 && i==1) {
-			// ap[1] = 0;
-			// ac[1] = 1;
-			// am[1] = 0;
-			// ar[1] = - (ms.Nx-1)*(ms.Nz-1) * refp;
-			// ai[1] = 0;
+		if (ms.kx2(i) + ms.kz2(k) < INFTSM) {
 			ap[ms.Ny-1] = 0;
 			ac[ms.Ny-1] = 1;
 			am[ms.Ny-1] = 0;
@@ -1209,9 +1160,8 @@ void IDM::getfdp(Scla &fdp, const Boundaries &sbc, double refp)
 		maty.tdma(&am[1], &ac[1], &ap[1], &ai[1]);
 
 		for (int j=1; j<ms.Ny; j++) {
-
-			fdp(i,j,2*k)   = ar[j];
-			fdp(i,j,2*k+1) = ai[j];
+			fdp[ms.idfr(i,j,k)] = ar[j];
+			fdp[ms.idfi(i,j,k)] = ai[j];
 		}
 	}}
 	/* note:
@@ -1239,7 +1189,7 @@ void IDM::update(Flow &fld, Flow &fldh, double dt)
 	Scla &w = fld.GetVec(3), &wh = fldh.GetVec(3);
 	Scla &p = fld.GetScl(),  &dp = fldh.GetScl();
 
-	#pragma omp for collapse(3)
+	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) { double hyc=ms.hy(j);
 	for (int k=1; k<ms.Nz; k++) { double hzc=ms.hz(k);
 	for (int i=1; i<ms.Nx; i++) { double hxc=ms.hx(i);
@@ -1248,18 +1198,18 @@ void IDM::update(Flow &fld, Flow &fldh, double dt)
 		int im, jm, km; ms.imx(i,j,k,im,jm,km);
 
 		// store time derivative in intermediate variables
-		if (i>1) uh[id] = (uh[id]-u[id]) / dt - (dp[id]-dp[im]) / hxc;
-		if (j>1) vh[id] = (vh[id]-v[id]) / dt - (dp[id]-dp[jm]) / hyc;
-		if (k>0) wh[id] = (wh[id]-w[id]) / dt - (dp[id]-dp[km]) / hzc;
+		uh[id] = (uh[id]-u[id]) / dt - (dp[id]-dp[im]) / hxc;
+		vh[id] = (vh[id]-v[id]) / dt - (dp[id]-dp[jm]) / hyc;
+		wh[id] = (wh[id]-w[id]) / dt - (dp[id]-dp[km]) / hzc;
 		
 		// update fields
-		if (i>1) u[id] += uh[id] * dt;
-		if (j>1) v[id] += vh[id] * dt;
-		if (k>0) w[id] += wh[id] * dt;
+		if (i > (bool)ms.x(0)) u[id] += uh[id] * dt;
+		if (j > (bool)ms.y(0)) v[id] += vh[id] * dt;
+		if (k > (bool)ms.z(0)) w[id] += wh[id] * dt;
 	}}}
 
 	#pragma omp barrier
-	#pragma omp for
+	#pragma omp for collapse(2)
 	for (int j=1; j<ms.Ny; j++)
 	for (int k=1; k<ms.Nz; k++)
 	for (int i=1; i<ms.Nx; i++)
@@ -1271,7 +1221,67 @@ void IDM::update(Flow &fld, Flow &fldh, double dt)
 
 
 
+//***** codes for time test *****//
 
+// #include <sys/time.h>
+// int cnt = 0;
+// struct timeval time0, time1;
+// double t_urhs=0, t_getuh=0, t_getdp=0, t_update=0;
+
+// void IDM::calc(Flow &fld, Flow &fldh,
+// 	const Flow &vis, const Vctr &fb, const Boundaries &bc, const Boundaries &sbc, double dt)
+// {
+// 	const Vctr &velh = fldh.GetVec();
+// 	const Vctr &vel = fld.SeeVec();
+// 	const Scla &p = fld.SeeScl();
+// 	Scla &dp = fldh.GetScl();
+
+// 	cout << ++ cnt << endl;
+
+// 	gettimeofday(&time0, NULL);
+// 		// uhcalc
+// 		#pragma omp parallel
+// 		{
+// 			urhs1(fldh.GetVec(1), fld, vis, fb[1], bc, sbc);
+// 			urhs2(fldh.GetVec(2), fld, vis, fb[2], bc, sbc);
+// 			urhs3(fldh.GetVec(3), fld, vis, fb[3], bc, sbc);
+// 		}
+// 	gettimeofday(&time1, NULL); t_urhs += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
+
+// 	gettimeofday(&time0, NULL);
+// 		#pragma omp parallel
+// 		{
+// 			getuh1(fldh.GetVec(), vel, vis, sbc, dt);
+// 			getuh2(fldh.GetVec(), vel, vis, sbc, dt);
+// 			getuh3(fldh.GetVec(), vel, vis, sbc, dt);
+// 		}
+// 	gettimeofday(&time1, NULL); t_getuh += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
+
+// 	gettimeofday(&time0, NULL);
+// 		// dpcalc
+// 		#pragma omp parallel
+// 		rhsdp(dp, velh, bc, sbc, dt); // rdp (which shares memory with dp)
+// 		dp.fftxz();                   // rdp->frdp
+// 		#pragma omp parallel
+// 		getfdp(dp, sbc, p.meanxz(1)); // frdp->fdp
+// 		dp.ifftxz();                  // fdp->dp
+// 	gettimeofday(&time1, NULL); t_getdp += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
+
+// 	gettimeofday(&time0, NULL);
+// 		// upcalc
+// 		#pragma omp parallel
+// 		update(fld, fldh, dt);
+// 	gettimeofday(&time1, NULL); t_update += (time1.tv_sec - time0.tv_sec) + 1e-6 * (time1.tv_usec - time0.tv_usec);
+		
+// 	if (cnt == 10) {
+// 		cout << endl << endl
+// 			 << "total:\t"    << 1./cnt * (t_urhs+t_getuh+t_getdp+t_update) << endl
+// 			 << "t_getuh:\t"  << t_getuh / t_urhs << endl
+// 			 << "t_getdp:\t"  << t_getdp / t_urhs << endl
+// 			 << "t_update:\t" << t_update/ t_urhs << endl << endl;
+// 		exit(0);
+// 	}
+// }
 
 
 
