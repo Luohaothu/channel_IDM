@@ -18,7 +18,7 @@ public:
 
 
 	static double ReynoldsStress(int j, const Vctr &vel);
-	static const double* ReynoldsShearStresses (int j, const Vctr &vel);
+	static std::vector<double> ReynoldsShearStresses (int j, const Vctr &vel);
 	static const double* ReynoldsNormalStresses(int j, const Vctr &vel);
 	static const double* MeanVisShearStresses  (int j, const Vctr &vel, const Flow &vis);
 	static const double* MeanVisNormalStresses (int j, const Vctr &vel, const Flow &vis);

@@ -69,7 +69,7 @@ double Statis::ReynoldsStress(int j, const Vctr &vel)
 	return rs;
 }
 
-const double* Statis::ReynoldsShearStresses(int j, const Vctr &vel)
+vector<double> Statis::ReynoldsShearStresses(int j, const Vctr &vel)
 /* compute three Reynolds shear stresses on the edges for a channel flow */
 {
 	const Mesh &ms = vel.ms;
@@ -115,10 +115,7 @@ const double* Statis::ReynoldsShearStresses(int j, const Vctr &vel)
 	rs23 -= weight * vm23 * wm23;  rs23 *= weight;
 	rs13 -= weight * um13 * wm13;  rs13 *= weight;
 
-	static double rs[3];
-	rs[0] = rs12;
-	rs[1] = rs23;
-	rs[2] = rs13;
+	vector<double> rs = {rs12, rs23, rs13};
 
 	return rs;
 }
@@ -294,7 +291,7 @@ void Statis::CheckTaub(const Vctr &vel, const Flow &vis, double taub[3])
 	double tau23 = 0;
 
 	{ // lower boundary
-		const double *rss  = Statis::ReynoldsShearStresses (1, vel);
+		const vector<double> rss  = Statis::ReynoldsShearStresses (1, vel);
 		const double *rsn  = Statis::ReynoldsNormalStresses(1, vel);
 		const double *taus = Statis::MeanVisShearStresses  (1, vel, vis);
 		const double *taun = Statis::MeanVisNormalStresses (1, vel, vis);
@@ -303,7 +300,7 @@ void Statis::CheckTaub(const Vctr &vel, const Flow &vis, double taub[3])
 		tau22 += .5 * (taun[1] - rsn[1]); // use yc[1] to approximate stress at y[1]
 		tau23 += .5 * (taus[1] - rss[1]);
 	}{ // upper boundary
-		const double *rss  = Statis::ReynoldsShearStresses (ms.Ny,   vel);
+		const vector<double> rss  = Statis::ReynoldsShearStresses (ms.Ny,   vel);
 		const double *rsn  = Statis::ReynoldsNormalStresses(ms.Ny-1, vel);
 		const double *taus = Statis::MeanVisShearStresses  (ms.Ny,   vel, vis);
 		const double *taun = Statis::MeanVisNormalStresses (ms.Ny-1, vel, vis);
