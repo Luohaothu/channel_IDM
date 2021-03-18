@@ -2,86 +2,66 @@
 
 #include "Basic.h"
 #include "Bcond.h"
+#include "Para.h"
 
 
 class Solver
 {
 public:
-	const Mesh ms;
+	Solver(const char* path, bool ifinit=true);
 
-	Solver(const Mesh &ms);
+	void ContinueCase();
+	void Manipulation();
 
-	// ***** initiation ***** //
-	void init(double energy);
-	void init(const Flow &fld);
+	void Evolve(); // default computation
+	void Evolve(const Solver &slv); // test computation
 
-	// ***** default cumputation ***** //
-	void evolve(double Re, double dt, int sgstyp);
-
-	// ***** test computation ***** //
-	void evolve(double Re, double dt, int sgstyp, Solver &solver0, double Re0);
-
-
-	double get_time()   const { return time_; };
-	double set_time(double t) { return time_ = t; };
-
-	Flow& get_fld () { return fld_; };
-	Flow& get_fldh() { return fldh_; };
-	Flow& get_vis () { return vis_; };
-	Vctr& get_fb  () { return fb_; };
-	Vctr& get_vel () { return fld_.GetVec(); };
-	Vctr& get_velh() { return fldh_.GetVec(); };
-	double* get_mpg() { return mpg_; };
-	void    set_mpg(double g1, double g2, double g3) { mpg_[0] = g1; mpg_[1] = g2; mpg_[2] = g3; };
-
+	void Output();
+	void ShowInfo() const;
 	void debug_Output(const char path[]) const;
 
-private:
-	Flow fld_;       // solution field: Velocity & Pressure
-	Flow fldh_;      // time derivative of solution field, also serve as intermediate fields
-	Flow vis_;       // viscous field: deployed on cell-centers and edges
-	Vctr fb_;        // body force
-	Boundaries bc_;  // boundary field specifying BCs at n+1 step
-	Boundaries sbc_; // secondary boundary coefficients determined by the type of BC used
-	double mpg_[3];  // mean pressure gradient acting as drving force
-	double time_;
+	Para para;
+	Geometry geom;
+	const Mesh ms;
 
+	Boundaries bc;  // boundary field specifying BCs at n+1 step
+	Boundaries sbc; // secondary boundary coefficients determined by the type of BC used
+	Flow fld;       // solution field: Velocity & Pressure
+	Flow fldh;      // time derivative of solution field, also serve as intermediate fields
+	Flow vis;       // viscous field: deployed on cell-centers and edges
+	Vctr fb;        // body force
+	std::vector<double> mpg; // mean pressure gradient acting as drving force
+	
+	double time;
+	int step;
+
+private:
 	// ***** initiation ***** //
-	static void InitFrom(Flow &fld, const Flow &fld0);
-	static void InitChannel(Flow &fld, Boundaries &bc, Boundaries &sbc, double energy);
-	static void InitTbl(Flow &fld, Boundaries &bc, Boundaries &sbc, double energy);
+	void InitFieldFrom(const Flow &fld0);
+	void InitFieldChan(Boundaries &bc, Boundaries &sbc, double energy);
+	void InitFieldBlyr(Boundaries &bc, Boundaries &sbc, double energy);
 
 	// ***** construct viscosity ***** //
-	static void CalcVis(Flow &vis, const Vctr &vel, double Re, int sgstyp);
+	static void CalcVis(Flow &vis, const Vctr &vel, double Re, int bftype);
 
 	// ***** construct body forces ***** //
-	static void CalcFb(Vctr &fb, const double mpg[3]);
-	static void CalcFb(Vctr &fb, const double mpg[3], const Vctr &f);
-
-	// ***** adjusting mean pressure gradient ***** //
-	static void CalcMpg(double mpg[3], Vctr &vel, Vctr &velh, double dt, const double mpgref[3] = NULL);
-	
-	// ***** data manipulation ***** //
-	static void RollBack(Flow &fld, const Flow &fldh, double dt);
-	static void RemoveSpanMean(Vctr &vel);
-	
-	void Assimilate(const Vctr &velexp, double dt, double en, double a);
-
-	// ***** construct boundary conditions ***** //
-
-	// Bcond::ChannelNoSlip(bc_, sbc_, ms);
-	// Bcond::ChannelDirichlet(bc_, sbc_, ms, solver0.get_fld().SeeVec());
-	// Bcond::ChannelRobin(bc_, sbc_, ms, solver0.get_fld().SeeVec());
-	// Bcond::TblCycling(bc_, sbc_, ms, double ufree);
+	static void CalcFb(Vctr &fb, const std::vector<double> &mpg);
+	static void CalcFb(Vctr &fb, const std::vector<double> &mpg, const Vctr &f);
 
 	// ***** apply boundary conditions ***** //
+	static void SetBoundaries(Vctr &vel, const Boundaries &bc, const Boundaries &sbc);
 
-	// non-periodic
-	// Bcond::SetBoundaryX(fld_.GetVec(), bc_, sbc_);
-	// Bcond::SetBoundaryY(fld_.GetVec(), bc_, sbc_);
-	// periodic
-	// Bcond::SetBoundaryX(fld_.GetVec());
-	// Bcond::SetBoundaryZ(fld_.GetVec());
+	// ***** adjusting mean pressure gradient ***** //
+	static void CalcMpg(std::vector<double> &mpg, Vctr &vel, double dt);
+	static void CalcMpg(std::vector<double> &mpg, Vctr &vel, double dt, const std::vector<double> &mpgref);
+
+	// ***** utilitis ***** //
+	double InnerScale() const;
+
+	// ***** data manipulation ***** //
+	static void SwapBulk(Vctr &vel);
+	static void RollBack(Flow &fld, const Flow &fldh, double dt);
+	static void RemoveSpanMean(Vctr &vel);
 
 };
 

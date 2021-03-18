@@ -6,6 +6,44 @@
 using namespace std;
 
 
+// void Solver::Assimilate(const Vctr &velexp, double dt, double en, double a)
+// {
+// 	static DA assimilator(ms);
+
+// 	const Vctr &vel = fld_.SeeVec();
+	
+// 	if (assimilator.GetExp(time_, velexp)) {
+
+// 		assimilator.Reset();
+
+// 		// // store the unassimilated flow field for recovery later
+// 		// Flow FLD_temp(mesh), FLDH_temp(mesh);
+// 		// FLD_temp.V[1] = FLD.V[1]; FLDH_temp.V[1] = FLDH.V[1];
+// 		// FLD_temp.V[2] = FLD.V[2]; FLDH_temp.V[2] = FLDH.V[2];
+// 		// FLD_temp.V[3] = FLD.V[3]; FLDH_temp.V[3] = FLDH.V[3];
+// 		// FLD_temp.S    = FLD.S;    FLDH_temp.S    = FLDH.S;
+
+
+// 		while (assimilator.IfIter(en, vel)) { // converged or reached max iterations yet
+			
+// 			RollBack(fld_, fldh_, dt);        // roll back the flow fields to the old time step
+// 			CalcFb(fb_, mpg_,                 // MPG cannot be rolled back, but it should not matter
+// 				assimilator.GetAsmForce(vel, vis_, dt, a));   // compute adjoint state and apply assimilating force
+// 			IDM::calc(fld_, fldh_, vis_, fb_, bc_, sbc_, dt); // solve the time step again under the new force
+// 		}
+
+// 		assimilator.WriteLog(time_);
+// 		// assimilator.writeForce("", round(time/dt));
+
+// 		// // recover the flow field to the unassimilated state
+// 		// FLD.V[1] = FLD_temp.V[1]; FLDH.V[1] = FLDH_temp.V[1];
+// 		// FLD.V[2] = FLD_temp.V[2]; FLDH.V[2] = FLDH_temp.V[2];
+// 		// FLD.V[3] = FLD_temp.V[3]; FLDH.V[3] = FLDH_temp.V[3];
+// 		// FLD.S    = FLD_temp.S;    FLDH.S    = FLDH_temp.S;
+// 	}
+// }
+
+
 DA::DA(const Mesh &ms):
 fb_  (ms),
 fldh_(ms),

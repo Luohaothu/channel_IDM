@@ -53,6 +53,7 @@ void Flow::InitRand(double energy)
 
 void Flow::CleanBoundary()
 {
+	#pragma omp for collapse(2)
 	for (int j=0; j<=Ny; j++) {
 	for (int k=0; k<=Nz; k++) {
 		v_[1](0,j,k) = v_[1](Nx,j,k) = v_[1]((bool)ms.x(0),j,k) = 0;
@@ -60,6 +61,7 @@ void Flow::CleanBoundary()
 		v_[3](0,j,k) = v_[3](Nx,j,k) = 0;
 		s_   (0,j,k) = s_   (Nx,j,k) = 0;
 	}}
+	#pragma omp for collapse(2)
 	for (int k=0; k<=Nz; k++) {
 	for (int i=0; i<=Nx; i++) {
 		v_[1](i,0,k) = v_[1](i,Ny,k) = 0;
@@ -67,12 +69,56 @@ void Flow::CleanBoundary()
 		v_[3](i,0,k) = v_[3](i,Ny,k) = 0;
 		s_   (i,0,k) = s_   (i,Ny,k) = 0;
 	}}
-	for (int j=0; j<=ms.Ny; j++) {
-	for (int i=0; i<=ms.Nx; i++) {
-		v_[1](i,j,0) = v_[1](i,j,ms.Nz) = 0;
-		v_[2](i,j,0) = v_[2](i,j,ms.Nz) = 0;
-		v_[3](i,j,0) = v_[3](i,j,ms.Nz) = v_[3](i,j,(bool)ms.z(0)) = 0;
-		s_   (i,j,0) = s_   (i,j,ms.Nz) = 0;
+	#pragma omp for collapse(2)
+	for (int j=0; j<=Ny; j++) {
+	for (int i=0; i<=Nx; i++) {
+		v_[1](i,j,0) = v_[1](i,j,Nz) = 0;
+		v_[1](i,j,0) = v_[1](i,j,Nz) = 0;
+		v_[2](i,j,0) = v_[2](i,j,Nz) = 0;
+		v_[3](i,j,0) = v_[3](i,j,Nz) = v_[3](i,j,(bool)ms.z(0)) = 0;
+		s_   (i,j,0) = s_   (i,j,Nz) = 0;
+	}}
+}
+
+void Flow::CombineBoundary(const Flow &fld, double a, double b)
+{
+	const Scla &u = fld.SeeVec(1);
+	const Scla &v = fld.SeeVec(2);
+	const Scla &w = fld.SeeVec(3);
+	const Scla &p = fld.SeeScl();
+
+	#pragma omp for collapse(2)
+	for (int j=0; j<=Ny; j++) {
+	for (int k=0; k<=Nz; k++) {
+		v_[1](0,j,k) = a * v_[1](0,j,k) + b * u(0,j,k);
+		v_[2](0,j,k) = a * v_[2](0,j,k) + b * v(0,j,k);
+		v_[3](0,j,k) = a * v_[3](0,j,k) + b * w(0,j,k);
+		v_[1](Nx,j,k) = a * v_[1](Nx,j,k) + b * u(Nx,j,k);
+		v_[2](Nx,j,k) = a * v_[2](Nx,j,k) + b * v(Nx,j,k);
+		v_[3](Nx,j,k) = a * v_[3](Nx,j,k) + b * w(Nx,j,k);
+		v_[1]((bool)ms.x(0),j,k) = s_(0,j,k) = s_(Nx,j,k) = 0;
+	}}
+	#pragma omp for collapse(2)
+	for (int k=0; k<=Nz; k++) {
+	for (int i=0; i<=Nx; i++) {
+		v_[1](i,0,k) = a * v_[1](i,0,k) + b * u(i,0,k);
+		v_[2](i,0,k) = a * v_[2](i,0,k) + b * v(i,0,k);
+		v_[3](i,0,k) = a * v_[3](i,0,k) + b * w(i,0,k);
+		v_[1](i,Ny,k) = a * v_[1](i,Ny,k) + b * u(i,Ny,k);
+		v_[2](i,Ny,k) = a * v_[2](i,Ny,k) + b * v(i,Ny,k);
+		v_[3](i,Ny,k) = a * v_[3](i,Ny,k) + b * w(i,Ny,k);
+		v_[2](i,(bool)ms.y(0),k) = s_(i,0,k) = s_(i,Ny,k) = 0;
+	}}
+	#pragma omp for collapse(2)
+	for (int j=0; j<=Ny; j++) {
+	for (int i=0; i<=Nx; i++) {
+		v_[1](i,j,0) = a * v_[1](i,j,0) + b * u(i,j,0);
+		v_[2](i,j,0) = a * v_[2](i,j,0) + b * v(i,j,0);
+		v_[3](i,j,0) = a * v_[3](i,j,0) + b * w(i,j,0);
+		v_[1](i,j,Nz) = a * v_[1](i,j,Nz) + b * u(i,j,Nz);
+		v_[2](i,j,Nz) = a * v_[2](i,j,Nz) + b * v(i,j,Nz);
+		v_[3](i,j,Nz) = a * v_[3](i,j,Nz) + b * w(i,j,Nz);
+		v_[3](i,j,(bool)ms.z(0)) = s_(i,j,0) = s_(i,j,Nz) = 0;
 	}}
 }
 

@@ -13,13 +13,8 @@ Para::Para(const char *path)
 {
 	XINDAT_modify_time = 0;
 	
-	if (path != NULL) {
-	/* if workpath provided, read the input file */
-		strcpy(workpath, path);
-		checkPara();
-	}
-	else {
 	/* initiate default parameters */
+	{
 		strcpy(workpath, "");
 
 		// file paths
@@ -45,17 +40,24 @@ Para::Para(const char *path)
 		Ly = 2.0;
 		Lz = 3.1416;
 		dy_min = 0.2;
+		prd = 010;
 
 		// time evolution control
 		Nt = 1000000;
 		dt = 1e-3;
 
 		// IO control
-		nread = 0;
+		inread = 0;
 		nwrite = 10000;
 		nprint = 1000;
 		nprobe = 0;
 		jprbs[0] = 0;
+	}
+
+	/* if workpath provided, read the input file */
+	if (path != NULL) {
+		strcpy(workpath, path);
+		checkPara();
 	}
 }
 
@@ -112,9 +114,10 @@ void Para::readPara()
 		if (strstr(str, "Ly")       ) { s = strchr(str, '='); sscanf(++s, "%lf", & Ly); }
 		if (strstr(str, "Lz")       ) { s = strchr(str, '='); sscanf(++s, "%lf", & Lz); }
 		if (strstr(str, "dy_min")   ) { s = strchr(str, '='); sscanf(++s, "%lf", & dy_min); }
+		if (strstr(str, "prd")      ) { s = strchr(str, '='); sscanf(++s, "%i",  & prd); }
 		if (strstr(str, "Nt")       ) { s = strchr(str, '='); sscanf(++s, "%i",  & Nt); }
 		if (strstr(str, "dt")       ) { s = strchr(str, '='); sscanf(++s, "%lf", & dt); }
-		if (strstr(str, "nread")    ) { s = strchr(str, '='); sscanf(++s, "%i",  & nread); }
+		if (strstr(str, "inread")   ) { s = strchr(str, '='); sscanf(++s, "%i",  & inread); }
 		if (strstr(str, "nwrite")   ) { s = strchr(str, '='); sscanf(++s, "%i",  & nwrite); }
 		if (strstr(str, "nprint")   ) { s = strchr(str, '='); sscanf(++s, "%i",  & nprint); }
 		if (strstr(str, "nprobe")   ) { s = strchr(str, '='); sscanf(++s, "%i",  & nprobe); }
@@ -133,7 +136,7 @@ void Para::readPara()
 }
 
 
-void Para::showPara()
+void Para::showPara() const
 {
 	cout << endl;
 	cout << "-------------------- PARAMETERS --------------------" << endl;
@@ -156,12 +159,13 @@ void Para::showPara()
 	cout << "Nx = " << Nx << ", Ny = " << Ny << ", Nz = " << Nz << endl;
 	cout << "Lx = " << Lx << ", Ly = " << Ly << ", Lz = " << Lz << endl;
 	cout << "dy_min = " << dy_min << endl;
+	cout << "prd = " << prd << endl;
 	cout << endl;
 	cout << "Time Control:" << endl;
 	cout << "Nt = " << Nt << ", dt = " << dt << endl;
 	cout << endl;
 	cout << "IO control:" << endl;
-	cout << "nread = " << nread << endl;
+	cout << "inread = " << inread << endl;
 	cout << "nwrite = " << nwrite << endl;
 	cout << "nprint = " << nprint << endl;
 	cout << "nprobe = " << nprobe << endl;

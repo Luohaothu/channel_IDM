@@ -22,7 +22,7 @@ void read_PIO_Mod(
 	double lc, double y);
 
 
-Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, double rsclx, double rsclu)
+void PIO::PredictBoundary(Vctr &veltmp, const Vctr &vel, const Vctr &velmfu, double Ret, double rsclx, double rsclu)
 {
 	const Mesh &ms = vel.ms;
 	const Mesh &ms0 = velmfu.ms;
@@ -33,24 +33,17 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 	double yo1 = 3.9 / sqrt(Ret); // position of outer signal
 	double yo2 = 2. - yo1;
 
-	Geometry_prdxz geo1(ms.Nx,2,ms.Nz, ms.Lx, yb2-yb1, ms.Lz); // to hold u_p
-	Geometry_prdxz geo2(ms.Nx,2,ms.Nz, ms.Lx, yo2-yo1, ms.Lz); // to hold uL
-
-	geo1.InitMesh(0); geo1.InitInterval(); geo1.InitWaveNumber(); geo1.InitIndices();
-	geo2.InitMesh(0); geo2.InitInterval(); geo2.InitWaveNumber(); geo2.InitIndices();
-
-	const Mesh msb(geo1); Vctr velb(msb); velb.Set(0);
-	const Mesh mso(geo2); Vctr velo(mso); velo.Set(0);
-
-	Scla &ub = velb[1], &vb = velb[2], &wb = velb[3];
-	Scla &uo = velo[1], &vo = velo[2], &wo = velo[3];
+	Vctr &velo = veltmp;
+	Vctr &velb = veltmp;
+	Scla &uo = velo[1], &vo = velo[2], &wo = velo[3]; // to hold uL
+	Scla &ub = velb[1], &vb = velb[2], &wb = velb[3]; // to hold u_p
 
 	// PIO coefficients
-	double *hr = new double[mso.Nxc], alfv, dxav, dzav;
-	double *hi = new double[mso.Nxc], alfw, dxaw, dzaw;
+	double *hr = new double[ms.Nxc], alfv, dxav, dzav;
+	double *hi = new double[ms.Nxc], alfw, dxaw, dzaw;
 
 	read_PIO_Sup(hr, hi, alfv, dxav, dzav,
-					 alfw, dxaw, dzaw, 1./Ret, yb1, geo2.kx, mso.Nxc);
+					 alfw, dxaw, dzaw, 1./Ret, yb1, ms.kx(), ms.Nxc);
 
 	double gmaup, dxup, dzup;
 	double gmaum, dxum, dzum;
@@ -62,37 +55,32 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 				 gmav,  dxv,  dzv,
 				 gmaw,  dxw,  dzw, 1./Ret, yb1);
 
-	// filter from MFU matching inner scale
-	#pragma omp parallel for collapse(3)
-	for (int j=0; j<=msb.Ny; j++) {
-	for (int k=0; k<=msb.Nz; k++) {
-	for (int i=0; i<=msb.Nx; i++) {
 
-		double x  = msb.x (i) * rsclx, xc = msb.xc(i) * rsclx;
-		double z  = msb.z (k) * rsclx, zc = msb.zc(k) * rsclx;
-		double dx = msb.dx(i) * rsclx, hx = msb.hx(i) * rsclx;
-		double dz = msb.dz(k) * rsclx, hz = msb.hz(k) * rsclx;
-		double y  = Filter::WallRscl(msb.y (j), rsclx);
-		double yc = Filter::WallRscl(msb.yc(j), rsclx);
+	int jo1 = 2; // position in veltmp to store uOL
+	int jo2 = jo1 + 1;
+	
+	#pragma omp parallel
+	{
+		// interpolate from LES outer region, mean values will be removed later
+		#pragma omp for collapse(2)
+		for (int k=1; k<ms.Nz; k++) {
+		for (int i=1; i<ms.Nx; i++) {
 
-		if (i>0) ub(i,j,k) = Filter::FilterNodeU(x,yc,zc, hx,0,dz, velmfu[1]) * rsclu;
-		if (j>0) vb(i,j,k) = Filter::FilterNodeV(xc,y,zc, dx,0,dz, velmfu[2]) * rsclu;
-		if (k>0) wb(i,j,k) = Filter::FilterNodeW(xc,yc,z, dx,0,hz, velmfu[3]) * rsclu;
+			double x = ms.x(i), xc = ms.xc(i);
+			double z = ms.z(k), zc = ms.zc(k);
 
-		// handle HALFMFU
-		if (1+msb.Ny < 2/ms0.Ly*j) vb(i,j,k) *= -1;
-	}}}
+			uo(i,jo1,k) = Interp::InterpNodeU(x, yo1,zc,vel[1]);
+			vo(i,jo1,k) = Interp::InterpNodeV(xc,yo1,zc,vel[2]);
+			wo(i,jo1,k) = Interp::InterpNodeW(xc,yo1,z, vel[3]);
 
-	// interpolate from LES outer region
-	Interp::InterpBulkU(uo, vel[1]); // mean values will be removed later
-	Interp::InterpBulkV(vo, vel[2]);
-	Interp::InterpBulkW(wo, vel[3]);
+			uo(i,jo2,k) = Interp::InterpNodeU(x, yo2,zc,vel[1]);
+			vo(i,jo2,k) = Interp::InterpNodeV(xc,yo2,zc,vel[2]);
+			wo(i,jo2,k) = Interp::InterpNodeW(xc,yo2,z, vel[3]);
+		}}
 
-	// get uL, vOL, wOL
-	uo.fftx();
-	vo.fftxz();
-	wo.fftxz();
-
+		uo.fftx (jo1, jo2);
+		vo.fftxz(jo1, jo2);
+		wo.fftxz(jo1, jo2);
 
 	// // keep the random perturbation of vo constant in time and random in space
 	// static bool randinput = true;
@@ -104,20 +92,17 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 	// 	randinput = false;
 	// }
 
-	
-	#pragma omp parallel
-	{
 		#pragma omp for collapse(2)
-		for (int j=0; j<=2; j+=2) {
-		for (int i=0; i<mso.Nxc; i++) {
+		for (int j=jo1; j<=jo2; j++) {
+		for (int i=0; i<ms.Nxc; i++) {
 
 			// get mean value at wave number k_x = 0
 			double um = 0;
 			if (i == 0)
-				for (int k=1; k<mso.Nz; k++)
-					um += uo(2*i,j,k) / (mso.Nz-1.);
+				for (int k=1; k<ms.Nz; k++)
+					um += uo(2*i,j,k) / (ms.Nz-1.);
 
-			for (int k=1; k<mso.Nz; k++) {
+			for (int k=1; k<ms.Nz; k++) {
 				double ur = uo(2*i,  j,k) - um;
 				double ui = uo(2*i+1,j,k);
 				// H needs conj because the fft defined in calibration is inversed
@@ -126,18 +111,18 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 			}
 		}}
 
-		#pragma omp for
-		for (int k=0; k<mso.Nz-1; k++) {
-		for (int i=0; i<mso.Nxc; i++) {
+		#pragma omp for collapse(2)
+		for (int k=0; k<ms.Nz-1; k++) {
+		for (int i=0; i<ms.Nxc; i++) {
 			// keep only the fluctuations with scale strictly larger than MFU
-			if (fabs(mso.kx(i)/rsclx) >= 2.*PI/ms0.Lx ||
-				fabs(mso.kz(k)/rsclx) >= 2.*PI/ms0.Lz ||
+			if (fabs(ms.kx(i)/rsclx) >= 2.*PI/ms0.Lx ||
+				fabs(ms.kz(k)/rsclx) >= 2.*PI/ms0.Lz ||
 				(k==0 && i==0))
 			{
-				vo(2*i,1,k) = 0; vo(2*i+1,1,k) = 0;
-				wo(2*i,0,k) = 0; wo(2*i+1,0,k) = 0;
-				vo(2*i,2,k) = 0; vo(2*i+1,2,k) = 0;
-				wo(2*i,2,k) = 0; wo(2*i+1,2,k) = 0;
+				vo(2*i,jo1,k) = 0; vo(2*i+1,jo1,k) = 0;
+				wo(2*i,jo1,k) = 0; wo(2*i+1,jo1,k) = 0;
+				vo(2*i,jo2,k) = 0; vo(2*i+1,jo2,k) = 0;
+				wo(2*i,jo2,k) = 0; wo(2*i+1,jo2,k) = 0;
 			}
 			// // offset vOL by half channel width (and/or length) to break the correlation between u & v
 			// else if (k%2 ^ i%2) {
@@ -166,14 +151,17 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 			// 	// if (i==5 && k==5) cout << "0 " << phi << endl;
 			// }
 		}}
-	}
 
-	uo.ifftx();
-	vo.ifftxz();
-	wo.ifftxz();
+		uo.ifftx (jo1, jo2);
+		vo.ifftxz(jo1, jo2);
+		wo.ifftxz(jo1, jo2);
+	}
 
 	Bcond::SetBoundaryX(velo);
 	Bcond::SetBoundaryZ(velo);
+
+	delete[] hr;
+	delete[] hi;
 
 
 	// // check large-scale Reynolds stress
@@ -186,22 +174,43 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 	// cout << uv << endl;
 
 
+	// filter from MFU matching inner scale
+	for (int j=0; j<=ms.Ny; j+=(j ? ms.Ny-1 : 1)) {
+	#pragma omp parallel for collapse(2)
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+
+		double x  = ms.x (i) * rsclx, xc = ms.xc(i) * rsclx;
+		double z  = ms.z (k) * rsclx, zc = ms.zc(k) * rsclx;
+		double dx = ms.dx(i) * rsclx, hx = ms.hx(i) * rsclx;
+		double dz = ms.dz(k) * rsclx, hz = ms.hz(k) * rsclx;
+		double y  = Filter::WallRscl(ms.y (j), rsclx);
+		double yc = Filter::WallRscl(ms.yc(j), rsclx);
+
+		if (i>0) ub(i,j,k) = Filter::FilterNodeU(x,yc,zc, hx,0,dz, velmfu[1]) * rsclu;
+		if (j>0) vb(i,j,k) = Filter::FilterNodeV(xc,y,zc, dx,0,dz, velmfu[2]) * rsclu;
+		if (k>0) wb(i,j,k) = Filter::FilterNodeW(xc,yc,z, dx,0,hz, velmfu[3]) * rsclu;
+
+		// handle HALFMFU
+		if (1+ms.Ny < 2/ms0.Ly*j) vb(i,j,k) *= -1;
+	}}}
+
 #ifdef MODULATION
 	// modulation
-	for (int j=0; j<=2; j++) {
+	for (int j=0; j<=ms.Ny; j+=(j ? ms.Ny-1 : 1)) {
 
 		double um = ub.meanxz(j);
 		double vm = vb.meanxz(j);
 		double wm = wb.meanxz(j);
-		double uom = uo.meanxz(j);
+		double uom= uo.meanxz(j<=1 ? jo1 : jo2);
 
-		#pragma omp parallel for
-		for (int k=1; k<msb.Nz; k++) {
-		for (int i=1; i<msb.Nx; i++) {
+		#pragma omp parallel for collapse(2)
+		for (int k=1; k<ms.Nz; k++) {
+		for (int i=1; i<ms.Nx; i++) {
 
-			double x = msb.x(i), xc = msb.xc(i);
-			double z = msb.z(k), zc = msb.zc(k);
-			double y = j<=1 ? yo1 : yo2;
+			double x = ms.x(i), xc = ms.xc(i);
+			double z = ms.z(k), zc = ms.zc(k);
+			double y = j<=1 ? ms.yc(jo1) : ms.yc(jo2);
 
 			double modu;
 			double modv = gmav * (Interp::InterpNodeU(xc+dxv,y,zc+dzv,uo) - uom);
@@ -218,225 +227,219 @@ Vctr PIO::BoundaryPredict(const Vctr &vel, const Vctr &velmfu, double Ret, doubl
 #endif
 
 	// combine small- & large-scales
-	#pragma omp parallel for
-	for (int k=1; k<msb.Nz; k++) {
-	for (int i=1; i<msb.Nx; i++) {
+	#pragma omp parallel for collapse(2)
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
 
-		ub(i,0,k) += uo(i,0,k);
-		ub(i,2,k) += uo(i,2,k);
+		ub(i,0,    k) += uo(i,jo1,k);
+		ub(i,ms.Ny,k) += uo(i,jo2,k);
 
-		double x = msb.xc(i) + dxav;
-		double z = msb.zc(k) + dzav;
+		double x = ms.xc(i) + dxav;
+		double z = ms.zc(k) + dzav;
 
-		vb(i,1,k) += alfv * Interp::InterpNodeV(x,yo1,z,vo);
-		vb(i,2,k) += alfv * Interp::InterpNodeV(x,yo2,z,vo);
+		vb(i,1,    k) += alfv * Interp::InterpNodeV(x,ms.y(jo1),z,vo);
+		vb(i,ms.Ny,k) += alfv * Interp::InterpNodeV(x,ms.y(jo2),z,vo);
 
-		x = msb.xc(i) + dxaw;
-		z = msb.z (k) + dzaw;
+		x = ms.xc(i) + dxaw;
+		z = ms.z (k) + dzaw;
 
-		wb(i,0,k) += alfw * Interp::InterpNodeW(x,yo1,z,wo);
-		wb(i,2,k) += alfw * Interp::InterpNodeW(x,yo2,z,wo);
+		wb(i,0,    k) += alfw * Interp::InterpNodeW(x,ms.yc(jo1),z,wo);
+		wb(i,ms.Ny,k) += alfw * Interp::InterpNodeW(x,ms.yc(jo2),z,wo);
 	}}
 
 	Bcond::SetBoundaryX(velb);
 	Bcond::SetBoundaryZ(velb);
 
-	delete[] hr;
-	delete[] hi;
-
 	// record for debug
 	// static int cnt = 0;
 	// if ((++cnt) % 5000 == 0)
 	// 	PIO::Predict(yb1, vel, velmfu, Ret, rsclx, rsclu, cnt);
-
-
-	return velb;
 }
 
 
-Vctr PIO::Predict(double y, const Vctr &velout, const Vctr &veluni, double Ret, double rsclx, double rsclu, int cnt)
-{
-	const Mesh &ms = velout.ms;
-	const Mesh &ms0 = veluni.ms;
+// Vctr PIO::Predict(double y, const Vctr &velout, const Vctr &veluni, double Ret, double rsclx, double rsclu, int cnt)
+// {
+// 	const Mesh &ms = velout.ms;
+// 	const Mesh &ms0 = veluni.ms;
 
-	double yb1 = y,               yb2 = 2. - y; // positions to predict
-	double yo1 = 3.9 / sqrt(Ret), yo2 = 2. - yo1; // positions of outer signal
+// 	double yb1 = y,               yb2 = 2. - y; // positions to predict
+// 	double yo1 = 3.9 / sqrt(Ret), yo2 = 2. - yo1; // positions of outer signal
 
-	int nx = (int)round(rsclx * ms.Lx / ms0.Lx) * (ms0.Nx-1) + 1;
-	int nz = (int)round(rsclx * ms.Lz / ms0.Lz) * (ms0.Nz-1) + 1;
+// 	int nx = (int)round(rsclx * ms.Lx / ms0.Lx) * (ms0.Nx-1) + 1;
+// 	int nz = (int)round(rsclx * ms.Lz / ms0.Lz) * (ms0.Nz-1) + 1;
 
-	Geometry_prdxz geo1(nx,   2,   nz, ms.Lx, yb2-yb1, ms.Lz); // to hold uS
-	Geometry_prdxz geo2(ms.Nx,2,ms.Nz, ms.Lx, yo2-yo1, ms.Lz); // to hold uL
+// 	Geometry_prdxz geo1(nx,   2,   nz, ms.Lx, yb2-yb1, ms.Lz); // to hold uS
+// 	Geometry_prdxz geo2(ms.Nx,2,ms.Nz, ms.Lx, yo2-yo1, ms.Lz); // to hold uL
 
-	geo1.InitMesh(0); geo1.InitInterval(); geo1.InitWaveNumber(); geo1.InitIndices();
-	geo2.InitMesh(0); geo2.InitInterval(); geo2.InitWaveNumber(); geo2.InitIndices();
+// 	geo1.InitMesh(0); geo1.InitInterval(); geo1.InitWaveNumber(); geo1.InitIndices();
+// 	geo2.InitMesh(0); geo2.InitInterval(); geo2.InitWaveNumber(); geo2.InitIndices();
 
-	const Mesh mss(geo1); Vctr vels(mss); vels.Set(0);
-	const Mesh mso(geo2); Vctr velo(mso); velo.Set(0);
+// 	const Mesh mss(geo1); Vctr vels(mss); vels.Set(0);
+// 	const Mesh mso(geo2); Vctr velo(mso); velo.Set(0);
 
-	Scla &us = vels[1], &vs = vels[2], &ws = vels[3];
-	Scla &uo = velo[1], &vo = velo[2], &wo = velo[3];
+// 	Scla &us = vels[1], &vs = vels[2], &ws = vels[3];
+// 	Scla &uo = velo[1], &vo = velo[2], &wo = velo[3];
 
-	// PIO coefficients
-	double *hr = new double[mso.Nxc], alfv, dxav, dzav;
-	double *hi = new double[mso.Nxc], alfw, dxaw, dzaw;
+// 	// PIO coefficients
+// 	double *hr = new double[mso.Nxc], alfv, dxav, dzav;
+// 	double *hi = new double[mso.Nxc], alfw, dxaw, dzaw;
 
-	double gmaup, dxup, dzup;
-	double gmaum, dxum, dzum;
-	double gmav,  dxv,  dzv;
-	double gmaw,  dxw,  dzw;
+// 	double gmaup, dxup, dzup;
+// 	double gmaum, dxum, dzum;
+// 	double gmav,  dxv,  dzv;
+// 	double gmaw,  dxw,  dzw;
 
-	read_PIO_Sup(hr, hi, alfv, dxav, dzav,
-					 alfw, dxaw, dzaw, 1./Ret, yb1, geo2.kx, mso.Nxc);
+// 	read_PIO_Sup(hr, hi, alfv, dxav, dzav,
+// 					 alfw, dxaw, dzaw, 1./Ret, yb1, geo2.kx, mso.Nxc);
 
-	read_PIO_Mod(gmaup, dxup, dzup,
-				 gmaum, dxum, dzum,
-				 gmav,  dxv,  dzv,
-				 gmaw,  dxw,  dzw, 1./Ret, yb1);
+// 	read_PIO_Mod(gmaup, dxup, dzup,
+// 				 gmaum, dxum, dzum,
+// 				 gmav,  dxv,  dzv,
+// 				 gmaw,  dxw,  dzw, 1./Ret, yb1);
 
-	// interpolate from MFU matching inner scale
-	#pragma omp parallel for collapse(2)
-	for (int j=0; j<=mss.Ny; j++) {
-	for (int k=0; k<=mss.Nz; k++) {
-	for (int i=0; i<=mss.Nx; i++) {
+// 	// interpolate from MFU matching inner scale
+// 	#pragma omp parallel for collapse(2)
+// 	for (int j=0; j<=mss.Ny; j++) {
+// 	for (int k=0; k<=mss.Nz; k++) {
+// 	for (int i=0; i<=mss.Nx; i++) {
 
-		double x = mss.x(i) * rsclx, xc = mss.xc(i) * rsclx;
-		double z = mss.z(k) * rsclx, zc = mss.zc(k) * rsclx;
-		double y = Filter::WallRscl(mss.y (j), rsclx);
-		double yc= Filter::WallRscl(mss.yc(j), rsclx);
+// 		double x = mss.x(i) * rsclx, xc = mss.xc(i) * rsclx;
+// 		double z = mss.z(k) * rsclx, zc = mss.zc(k) * rsclx;
+// 		double y = Filter::WallRscl(mss.y (j), rsclx);
+// 		double yc= Filter::WallRscl(mss.yc(j), rsclx);
 
-		if (i>0) us(i,j,k) = Interp::InterpNodeU(x,yc,zc,veluni[1]) * rsclu;
-		if (j>0) vs(i,j,k) = Interp::InterpNodeV(xc,y,zc,veluni[2]) * rsclu;
-		if (k>0) ws(i,j,k) = Interp::InterpNodeW(xc,yc,z,veluni[3]) * rsclu;
+// 		if (i>0) us(i,j,k) = Interp::InterpNodeU(x,yc,zc,veluni[1]) * rsclu;
+// 		if (j>0) vs(i,j,k) = Interp::InterpNodeV(xc,y,zc,veluni[2]) * rsclu;
+// 		if (k>0) ws(i,j,k) = Interp::InterpNodeW(xc,yc,z,veluni[3]) * rsclu;
 
-		// handle HALFMFU
-		if (1+mss.Ny < 2/ms0.Ly*j) vs(i,j,k) *= -1;
-	}}}
+// 		// handle HALFMFU
+// 		if (1+mss.Ny < 2/ms0.Ly*j) vs(i,j,k) *= -1;
+// 	}}}
 
-	// interpolate from LES outer region
-	Interp::InterpBulkU(uo, velout[1]); // mean values will be removed later
-	Interp::InterpBulkV(vo, velout[2]);
-	Interp::InterpBulkW(wo, velout[3]);
+// 	// interpolate from LES outer region
+// 	Interp::InterpBulkU(uo, velout[1]); // mean values will be removed later
+// 	Interp::InterpBulkV(vo, velout[2]);
+// 	Interp::InterpBulkW(wo, velout[3]);
 
-	// get uL, vOL, wOL
-	uo.fftx();
-	vo.fftxz();
-	wo.fftxz();
+// 	// get uL, vOL, wOL
+// 	uo.fftx();
+// 	vo.fftxz();
+// 	wo.fftxz();
 
-	#pragma omp parallel
-	{
-		#pragma omp for collapse(2)
-		for (int j=0; j<=2; j+=2) {
-		for (int i=0; i<mso.Nxc; i++) {
+// 	#pragma omp parallel
+// 	{
+// 		#pragma omp for collapse(2)
+// 		for (int j=0; j<=2; j+=2) {
+// 		for (int i=0; i<mso.Nxc; i++) {
 
-			// get mean value at wave number k_x = 0
-			double um = 0;
-			if (i == 0)
-				for (int k=1; k<mso.Nz; k++)
-					um += uo(2*i,j,k) / (mso.Nz-1.);
+// 			// get mean value at wave number k_x = 0
+// 			double um = 0;
+// 			if (i == 0)
+// 				for (int k=1; k<mso.Nz; k++)
+// 					um += uo(2*i,j,k) / (mso.Nz-1.);
 
-			for (int k=1; k<mso.Nz; k++) {
-				double ur = uo(2*i,  j,k) - um;
-				double ui = uo(2*i+1,j,k);
-				// H needs conj because the fft defined in calibration is inversed
-				uo(2*i,  j,k) = hr[i] * ur + hi[i] * ui;
-				uo(2*i+1,j,k) = hr[i] * ui - hi[i] * ur;
-			}
-		}}
+// 			for (int k=1; k<mso.Nz; k++) {
+// 				double ur = uo(2*i,  j,k) - um;
+// 				double ui = uo(2*i+1,j,k);
+// 				// H needs conj because the fft defined in calibration is inversed
+// 				uo(2*i,  j,k) = hr[i] * ur + hi[i] * ui;
+// 				uo(2*i+1,j,k) = hr[i] * ui - hi[i] * ur;
+// 			}
+// 		}}
 
-		#pragma omp for
-		for (int k=0; k<mso.Nz-1; k++) {
-		for (int i=0; i<mso.Nxc; i++) {
-			// keep only the fluctuations with scale strictly larger than MFU
-			if (fabs(mso.kx(i)/rsclx) >= 2.*PI/ms0.Lx ||
-				fabs(mso.kz(k)/rsclx) >= 2.*PI/ms0.Lz ||
-				(k==0 && i==0))
-			{
-				vo(2*i,1,k) = 0; vo(2*i+1,1,k) = 0;
-				wo(2*i,0,k) = 0; wo(2*i+1,0,k) = 0;
-				vo(2*i,2,k) = 0; vo(2*i+1,2,k) = 0;
-				wo(2*i,2,k) = 0; wo(2*i+1,2,k) = 0;
-			}
-		}}
-	}
+// 		#pragma omp for
+// 		for (int k=0; k<mso.Nz-1; k++) {
+// 		for (int i=0; i<mso.Nxc; i++) {
+// 			// keep only the fluctuations with scale strictly larger than MFU
+// 			if (fabs(mso.kx(i)/rsclx) >= 2.*PI/ms0.Lx ||
+// 				fabs(mso.kz(k)/rsclx) >= 2.*PI/ms0.Lz ||
+// 				(k==0 && i==0))
+// 			{
+// 				vo(2*i,1,k) = 0; vo(2*i+1,1,k) = 0;
+// 				wo(2*i,0,k) = 0; wo(2*i+1,0,k) = 0;
+// 				vo(2*i,2,k) = 0; vo(2*i+1,2,k) = 0;
+// 				wo(2*i,2,k) = 0; wo(2*i+1,2,k) = 0;
+// 			}
+// 		}}
+// 	}
 
-	uo.ifftx();
-	vo.ifftxz();
-	wo.ifftxz();
+// 	uo.ifftx();
+// 	vo.ifftxz();
+// 	wo.ifftxz();
 
-	Bcond::SetBoundaryX(velo);
-	Bcond::SetBoundaryZ(velo);
+// 	Bcond::SetBoundaryX(velo);
+// 	Bcond::SetBoundaryZ(velo);
 
-	delete[] hr;
-	delete[] hi;
+// 	delete[] hr;
+// 	delete[] hi;
 
-	// here MODULATION should always stay since the purpose of this function is to obtain highly resolved predicted field
-	for (int j=0; j<=2; j++) {
+// 	// here MODULATION should always stay since the purpose of this function is to obtain highly resolved predicted field
+// 	for (int j=0; j<=2; j++) {
 
-		double um = us.meanxz(j);
-		double vm = vs.meanxz(j);
-		double wm = ws.meanxz(j);
-		double uom = uo.meanxz(j); // uom seems unnecessary since mean of uo has been removed when calculating uL
+// 		double um = us.meanxz(j);
+// 		double vm = vs.meanxz(j);
+// 		double wm = ws.meanxz(j);
+// 		double uom = uo.meanxz(j); // uom seems unnecessary since mean of uo has been removed when calculating uL
 
-		#pragma omp parallel for
-		for (int k=1; k<mss.Nz; k++) {
-		for (int i=1; i<mss.Nx; i++) {
+// 		#pragma omp parallel for
+// 		for (int k=1; k<mss.Nz; k++) {
+// 		for (int i=1; i<mss.Nx; i++) {
 
-			double x = mss.x(i), xc = mss.xc(i);
-			double z = mss.z(k), zc = mss.zc(k);
-			double y = j<=1 ? yo1 : yo2;
+// 			double x = mss.x(i), xc = mss.xc(i);
+// 			double z = mss.z(k), zc = mss.zc(k);
+// 			double y = j<=1 ? yo1 : yo2;
 
-			double modu;
-			double modv = gmav * (Interp::InterpNodeU(xc+dxv,y,zc+dzv,uo) - uom);
-			double modw = gmaw * (Interp::InterpNodeU(xc+dxw,y,z +dzw,uo) - uom);
+// 			double modu;
+// 			double modv = gmav * (Interp::InterpNodeU(xc+dxv,y,zc+dzv,uo) - uom);
+// 			double modw = gmaw * (Interp::InterpNodeU(xc+dxw,y,z +dzw,uo) - uom);
 
-			if (us(i,j,k) > um) modu = gmaup * (Interp::InterpNodeU(x+dxup,y,zc+dzup,uo) - uom);
-			else                modu = gmaum * (Interp::InterpNodeU(x+dxum,y,zc+dzum,uo) - uom);
+// 			if (us(i,j,k) > um) modu = gmaup * (Interp::InterpNodeU(x+dxup,y,zc+dzup,uo) - uom);
+// 			else                modu = gmaum * (Interp::InterpNodeU(x+dxum,y,zc+dzum,uo) - uom);
 
-			if (j != 1) us(i,j,k) = um + (us(i,j,k) - um) * (1 + modu);
-			if (j != 0) vs(i,j,k) = vm + (vs(i,j,k) - vm) * (1 + modv);
-			if (j != 1) ws(i,j,k) = wm + (ws(i,j,k) - wm) * (1 + modw);
-		}}
-	}
+// 			if (j != 1) us(i,j,k) = um + (us(i,j,k) - um) * (1 + modu);
+// 			if (j != 0) vs(i,j,k) = vm + (vs(i,j,k) - vm) * (1 + modv);
+// 			if (j != 1) ws(i,j,k) = wm + (ws(i,j,k) - wm) * (1 + modw);
+// 		}}
+// 	}
 
-	// superposition
-	#pragma omp parallel for
-	for (int k=1; k<mss.Nz; k++) {
-	for (int i=1; i<mss.Nx; i++) {
+// 	// superposition
+// 	#pragma omp parallel for
+// 	for (int k=1; k<mss.Nz; k++) {
+// 	for (int i=1; i<mss.Nx; i++) {
 
-		double x = mss.x (i);
-		double z = mss.zc(k);
+// 		double x = mss.x (i);
+// 		double z = mss.zc(k);
 
-		us(i,0,k) += Interp::InterpNodeU(x,yo1,z,uo);
-		us(i,2,k) += Interp::InterpNodeU(x,yo2,z,uo);
+// 		us(i,0,k) += Interp::InterpNodeU(x,yo1,z,uo);
+// 		us(i,2,k) += Interp::InterpNodeU(x,yo2,z,uo);
 
-		x = mss.xc(i) + dxav;
-		z = mss.zc(k) + dzav;
+// 		x = mss.xc(i) + dxav;
+// 		z = mss.zc(k) + dzav;
 
-		vs(i,1,k) += alfv * Interp::InterpNodeV(x,yo1,z,vo);
-		vs(i,2,k) += alfv * Interp::InterpNodeV(x,yo2,z,vo);
+// 		vs(i,1,k) += alfv * Interp::InterpNodeV(x,yo1,z,vo);
+// 		vs(i,2,k) += alfv * Interp::InterpNodeV(x,yo2,z,vo);
 
-		x = mss.xc(i) + dxaw;
-		z = mss.z (k) + dzaw;
+// 		x = mss.xc(i) + dxaw;
+// 		z = mss.z (k) + dzaw;
 
-		ws(i,0,k) += alfw * Interp::InterpNodeW(x,yo1,z,wo);
-		ws(i,2,k) += alfw * Interp::InterpNodeW(x,yo2,z,wo);
-	}}
+// 		ws(i,0,k) += alfw * Interp::InterpNodeW(x,yo1,z,wo);
+// 		ws(i,2,k) += alfw * Interp::InterpNodeW(x,yo2,z,wo);
+// 	}}
 
-	Bcond::SetBoundaryX(vels);
-	Bcond::SetBoundaryZ(vels);
+// 	Bcond::SetBoundaryX(vels);
+// 	Bcond::SetBoundaryZ(vels);
 
-	// record for debug
-	char str[32];
-	sprintf(str, "UBOT%08i", max(cnt,0)); us.debug_AsciiOutput("test/probedata/", str, 0,1);
-	sprintf(str, "VBOT%08i", max(cnt,0)); vs.debug_AsciiOutput("test/probedata/", str, 1,2);
-	sprintf(str, "WBOT%08i", max(cnt,0)); ws.debug_AsciiOutput("test/probedata/", str, 0,1);
-	sprintf(str, "UTOP%08i", max(cnt,0)); us.debug_AsciiOutput("test/probedata/", str, 2,3);
-	sprintf(str, "VTOP%08i", max(cnt,0)); vs.debug_AsciiOutput("test/probedata/", str, 2,3);
-	sprintf(str, "WTOP%08i", max(cnt,0)); ws.debug_AsciiOutput("test/probedata/", str, 2,3);
+// 	// record for debug
+// 	char str[32];
+// 	sprintf(str, "UBOT%08i", max(cnt,0)); us.debug_AsciiOutput("test/probedata/", str, 0,1);
+// 	sprintf(str, "VBOT%08i", max(cnt,0)); vs.debug_AsciiOutput("test/probedata/", str, 1,2);
+// 	sprintf(str, "WBOT%08i", max(cnt,0)); ws.debug_AsciiOutput("test/probedata/", str, 0,1);
+// 	sprintf(str, "UTOP%08i", max(cnt,0)); us.debug_AsciiOutput("test/probedata/", str, 2,3);
+// 	sprintf(str, "VTOP%08i", max(cnt,0)); vs.debug_AsciiOutput("test/probedata/", str, 2,3);
+// 	sprintf(str, "WTOP%08i", max(cnt,0)); ws.debug_AsciiOutput("test/probedata/", str, 2,3);
 
-	return vels;
-}
+// 	return vels;
+// }
 
 
 void PIO::PredictBoundarySGS(Vctr &shearsgs, const Vctr &velout, double Ret)
@@ -448,14 +451,8 @@ void PIO::PredictBoundarySGS(Vctr &shearsgs, const Vctr &velout, double Ret)
 	double yo1 = 3.9 / sqrt(Ret); // position of outer signal
 	double yo2 = 2. - yo1;
 
-	Geometry_prdxz geo2(ms.Nx,2,ms.Nz, ms.Lx, yo2-yo1, ms.Lz); // to hold uL
-
-	geo2.InitMesh(0);
-	geo2.InitInterval();
-	geo2.InitWaveNumber();
-	geo2.InitIndices();
-
-	const Mesh mso(geo2);
+	Geometry_prdxz geo(ms.Nx,2,ms.Nz, ms.Lx, yo2-yo1, ms.Lz); // to hold uL
+	const Mesh mso(geo.Init(0));
 	Vctr velo(mso);
 	velo.Set(0);
 
@@ -478,7 +475,7 @@ void PIO::PredictBoundarySGS(Vctr &shearsgs, const Vctr &velout, double Ret)
 	double gmaw,  dxw,  dzw;
 
 	read_PIO_Sup(hr, hi, alfv, dxav, dzav,
-					 alfw, dxaw, dzaw, 1./Ret, ms.y(1), geo2.kx, mso.Nxc);
+					 alfw, dxaw, dzaw, 1./Ret, ms.y(1), geo.kx, mso.Nxc);
 
 	read_PIO_Mod(gmaup, dxup, dzup,
 				 gmaum, dxum, dzum,

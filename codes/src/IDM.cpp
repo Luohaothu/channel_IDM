@@ -4,45 +4,42 @@
 using namespace std;
 
 
-void IDM::calc(Flow &fld, Flow &fldh,
+void IDM::calc(Flow &fldh, const Flow &fld,
 	const Flow &vis, const Vctr &fb, const Boundaries &bc, const Boundaries &sbc, double dt)
 {
-	const Vctr &velh = fldh.GetVec();
 	const Vctr &vel = fld.SeeVec();
-	const Scla &p = fld.SeeScl();
-	Scla &dp = fldh.GetScl();
+	const Scla &p   = fld.SeeScl();
 
-	// uhcalc
+	Vctr &velh = fldh.GetVec();
+	Scla &dp   = fldh.GetScl();
+
 	#pragma omp parallel
 	{
+		// uhcalc
 		urhs1(fldh.GetVec(1), fld, vis, fb[1], bc, sbc);
 		urhs2(fldh.GetVec(2), fld, vis, fb[2], bc, sbc);
 		urhs3(fldh.GetVec(3), fld, vis, fb[3], bc, sbc);
 
-		#pragma omp single
 		fldh.CleanBoundary();
 		
 		getuh1(fldh.GetVec(), vel, vis, sbc, dt);
 		getuh2(fldh.GetVec(), vel, vis, sbc, dt);
 		getuh3(fldh.GetVec(), vel, vis, sbc, dt);
+
+		// dpcalc
+		rhsdp(dp, velh, bc, sbc, dt); // rdp (which shares memory with dp)
+		
+		if (dp.ms.x(0)) dp.dctxz(); // rdp->frdp
+		else            dp.fftxz();
+
+		getfdp(dp, sbc, p.meanxz(fld.ms.Ny-1)); // frdp->fdp
+
+		if (dp.ms.x(0)) dp.idctxz(); // fdp->dp
+		else            dp.ifftxz();
+
+		// upcalc
+		update(fldh, fld, dt);
 	}
-
-	// dpcalc
-	#pragma omp parallel
-	rhsdp(dp, velh, bc, sbc, dt); // rdp (which shares memory with dp)
-	
-	if (fld.ms.x(0)) dp.dctxz(); // rdp->frdp
-	else             dp.fftxz();
-
-	#pragma omp parallel
-	getfdp(dp, sbc, p.meanxz(fld.ms.Ny-1)); // frdp->fdp
-
-	if (fld.ms.x(0)) dp.idctxz(); // fdp->dp
-	else             dp.ifftxz();
-
-	// upcalc
-	#pragma omp parallel
-	update(fld, fldh, dt);
 }
 
 
@@ -1179,15 +1176,20 @@ void IDM::getfdp(Scla &fdp, const Boundaries &sbc, double refp)
 
 
 
-void IDM::update(Flow &fld, Flow &fldh, double dt)
+void IDM::update(Flow &fldh, const Flow &fld, double dt)
 /* project from U^* to U^n+1 using DP */
 {
 	const Mesh &ms = fld.ms;
 
-	Scla &u = fld.GetVec(1), &uh = fldh.GetVec(1);
-	Scla &v = fld.GetVec(2), &vh = fldh.GetVec(2);
-	Scla &w = fld.GetVec(3), &wh = fldh.GetVec(3);
-	Scla &p = fld.GetScl(),  &dp = fldh.GetScl();
+	const Scla &u = fld.SeeVec(1);
+	const Scla &v = fld.SeeVec(2);
+	const Scla &w = fld.SeeVec(3);
+	const Scla &p = fld.SeeScl();
+
+	Scla &uh = fldh.GetVec(1);
+	Scla &vh = fldh.GetVec(2);
+	Scla &wh = fldh.GetVec(3);
+	Scla &dp = fldh.GetScl();
 
 	#pragma omp for
 	for (int j=1; j<ms.Ny; j++) { double hyc=ms.hy(j);
@@ -1197,23 +1199,18 @@ void IDM::update(Flow &fld, Flow &fldh, double dt)
 		int id =        ms.idx(i,j,k);
 		int im, jm, km; ms.imx(i,j,k,im,jm,km);
 
-		// store time derivative in intermediate variables
-		uh[id] = (uh[id]-u[id]) / dt - (dp[id]-dp[im]) / hxc;
-		vh[id] = (vh[id]-v[id]) / dt - (dp[id]-dp[jm]) / hyc;
-		wh[id] = (wh[id]-w[id]) / dt - (dp[id]-dp[km]) / hzc;
-		
-		// update fields
-		if (i > (bool)ms.x(0)) u[id] += uh[id] * dt;
-		if (j > (bool)ms.y(0)) v[id] += vh[id] * dt;
-		if (k > (bool)ms.z(0)) w[id] += wh[id] * dt;
+		// store new field in intermediate variables
+		uh[id] -= dt/hxc * (dp[id]-dp[im]);
+		vh[id] -= dt/hyc * (dp[id]-dp[jm]);
+		wh[id] -= dt/hzc * (dp[id]-dp[km]);
 	}}}
 
 	#pragma omp barrier
-	#pragma omp for collapse(2)
+	#pragma omp for collapse(3)
 	for (int j=1; j<ms.Ny; j++)
 	for (int k=1; k<ms.Nz; k++)
 	for (int i=1; i<ms.Nx; i++)
-		p(i,j,k) += dt * (dp(i,j,k) /= dt);
+		dp(i,j,k) += p(i,j,k);
 }
 
 

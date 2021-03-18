@@ -37,6 +37,17 @@ Statis::~Statis()
 }
 
 
+double Statis::WallStress(const Vctr &vel, const Flow &vis)
+/* conpute the wall stress by extrapolation of total stress, to determine Ret */
+{
+	const Mesh &ms = vel.ms;
+	double tau = 0;
+	for (int j=1; j<=ms.Ny; j++)
+		tau += ms.hy(j) * fabs(
+			MeanVisShearStresses(j, vel, vis)[0] - ReynoldsStress(j, vel) );
+	return tau / pow(.5 * (ms.yc(ms.Ny) - ms.yc(0)), 2.);
+}
+
 double Statis::ReynoldsStress(int j, const Vctr &vel)
 /* compute the Reynolds stress R12 on the edge for a channel flow */
 {
@@ -356,10 +367,10 @@ double Statis::CheckProf(const Flow &fld, const Flow &vis, double velm[3])
 	for (int j=0; j<=ms.Ny; j++) {
 
 		// calculate means & fluctuations
-		u.MnsLyr( um_[j] = u.meanxz(j), j );
-		v.MnsLyr( vm_[j] = v.meanxz(j), j );
-		w.MnsLyr( wm_[j] = w.meanxz(j), j );
-		p.MnsLyr( pm_[j] = p.meanxz(j), j );
+		u.AddLyr(-(um_[j] = u.meanxz(j)), j );
+		v.AddLyr(-(vm_[j] = v.meanxz(j)), j );
+		w.AddLyr(-(wm_[j] = w.meanxz(j)), j );
+		p.AddLyr(-(pm_[j] = p.meanxz(j)), j );
 
 		num_[j] = nuc.meanxz(j);
 
@@ -424,7 +435,7 @@ void Statis::WriteProfile(const char *path, int tstep) const
 }
 
 
-void Statis::WriteLogfile(const char *path, int tstep, double time, const double mpg[3]) const
+void Statis::WriteLogfile(const char *path, int tstep, double time, const vector<double> &mpg) const
 {
 	FILE *fp;
 	char str[1024];
@@ -491,7 +502,7 @@ long int Statis::GetLogpos(const char *path, int tstep)
 	return pos;
 }
 
-double Statis::GetLogTime(const char *path, int tstep, double mpg[3])
+double Statis::GetLog(const char *path, int tstep, vector<double> &mpg)
 {
 	long int pos = GetLogpos(path, tstep);
 
@@ -500,14 +511,14 @@ double Statis::GetLogTime(const char *path, int tstep, double mpg[3])
 
 	double n;
 	double t = 0;
-	double ener, tau21, tau22, tau23;
+	double *dummy = new double;
 
 	if (pos > 0) {
 		FILE *fp = fopen(str, "r");
 		fseek(fp, pos, SEEK_SET);
 		if(fgets(str, 1024, fp))
 			sscanf(str, "%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf",
-				&n, &t, &ener, &tau21, &tau22, &tau23, mpg, mpg+1, mpg+2);
+				&n, &t, dummy,dummy,dummy,dummy, &mpg[0], &mpg[1], &mpg[2]);
 		fclose(fp);
 	}
 

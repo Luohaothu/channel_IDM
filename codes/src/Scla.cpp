@@ -13,6 +13,7 @@ Ny(ms.Ny),
 Nz(ms.Nz)
 {
 	q_ = new double[(Nx+1) * (Ny+1) * (Nz+1)];
+	memset(q_, 0, (Nx+1) * (Ny+1) * (Nz+1) * sizeof(double));
 
 	fft_temp = new double*[Ny+1];
 	for (int j=0; j<=Ny; j++)
@@ -103,20 +104,20 @@ Scla& Scla::operator=(const Scla &src)
 
 /***** fft *****/
 
-void Scla::fftxz()
+void Scla::fftxz(int j0, int jn)
 {
-	#pragma omp parallel for
-	for (int j=0; j<=Ny; j++) {
+	#pragma omp for
+	for (int j=j0; j<=(jn>0?jn:Ny+jn); j++) {
 		for (int k=1; k<Nz; k++)
 		for (int i=1; i<Nx; i++)
 			q_[ms.idfxz(i-1,j,k-1)] = q_[ms.idx(i,j,k)];
 		fftw_execute(frc_xz[j]);
 	}
 }
-void Scla::ifftxz()
+void Scla::ifftxz(int j0, int jn)
 {
-	#pragma omp parallel for
-	for (int j=0; j<=Ny; j++) {
+	#pragma omp for
+	for (int j=j0; j<=(jn>0?jn:Ny+jn); j++) {
 		fftw_execute(fcr_xz[j]);
 		for (int k=Nz-1; k>=1; k--)
 		for (int i=Nx-1; i>=1; i--)
@@ -124,10 +125,10 @@ void Scla::ifftxz()
 	}
 }
 
-void Scla::fftx()
+void Scla::fftx(int j0, int jn)
 {
-	#pragma omp parallel for
-	for (int j=0; j<=Ny; j++) { double *temp = fft_temp[j];
+	#pragma omp for
+	for (int j=j0; j<=(jn>0?jn:Ny+jn); j++) { double *temp = fft_temp[j];
 	for (int k=0; k<=Nz; k++) {
 		for (int i=1; i<Nx; i++)
 			temp[i-1] = q_[ms.idx(i,j,k)];
@@ -136,10 +137,10 @@ void Scla::fftx()
 			q_[ms.idx(i,j,k)] = temp[i];
 	}}
 }
-void Scla::ifftx()
+void Scla::ifftx(int j0, int jn)
 {
-	#pragma omp parallel for
-	for (int j=0; j<=Ny; j++) { double *temp = fft_temp[j];
+	#pragma omp for
+	for (int j=j0; j<=(jn>0?jn:Ny+jn); j++) { double *temp = fft_temp[j];
 	for (int k=0; k<=Nz; k++) {
 		for (int i=0; i<ms.Nxr; i++)
 			temp[i] = q_[ms.idx(i,j,k)];
@@ -149,10 +150,10 @@ void Scla::ifftx()
 	}}
 }
 
-void Scla::fftz()
+void Scla::fftz(int j0, int jn)
 {
-	#pragma omp parallel for
-	for (int j=0; j<=Ny; j++) { double *temp = fft_temp[j];
+	#pragma omp for
+	for (int j=j0; j<=(jn>0?jn:Ny+jn); j++) { double *temp = fft_temp[j];
 	for (int i=0; i<=Nx; i++) {
 		for (int k=1; k<Nz; k++)
 			temp[k-1] = q_[ms.idx(i,j,k)];
@@ -161,10 +162,10 @@ void Scla::fftz()
 			q_[ms.idx(i,j,k)] = temp[k];
 	}}
 }
-void Scla::ifftz()
+void Scla::ifftz(int j0, int jn)
 {
-	#pragma omp parallel for
-	for (int j=0; j<=Ny; j++) { double *temp = fft_temp[j];
+	#pragma omp for
+	for (int j=j0; j<=(jn>0?jn:Ny+jn); j++) { double *temp = fft_temp[j];
 	for (int i=0; i<=Nx; i++) {
 		for (int k=0; k<ms.Nzr; k++)
 			temp[k] = q_[ms.idx(i,j,k)];
@@ -174,32 +175,32 @@ void Scla::ifftz()
 	}}
 }
 
-void Scla::dctxz()
+void Scla::dctxz(int j0, int jn)
 {
-	this->dctx();
-	this->fftz();
+	this->dctx(j0, jn);
+	this->fftz(j0, jn);
 }
 
-void Scla::idctxz()
+void Scla::idctxz(int j0, int jn)
 {
-	this->ifftz();
-	this->idctx();
+	this->ifftz(j0, jn);
+	this->idctx(j0, jn);
 }
 
-void Scla::dctx()
+void Scla::dctx(int j0, int jn)
 {
-	#pragma omp parallel for
-	for (int j=0; j<=Ny; j++) {
+	#pragma omp for
+	for (int j=j0; j<=(jn>0?jn:Ny+jn); j++) {
 	for (int k=0; k<=Nz; k++) {
 		fftw_execute(frR_x[j*(Nz+1)+k]);
 		for (int i=1; i<Nx; i++)
 			q_[ms.idx(i,j,k)] /= 2;
 	}}
 }
-void Scla::idctx()
+void Scla::idctx(int j0, int jn)
 {
-	#pragma omp parallel for
-	for (int j=0; j<=Ny; j++) {
+	#pragma omp for
+	for (int j=j0; j<=(jn>0?jn:Ny+jn); j++) {
 	for (int k=0; k<=Nz; k++) {
 		fftw_execute(fRr_x[j*(Nz+1)+k]);
 		for (int i=1; i<Nx; i++)

@@ -92,6 +92,15 @@ void Geometry::DeepCopy(const Geometry &geo)
 	}
 }
 
+Geometry& Geometry::Init(double dy_min, const char *path)
+// a wrapper for Geometry initialization
+{
+	InitMesh(dy_min, path); // method of subclasses can be invoked since it is virtual
+	InitInterval();
+	InitIndices();
+	InitWaveNumber();
+	return *this;
+}
 
 void Geometry::InitMesh(double dy_min, const char *path)
 {
@@ -263,16 +272,13 @@ void Geometry::InitMeshY(double dy_min)
 		return;
 	}
 
-	class HyperTangent
-	{
-	public:
+	struct HyperTangent
+	{	// generate grid points with hyperbolic tangent distribution
 		const int N;
 		const double L;
 		HyperTangent(int N, double L): N(N), L(L) {};
-		double operator()(double gma, int i) {
-			// generate grid points with hyperbolic tangent distribution
-			return 1 + .5*L * tanh(gma * (2.*(i-1)/(N-1) - 1)) / tanh(gma);
-		};
+		double operator()(double gma, int i)
+			{ return 1 + .5*L * tanh(gma * (2.*(i-1)/(N-1) - 1)) / tanh(gma); };
 	} hyptan(
 		dy_min > 0 ? Ny : 2*Ny-1, // one-sided: 1 + Ly * tanh(gma * ((i-1)/(Ny-1) - 1)) / tanh(gma);
 		dy_min > 0 ? Ly : 2*Ly );

@@ -32,20 +32,17 @@ public:
 	const double* SeeBlk() const { return &q_[ms.idx(0,0,0)]; };
 
 	// fft
-	void fftx();
-	void ifftx();
+	void fftx (int j0=0, int jn=0);
+	void ifftx(int j0=0, int jn=0);
+	void fftz (int j0=0, int jn=0); // FORWARD (exponent -1), real to complex, without normalization
+	void ifftz(int j0=0, int jn=0); // BACKWARD (exponent 1), complex to real, with normalization
+	void dctx (int j0=0, int jn=0);
+	void idctx(int j0=0, int jn=0);
 
-	void fftz();  // FORWARD (exponent -1), real to complex, without normalization
-	void ifftz(); // BACKWARD (exponent 1), complex to real, with normalization
-
-	void fftxz();
-	void ifftxz();
-
-	void dctx();
-	void idctx();
-
-	void dctxz();
-	void idctxz();
+	void fftxz (int j0=0, int jn=0);
+	void ifftxz(int j0=0, int jn=0);
+	void dctxz (int j0=0, int jn=0);
+	void idctxz(int j0=0, int jn=0);
 
 	// arithmetic mean (simple averaging)
 	double meanz(int i, int j) const;
@@ -81,9 +78,7 @@ public:
 	// arithmetic
 	Scla& SetLyr(double a, int j=0) { TravLyr(a, j, set); return *this; }; // set to a
 	Scla& AddLyr(double a, int j=0) { TravLyr(a, j, add); return *this; }; // add a
-	Scla& MnsLyr(double a, int j=0) { TravLyr(a, j, mns); return *this; }; // minus a
 	Scla& MltLyr(double a, int j=0) { TravLyr(a, j, mlt); return *this; }; // multiplied by a
-	Scla& DvdLyr(double a, int j=0) { TravLyr(a, j, dvd); return *this; }; // divided by a
 
 	Scla& SetLyr(const double *src, int j=0) { TravLyr(src, j, set); return *this; };
 	Scla& AddLyr(const double *src, int j=0) { TravLyr(src, j, add); return *this; };
@@ -93,9 +88,7 @@ public:
 	// note: bulk functions will change the boundary
 	Scla& Set       (double a) { TravBlk(a, set); return *this; };
 	Scla& operator+=(double a) { TravBlk(a, add); return *this; };
-	Scla& operator-=(double a) { TravBlk(a, mns); return *this; };
 	Scla& operator*=(double a) { TravBlk(a, mlt); return *this; };
-	Scla& operator/=(double a) { TravBlk(a, dvd); return *this; };
 
 	Scla& Set       (const Scla &src) { TravBlk(src.SeeBlk(), set); return *this; };
 	Scla& operator+=(const Scla &src) { TravBlk(src.SeeBlk(), add); return *this; };
@@ -151,6 +144,13 @@ public:
 	Scla&       operator[](int n)       { return n==1 ? v1_ : n==2 ? v2_ : v3_; };
 	const Scla& operator[](int n) const { return n==1 ? v1_ : n==2 ? v2_ : v3_; };
 
+	Vctr& operator+=(double a) { v1_+=a; v2_+=a; v3_+=a; return *this; };
+	Vctr& operator*=(double a) { v1_*=a; v2_*=a; v3_*=a; return *this; };
+	Vctr& operator+=(const Vctr &src) { v1_+=src[1]; v2_+=src[2]; v3_+=src[3]; return *this; };
+	Vctr& operator-=(const Vctr &src) { v1_-=src[1]; v2_-=src[2]; v3_-=src[3]; return *this; };
+	Vctr& operator*=(const Vctr &src) { v1_*=src[1]; v2_*=src[2]; v3_*=src[3]; return *this; };
+	Vctr& operator/=(const Vctr &src) { v1_/=src[1]; v2_/=src[2]; v3_/=src[3]; return *this; };
+
 	// vector operators
 	double  Module    (int i, int j, int k) const;
 	double  Divergence(int i, int j, int k) const;
@@ -175,6 +175,13 @@ public:
 
 	Flow& Set(double a) { v_.Set(a); s_.Set(a); return *this; };
 
+	Flow& operator+=(double a) { v_+=a; s_+=a; return *this; };
+	Flow& operator*=(double a) { v_*=a; s_*=a; return *this; };
+	Flow& operator+=(const Flow &src) { v_+=src.SeeVec(); s_+=src.SeeScl(); return *this; };
+	Flow& operator-=(const Flow &src) { v_-=src.SeeVec(); s_-=src.SeeScl(); return *this; };
+	Flow& operator*=(const Flow &src) { v_*=src.SeeVec(); s_*=src.SeeScl(); return *this; };
+	Flow& operator/=(const Flow &src) { v_/=src.SeeVec(); s_/=src.SeeScl(); return *this; };
+
 	void InitRand(double energy);
 
 	Scla& GetScl() { return s_; };
@@ -193,6 +200,7 @@ public:
 	};
 
 	void CleanBoundary();
+	void CombineBoundary(const Flow &fld, double a, double b);
 
 	// IO functions
 	Flow& ReadField(const char *path, int tstep, const char *suffix);

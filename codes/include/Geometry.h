@@ -19,9 +19,7 @@ public:
 	Geometry(const Geometry &geo);
 	Geometry& operator=(const Geometry &geo);
 	
-	void InitMesh(double dy_min, const char *path=NULL);
-	void InitInterval();
-	void InitIndices();
+	Geometry& Init(double dy_min, const char *path=NULL);
 
 	void WriteMeshY(const char *path) const;
 	void WriteMesh(const char *path) const;
@@ -41,10 +39,16 @@ public:
 	int *jma, *jpa;
 	int *kma, *kpa;
 
+protected:
+	virtual void InitMesh(double dy_min, const char *path=NULL);
+	virtual void InitIndices();
+	virtual void InitWaveNumber() {};
+
 private:
 	void DeepCopy(const Geometry &geo);
 	void InitMeshY(const char *path);
 	void InitMeshY(double dy_min);
+	void InitInterval();
 	void AlignBoundaryYc(const Geometry &geo);
 };
 
@@ -52,7 +56,8 @@ private:
 class Geometry_prdz: public Geometry
 {
 public:
-	using Geometry::Geometry;
+	using Geometry::Geometry; // inherit all constructors of Geometry
+	Geometry_prdz(const Geometry &geo): Geometry(geo) {}; // except for Geometry(const Geometry&), because that becomes Geometry_prdz(const Geometry_prdz&)
 	void InitMesh(double dy_min, const char *path=NULL);
 	void InitIndices();
 	void InitWaveNumber();
@@ -63,6 +68,7 @@ class Geometry_prdxz: public Geometry
 {
 public:
 	using Geometry::Geometry;
+	Geometry_prdxz(const Geometry &geo): Geometry(geo) {};
 	void InitMesh(double dy_min, const char *path=NULL);
 	void InitIndices();
 	void InitWaveNumber();
@@ -129,6 +135,8 @@ public:
 	double kx2(int i) const { return geo.kx2[i]; };
 	double kz2(int k) const { return geo.kz2[k]; };
 
+	const double* kx() const { return geo.kx; };
+
 	// batch indexing
 	void ipx(int i, int j, int k, int &ip, int &jp, int &kp) const;
 	void imx(int i, int j, int k, int &im, int &jm, int &km) const;
@@ -147,7 +155,7 @@ public:
 	void hmx(int i, int j, int k, double &hxm, double &hym, double &hzm) const;
 
 private:
-	const Geometry geo;
+	const Geometry &geo;
 
 };
 

@@ -13,16 +13,17 @@ public:
 
 	void Check(const Flow &fld, const Flow &vis, double Re, double dt);
 	void WriteProfile(const char *path, int tstep=-1) const;
-	void WriteLogfile(const char *path, int tstep, double time, const double mpg[3]) const;
-	static double GetLogTime(const char *path, int tstep, double mpg[3]);
+	void WriteLogfile(const char *path, int tstep, double time, const std::vector<double> &mpg) const;
+	static double GetLog(const char *path, int tstep, std::vector<double> &mpg);
 
 
+	static double WallStress(const Vctr &vel, const Flow &vis);
 	static double ReynoldsStress(int j, const Vctr &vel);
 	static std::vector<double> ReynoldsShearStresses (int j, const Vctr &vel);
 	static const double* ReynoldsNormalStresses(int j, const Vctr &vel);
 	static const double* MeanVisShearStresses  (int j, const Vctr &vel, const Flow &vis);
 	static const double* MeanVisNormalStresses (int j, const Vctr &vel, const Flow &vis);
-	
+
 private:
 	double div_; int divpos_[3];
 	double cfl_; int cflpos_[3];

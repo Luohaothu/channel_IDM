@@ -180,9 +180,11 @@ void OFW::OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veld
 }
 
 
-void OFW::OffWallVelo(Boundaries &bc, Boundaries &sbc, const Vctr &vel, const Vctr &veldns, double Ret, double rsclx, double rsclu)
+void OFW::OffWallVelo(Boundaries &bc, Boundaries &sbc, Vctr &veltmp,
+	const Vctr &vel, const Vctr &velmfu, double Ret, double rsclx, double rsclu)
 {
-	Bcond::ChannelDirichlet(bc, sbc, vel.ms, PIO::BoundaryPredict(vel, veldns, Ret, rsclx, rsclu));
+	PIO::PredictBoundary(veltmp, vel, velmfu, Ret, rsclx, rsclu);
+	Bcond::ChannelDirichlet(bc, sbc, vel.ms, veltmp);
 }
 
 

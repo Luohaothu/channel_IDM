@@ -32,7 +32,7 @@ jprbs = 0		// layer indexes of layers to be probed (jprbs[0] store the number of
 // *************************************
 
 // initial settings
-nread = 0		// step number of fields to read for continuing computation (0 for not inputing)
+inread = 0		// step number of fields to read for continuing computation (0 for not inputing)
 inpath = ""		// path of the continue computation files (relative paths with respect to XINDAT, or absolute paths)
 inener = 0.5	// initial turbulent intensity ( = <u'^2 + v'^2 + w'^2> / 2 )
 
@@ -49,3 +49,4 @@ Lx = 6.2832		// domain length of streamwise direction
 Ly = 2.0		// channel height. Not adjustable (must be 2.0 if the non-dimensional equation is solved)
 Lz = 3.1416		// domain length of spanwise direction
 dy_min = 0.01	// y coordinate at first grid off wall
+prd = 010		// periodicity of x,y,z directions, 0 for periodic, 1 for non-periodic

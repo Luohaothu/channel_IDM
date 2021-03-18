@@ -6,7 +6,7 @@
 
 namespace IDM
 {
-void calc(Flow &fld, Flow &fldh,
+void calc(Flow &fldh, const Flow &fld,
 	const Flow &vis, const Vctr &fb, const Boundaries &bc, const Boundaries &sbc, double dt);
 
 // subroutines for computation
@@ -26,7 +26,7 @@ void rhsdp(Scla &rdp, const Vctr &velh, const Boundaries &bc, const Boundaries &
 void getfdp(Scla &dp, const Boundaries &sbc, double refp);
 
 // step 4: update velocity & pressure fields
-void update(Flow &fld, Flow &fldh, double dt);
+void update(Flow &fldh, const Flow &fld, double dt);
 
 } // namespace IDM
 

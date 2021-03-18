@@ -14,7 +14,7 @@ public:
 	Para(const char *path); // assign default values and try para reading
 
 	void checkPara(int tstep = 0);
-	void showPara();
+	void showPara() const;
 	
 	// file paths
 	char fieldpath[1024];
@@ -39,13 +39,14 @@ public:
 	double Ly;			// channel height. Not adjustable (must be 2.0 if the non-dimensional equation is solved)
 	double Lz;			// domain length of spanwise direction
 	double dy_min;		// y coordinate at first grid off wall
+	int prd;			// periodicity of x,y,z directions, 0 for periodic, 1 for non-periodic
 
 	// time evolution control
 	int Nt;				// total time steps to evolve
 	double dt;			// time step length
 
 	// IO control
-	int nread;			// step number of whole field files to read for continuing computation (0 for not inputing)
+	int inread;			// step number of whole field files to read for continuing computation (0 for not inputing)
 	int nwrite;			// step interval for writing whole fields (0 for not outputing)
 	int nprint;			// step interval for printing and updating log of computation state (0 for not outputing)
 	int nprobe;			// step interval for writing time serials of probed layers (0 for not outputing)
