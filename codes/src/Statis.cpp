@@ -170,7 +170,7 @@ const double* Statis::ReynoldsNormalStresses(int j, const Vctr &vel)
 	return rs;
 }
 
-const double* Statis::MeanVisShearStresses(int j, const Vctr &vel, const Flow &vis)
+vector<double> Statis::MeanVisShearStresses(int j, const Vctr &vel, const Flow &vis)
 // compute mean viscous (including kinetic and eddy viscosity) shear stresses on edges for a channel flow
 {
 	const Mesh &ms = vel.ms;
@@ -196,11 +196,7 @@ const double* Statis::MeanVisShearStresses(int j, const Vctr &vel, const Flow &v
 
 	double weight = 1. / (ms.Nx-1.) / (ms.Nz-1.);
 
-	static double tau[3];
-
-	tau[0] = tau12 * weight;
-	tau[1] = tau23 * weight;
-	tau[2] = tau13 * weight;
+	vector<double> tau = {tau12 * weight, tau23 * weight, tau13 * weight};
 
 	return tau;
 }
@@ -304,7 +300,7 @@ void Statis::CheckTaub(const Vctr &vel, const Flow &vis, double taub[3])
 	{ // lower boundary
 		const vector<double> rss  = Statis::ReynoldsShearStresses (1, vel);
 		const double *rsn  = Statis::ReynoldsNormalStresses(1, vel);
-		const double *taus = Statis::MeanVisShearStresses  (1, vel, vis);
+		const vector<double> taus = Statis::MeanVisShearStresses  (1, vel, vis);
 		const double *taun = Statis::MeanVisNormalStresses (1, vel, vis);
 
 		tau21 += .5 * (taus[0] - rss[0]);
@@ -313,7 +309,7 @@ void Statis::CheckTaub(const Vctr &vel, const Flow &vis, double taub[3])
 	}{ // upper boundary
 		const vector<double> rss  = Statis::ReynoldsShearStresses (ms.Ny,   vel);
 		const double *rsn  = Statis::ReynoldsNormalStresses(ms.Ny-1, vel);
-		const double *taus = Statis::MeanVisShearStresses  (ms.Ny,   vel, vis);
+		const vector<double> taus = Statis::MeanVisShearStresses  (ms.Ny,   vel, vis);
 		const double *taun = Statis::MeanVisNormalStresses (ms.Ny-1, vel, vis);
 
 		tau21 -= .5 * (taus[0] - rss[0]);

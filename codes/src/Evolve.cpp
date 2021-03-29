@@ -20,11 +20,12 @@ void Solver::Manipulation()
 
 // ***** choose cumputation mode ***** //
 
-#define _FULLCHANNEL
+// #define _FULLCHANNEL
 // #define _HALFCHANNEL
 // #define _FULLCHANNEL_ALGEWM
 // #define _FULLCHANNEL_SLIPWM
 // #define _TBL
+#define _ETBL
 #define _TESTCHANNEL
 
 // *********************************** //
@@ -33,8 +34,6 @@ void Solver::Manipulation()
 void Solver::Evolve()
 {
 	step ++; time += para.dt;
-
-	// SwapBulk(fld.GetVec());
 
 	CalcVis(vis, fld.SeeVec(), para.Re, para.bftype);
 	Bcond::ChannelNoSlip(bc, sbc, ms);
@@ -104,6 +103,24 @@ void Solver::Evolve()
 	CalcVis(vis, fld.SeeVec(), para.Re, para.bftype);
 	Bcond::TblDevelop(bc, sbc, fld.SeeVec(), 1., para.dt);
 	CalcFb(fb, mpg);
+	IDM::calc(fldh, fld, vis, fb, bc, sbc, para.dt);
+	SetBoundaries(fldh.GetVec(), bc, sbc);
+	Manipulation();
+
+	fld += (fldh -= fld);
+}
+#endif
+
+#ifdef _ETBL
+void Solver::Evolve()
+{
+	step ++; time += para.dt;
+
+	mpg[0] = mpg[1] = mpg[2] = 0;
+
+	CalcVis(vis, fld.SeeVec(), para.Re, para.bftype);
+	Bcond::ChannelHalf(bc, sbc, ms);
+	CalcFb(fb, mpg, "Fx.txt");
 	IDM::calc(fldh, fld, vis, fb, bc, sbc, para.dt);
 	SetBoundaries(fldh.GetVec(), bc, sbc);
 	Manipulation();

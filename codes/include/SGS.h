@@ -12,6 +12,7 @@ public:
 	void DynamicSmarg (Scla &nut, const Vctr &vel);
 	void DynamicVreman(Scla &nut, const Vctr &vel, double Re);
 
+	// TODO: cancel static methods and use private members to hold output and temporal fields
 	static void SubGridStress(Vctr &shear, Vctr &normal, const Vctr &veldns, double rsclx, double rsclu);
 	static void SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, double rsclu);
 	static void SubGridNormalStress(Vctr &normal, const Vctr &veldns, double rsclx, double rsclu);

@@ -47,6 +47,7 @@ private:
 	// ***** construct body forces ***** //
 	static void CalcFb(Vctr &fb, const std::vector<double> &mpg);
 	static void CalcFb(Vctr &fb, const std::vector<double> &mpg, const Vctr &f);
+	static void CalcFb(Vctr &fb, const std::vector<double> &mpg, const char *filename);
 
 	// ***** apply boundary conditions ***** //
 	static void SetBoundaries(Vctr &vel, const Boundaries &bc, const Boundaries &sbc);

@@ -272,8 +272,8 @@ void Bcond::ChannelHalf(Boundaries &bc, Boundaries &sbc, const Mesh &ms)
 
 void Bcond::TblCycling(Boundaries &bc, Boundaries &sbc, const Mesh &ms, double ufree)
 {
-	double dy0 = ms.dy(0);
-	double dy1 = ms.dy(1);
+	double dy0 = ms.dy(0), dyn = ms.dy(ms.Ny);
+	double dy1 = ms.dy(1), dym = ms.dy(ms.Ny-1);
 
 	for (int k=0; k<=ms.Nz; k++) {
 	for (int i=0; i<=ms.Nx; i++) {
@@ -282,9 +282,9 @@ void Bcond::TblCycling(Boundaries &bc, Boundaries &sbc, const Mesh &ms, double u
 		bc.wb3(i,k) = 0; sbc.wb3(i,k) = dy0 / dy1;
 		bc.vb3(i,k) = 0; sbc.vb3(i,k) = 0;
 
-		bc.ub4(i,k) = ufree; sbc.ub4(i,k) = 0;
-		bc.vb4(i,k) = 0; sbc.vb4(i,k) = -1;
-		bc.wb4(i,k) = 0; sbc.wb4(i,k) = -1;
+		bc.ub4(i,k) = ufree; sbc.ub4(i,k) = dyn / dym;
+		bc.wb4(i,k) = 0;     sbc.wb4(i,k) = -1;
+		bc.vb4(i,k) = 0;     sbc.vb4(i,k) = -1;
 	}}
 }
 

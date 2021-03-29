@@ -278,9 +278,9 @@ void Geometry::InitMeshY(double dy_min)
 		const double L;
 		HyperTangent(int N, double L): N(N), L(L) {};
 		double operator()(double gma, int i)
-			{ return 1 + .5*L * tanh(gma * (2.*(i-1)/(N-1) - 1)) / tanh(gma); };
+			{ return .5*L * (1 + tanh(gma * (2.*(i-1)/(N-1) - 1)) / tanh(gma)); };
 	} hyptan(
-		dy_min > 0 ? Ny : 2*Ny-1, // one-sided: 1 + Ly * tanh(gma * ((i-1)/(Ny-1) - 1)) / tanh(gma);
+		dy_min > 0 ? Ny : 2*Ny-1, // one-sided: Ly * (1 + tanh(gma * ((i-1)/(Ny-1) - 1)) / tanh(gma));
 		dy_min > 0 ? Ly : 2*Ly );
 
 	double gma = newton_iter( // a lambda function is used here

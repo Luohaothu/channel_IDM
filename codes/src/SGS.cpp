@@ -77,7 +77,7 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 #pragma omp parallel
 {
 	// Sij, |Sij| and |Sij|*Sij stored in Lij
-	#pragma omp for
+	#pragma omp for collapse(3)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
@@ -103,7 +103,7 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 
 	// Mij
 	#pragma omp barrier
-	#pragma omp for
+	#pragma omp for collapse(3)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
@@ -146,7 +146,7 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 	}
 
 	// F(Ui) and Ui*Uj
-	#pragma omp for
+	#pragma omp for collapse(3)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
@@ -165,7 +165,7 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 
 	// Lij
 	#pragma omp barrier
-	#pragma omp for
+	#pragma omp for collapse(3)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
@@ -187,7 +187,7 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 	/***** calculate eddy viscosity *****/
 
 	#pragma omp barrier
-	#pragma omp for
+	#pragma omp for collapse(2)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int i=1; i<ms.Nx; i++) {
 
@@ -241,7 +241,7 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 #pragma omp parallel
 {
 	// Sij
-	#pragma omp for
+	#pragma omp for collapse(3)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
@@ -253,7 +253,7 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 
 	// Gij, G:G, PI^g * S:S
 	#pragma omp barrier
-	#pragma omp for
+	#pragma omp for collapse(3)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
@@ -300,7 +300,7 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 
 	// C_nu
 	#pragma omp barrier
-	#pragma omp for reduction(+: sum1, sum2)
+	#pragma omp for collapse(3) reduction(+: sum1, sum2)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {

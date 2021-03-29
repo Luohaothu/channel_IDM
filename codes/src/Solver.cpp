@@ -1,3 +1,4 @@
+#include <fstream>
 #include "Solver.h"
 #include "Interp.h"
 #include "Filter.h"
@@ -34,8 +35,8 @@ step(0)
 	if (para.inread) {
 		ContinueCase();
 	} else {
-		if (para.prd == 010) InitFieldChan(bc, sbc, para.inener);
-		if (para.prd == 110) InitFieldBlyr(bc, sbc, para.inener);
+		if (para.dy_min >= 0) InitFieldChan(bc, sbc, para.inener);
+		if (para.dy_min <  0) InitFieldBlyr(bc, sbc, para.inener);
 	}
 
 	// initiate the mean pressure gradient with default values, can be adjusted in Evolve
@@ -96,11 +97,24 @@ void Solver::InitFieldBlyr(Boundaries &bc, Boundaries &sbc, double energy)
 	Scla &v = fld.GetVec(2);
 	Scla &w = fld.GetVec(3);
 
-	// impose initial profile
-	for (int j=0; j<=ms.Ny; j++)
-		u.AddLyr(fmin(10*ms.yc(j), 1.), j);
+	fld.InitRand(energy);
 
-	Bcond::TblDevelop(bc, sbc, fld.SeeVec(), 1., 1);	
+	double Ufree = 1.;
+
+	// impose initial profile
+	for (int j=0; j<=ms.Ny; j++) {
+
+		double um = Ufree / (PI/2) * atan(100*ms.yc(j)/ms.Ly);
+
+		// damp fluctuations in free stream
+		u.MltLyr(1-um/Ufree, j); if (j>0)
+		v.MltLyr(1-um/Ufree, j);
+		w.MltLyr(1-um/Ufree, j);
+
+		u.AddLyr(um, j);
+	}
+
+	Bcond::TblDevelop(bc, sbc, fld.SeeVec(), Ufree, 1);	
 	SetBoundaries(fld.GetVec(), bc, sbc);
 }
 
@@ -200,6 +214,46 @@ void Solver::CalcFb(Vctr &fb, const vector<double> &mpg, const Vctr &f)
 	fb[1] += f[1];
 	fb[2] += f[2];
 	fb[3] += f[3];
+}
+void Solver::CalcFb(Vctr &fb, const vector<double> &mpg, const char *filename)
+{
+	const Mesh &ms = fb.ms;
+
+	fb[1].Set(- mpg[0]);
+	fb[2].Set(- mpg[1]);
+	fb[3].Set(- mpg[2]);
+
+	// read distributed force
+	vector<double> y, f;
+
+	string line;
+	ifstream fin; fin.open(filename);
+
+	while (getline(fin, line)) {
+
+		double y_, f_;
+		sscanf(line.c_str(), "%le%le",  &y_, &f_);
+
+		y.push_back(y_);
+		f.push_back(f_);
+	}
+
+	fin.close();
+
+	// Add force
+	#pragma omp parallel for
+	for (int j=0; j<=ms.Ny; j++) {
+
+		double yc = ms.yc(j);
+
+		int j0 = Interp::BiSearch(yc, y.data(), 0, y.size()-1);
+		int j1 = j0 + 1;
+
+		double a = (y[j1] - yc) / (y[j1] - y[j0]);
+		double b = (yc - y[j0]) / (y[j1] - y[j0]);
+
+		fb[1].AddLyr(a * f[j0] + b * f[j1], j);
+	}
 }
 
 
@@ -386,6 +440,54 @@ void Solver::SwapBulk(Vctr &vel)
 		}
 	}}}
 
+
+	// // eliminate divergence by solving spanwise Poisson Eq.
+	// ////// TODO: not correct
+	// Scla p(ms); p.Set(0.);
+
+	// for (int j=1; j<j1; j++) {
+
+	// 	for (int k=1; k<ms.Nz; k++) {
+	// 	for (int i=1; i<ms.Nx; i++) {
+	// 		p(i,j,k) = vel.Divergence(i,j,k);
+	// 	}}
+
+	// 	p.debug_AsciiOutput("", "p1", j, j+1);
+
+	// 	p.fftz(j,j);
+
+	// 	for (int k=0; k<ms.Nzc; k++)
+	// 		cout << ms.kz2(k) << endl;
+
+	// 	for (int k=0; k<ms.Nzc; k++) {
+	// 	for (int i=1; i<ms.Nx;  i++) {
+	// 		p(i,j,2*k)   *= -1. / ms.kz2(k);
+	// 		p(i,j,2*k+1) *= -1. / ms.kz2(k);
+	// 	}}
+
+	// 	for (int i=1; i<ms.Nx; i++) {
+	// 		p(i,j,0) = 0;
+	// 		p(i,j,1) = 0;
+	// 	}
+
+	// 	p.ifftz(j,j);
+
+	// 	p.debug_AsciiOutput("", "p2", j, j+1);
+	// 	exit(0);
+
+	// 	for (int k=1; k<ms.Nz; k++) {
+	// 	for (int i=1; i<ms.Nx; i++) {
+	// 		w(i,j,k) -= 1./ms.hz(k) * (p(i,j,k) - p(i,j,ms.kma(k)));
+	// 	}}
+
+	// 	// if (j==7) cout << vel.Divergence(5,j,5) << endl;
+	// }
+
+	// Bcond::SetBoundaryX(vel);
+	// Bcond::SetBoundaryZ(vel);
+
+
+
 	// // eliminate divergence by solving planar Poisson Eq.
 	// Scla p(ms); p.Set(0.);
 
@@ -418,6 +520,35 @@ void Solver::SwapBulk(Vctr &vel)
 
 	// Bcond::SetBoundaryX(vel);
 	// Bcond::SetBoundaryZ(vel);
+
+
+	// // correct Reynolds stress
+	// for (int j=1; j<=j1; j++) {
+
+	// 	double rs0= Statis::ReynoldsShearStresses(ms.Ny-j+1, vel)[0];
+	// 	double ns0= Statis::MeanVisShearStresses (ms.Ny-j+1, vel, vis)[0];
+	// 	double rs = Statis::ReynoldsShearStresses(j, vel)[0];
+	// 	double ns = Statis::MeanVisShearStresses (j, vel, vis)[0];
+		
+	// 	if (j == j1)
+	// 		cout << ns << ' ' << ns0 << ' ' << rs << ' ' << rs0 << ' ' << vis.GetVec(3)(5,j,5) << endl;
+
+	// 	// for (int k=0; k<=ms.Nz; k++) {
+	// 	// for (int i=1; i<=ms.Nx; i++) {
+	// 	// 	vis.GetVec(3)(i,j,k) = fmin(fmax(.5 * (rs+rs0) / vel.ShearStrain(i,j,k)[0], -.1), .1);
+	// 	// }}
+
+	// 	double rsclvis = fmin(fmax((rs+rs0)/ns, -50.), 50.);
+
+	// 	vis.GetVec(3).MltLyr(rsclvis + 1, j);
+
+	// 	rs = Statis::ReynoldsShearStresses(j, vel)[0];
+	// 	ns = Statis::MeanVisShearStresses (j, vel, vis)[0];
+
+	// 	if (j == j1)
+	// 		cout << ns << ' ' << ns0 << ' ' << rs << ' ' << rs0 << ' ' << vis.GetVec(3)(5,j,5) << endl << endl;
+	// }
+	
 
 	// // sponge
 	// u.MltLyr((double)(j-j1)/(j2-j), j).AddLyr(u.SeeLyr(ms.Ny-j), j).MltLyr((double)(j2-j)/(j2-j1), j);
