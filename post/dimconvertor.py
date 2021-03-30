@@ -22,6 +22,9 @@ uave = np.mean([ log[9] for log in logs if int(log[0]) in para.tsteps])
 uc = utau
 # uc = uave
 
+uc = 1.
+lc = 22.6906404/1420.960*492.2115
+
 
 for filename in os.listdir(para.statpath):
 
@@ -31,9 +34,10 @@ for filename in os.listdir(para.statpath):
 
 		data = np.loadtxt(para.statpath+filename, skiprows=3)
 
-		data[:,1]    *= uc
+		data[:,1]    /= lc/uc
 		data[:,2:9]  /= uc**2
-		data[:,9:13] /= uc
+		data[:,9:12] /= uc
+		data[:,12]   /= uc/lc
 
 		np.savetxt(dst+'statdata/'+filename, data, header=header, comments='')
 
@@ -43,6 +47,7 @@ for filename in os.listdir(para.statpath):
 
 		data = np.loadtxt(para.statpath+filename, skiprows=3)
 
+		data[:,0]     /= lc
 		data[:,1:4]   /= uc
 		data[:,4:11]  /= uc**2
 		data[:,11:14] /= uc**3
@@ -62,8 +67,8 @@ for filename in os.listdir(para.fieldpath):
 
 	q = read_channel(para.fieldpath + filename)
 
-	if   filename[:2] == 'PT':                 q /= uc**3
-	elif filename[:2] in ('UT','VT','WT','P'): q /= uc**2
+	if   filename[:2] == 'PT':                 q /= uc**3/lc
+	elif filename[:2] in ('UT','VT','WT','P'): q /= uc**2/lc
 	elif filename[0]  in ('U','V','W'):        q /= uc
 
 	write_channel(dst+'fielddata/'+filename, q)

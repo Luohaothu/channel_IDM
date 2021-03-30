@@ -1,5 +1,8 @@
-#!/root/Software/anaconda3/bin/python3
-from basic import *
+import numpy as np
+import os
+
+from basic import DataSetInfo
+import fileIO
 from statis import Statis
 from budgets import Budgets
 
@@ -8,14 +11,12 @@ para = DataSetInfo("mytest/")
 para.scale_inner()
 
 stas = Statis(para)
-# bgts = Budgets(para)
-
 stas.calc_statis()
 # stas.flipy()
 
-# bgts.dissipation()
-# bgts.flipy()
 
+bgts = Budgets(para)
+bgts.calc_budgets()
 
 
 with open(para.postpath+"wallscale.txt", 'w') as fp:
@@ -49,13 +50,24 @@ header = \
 		"<u'p'><sup>+</sup>", "<v'p'><sup>+</sup>", "<w'p'><sup>+</sup>", "<p'p'><sup>+</sup>"	) + \
 	'zone t = "%s", i = %i' %( casename, len(jrange) )
 
-data = np.vstack([ para.yc/para.lc,
-	stas.Um,	stas.Vm,	stas.Wm,	stas.Pm/para.pc,
-	stas.R11,	stas.R22,	stas.R33,	stas.R12,	stas.R23,	stas.R13,
-	stas.Rpu,	stas.Rpv,	stas.Rpw,	stas.Rpp/para.pc**2	])
-data[1:4] /= para.uc
-data[5:11] /= para.uc**2
-data[11:14] /= para.uc * para.pc
+data = np.vstack([
+	para.yc/para.lc,
+	stas.Um/para.uc,
+	stas.Vm/para.uc,
+	stas.Wm/para.uc,
+	stas.Pm/para.pc,
+	stas.R11/para.uc**2,
+	stas.R22/para.uc**2,
+	stas.R33/para.uc**2,
+	stas.R12/para.uc**2,
+	stas.R23/para.uc**2,
+	stas.R13/para.uc**2,
+	stas.Rpu/para.uc/para.pc,
+	stas.Rpv/para.uc/para.pc,
+	stas.Rpw/para.uc/para.pc,
+	stas.Rpp/para.pc**2,
+	])
+
 data = data.T[jrange]
 
 np.savetxt(para.postpath+"profiles.dat", data, header=header, comments='')
@@ -64,34 +76,53 @@ np.savetxt(para.postpath+"profiles.dat", data, header=header, comments='')
 
 
 
-# header = \
-# 	'Title = "profiles of budgets"\n' + \
-# 	'variables = "%s", "%s"\n' % ( "y<sup>+</sup>", "<greek>e</greek><sup>+</sup>" ) + \
-# 	'zone t = "%s", i = %i' %( casename, len(jrange) )
-# data = np.vstack([ para.yc/para.lc, bgts.epsl/(para.uc**3/para.lc) ])
-# data = data.T[jrange]
-# np.savetxt(para.postpath+"budgets.dat", data, header=header, comments='')
+header = \
+	'Title = "profiles of budgets"\n' + \
+	'variables = "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"\n' \
+	% (
+		"y<sup>+</sup>",
+		"P<sup>+</sup>",
+		"D<sub>t</sub><sup>+</sup>",
+		"D<sub>p</sub><sup>+</sup>",
+		"D<sub>v</sub><sup>+</sup>",
+		"<greek>F</greek><sup>+</sup>",
+		"<greek>e</greek><sup>+</sup>",
+		"balance",
+		) + \
+	'zone t = "%s", i = %i' %( casename, len(jrange) )
+data = np.vstack([
+	para.yc/para.lc,
+	bgts.Prod/(para.uc**3/para.lc),
+	bgts.Dtur/(para.uc**3/para.lc),
+	bgts.Dpre/(para.uc**3/para.lc),
+	bgts.Dvis/(para.uc**3/para.lc),
+	bgts.Rdis/(para.uc**3/para.lc),
+	bgts.Epsl/(para.uc**3/para.lc),
+	bgts.Baln/(para.uc**3/para.lc),
+	])
+data = data.T[jrange]
+np.savetxt(para.postpath+"budgets.dat", data, header=header, comments='')
 
 
 
 
 
-if 'raw' not in listdir(para.postpath): system('mkdir %sraw'%para.postpath)
+if 'raw' not in os.listdir(para.postpath): os.system('mkdir %sraw'%para.postpath)
 
 para.kx[:para.Nxc].astype(np.float64).tofile(para.postpath + 'raw/kxs.bin')
 para.kz.           astype(np.float64).tofile(para.postpath + 'raw/kzs.bin')
 para.yc[jrange].   astype(np.float64).tofile(para.postpath + 'raw/ys.bin')
 
-write_channel(para.postpath + 'raw/Euu.bin', stas.Euu[jrange])
-write_channel(para.postpath + 'raw/Evv.bin', stas.Evv[jrange])
-write_channel(para.postpath + 'raw/Eww.bin', stas.Eww[jrange])
-write_channel(para.postpath + 'raw/Epp.bin', stas.Epp[jrange])
-write_channel(para.postpath + 'raw/Euvr.bin', stas.Euv.real[jrange])
-write_channel(para.postpath + 'raw/Euvi.bin', stas.Euv.imag[jrange])
-write_channel(para.postpath + 'raw/Evwr.bin', stas.Evw.real[jrange])
-write_channel(para.postpath + 'raw/Evwi.bin', stas.Evw.imag[jrange])
-write_channel(para.postpath + 'raw/Euwr.bin', stas.Euw.real[jrange])
-write_channel(para.postpath + 'raw/Euwi.bin', stas.Euw.imag[jrange])
+fileIO.write_channel(para.postpath + 'raw/Euu.bin', stas.Euu[jrange])
+fileIO.write_channel(para.postpath + 'raw/Evv.bin', stas.Evv[jrange])
+fileIO.write_channel(para.postpath + 'raw/Eww.bin', stas.Eww[jrange])
+fileIO.write_channel(para.postpath + 'raw/Epp.bin', stas.Epp[jrange])
+fileIO.write_channel(para.postpath + 'raw/Euvr.bin', stas.Euv.real[jrange])
+fileIO.write_channel(para.postpath + 'raw/Euvi.bin', stas.Euv.imag[jrange])
+fileIO.write_channel(para.postpath + 'raw/Evwr.bin', stas.Evw.real[jrange])
+fileIO.write_channel(para.postpath + 'raw/Evwi.bin', stas.Evw.imag[jrange])
+fileIO.write_channel(para.postpath + 'raw/Euwr.bin', stas.Euw.real[jrange])
+fileIO.write_channel(para.postpath + 'raw/Euwi.bin', stas.Euw.imag[jrange])
 
 stas.flipk()
 
@@ -136,8 +167,9 @@ data = np.array([np.ravel(temp) for temp in data]).T
 
 pame = para.postpath + "ES2D.dat"
 np.savetxt(pame, data, header=header, comments='')
-if not system("preplot " + pame):
-	system("rm -f " + pame)
+if not os.system("preplot " + pame):
+	# os.system("rm -f " + pame)
+	pass
 
 
 
@@ -178,8 +210,9 @@ data = np.array([np.ravel(temp) for temp in data]).T
 
 pame = para.postpath + "ES1D_xy.dat"
 np.savetxt(pame, data, header=header, comments='')
-if not system("preplot " + pame):
-	system("rm -f " + pame)
+if not os.system("preplot " + pame):
+	# os.system("rm -f " + pame)
+	pass
 
 
 
@@ -220,8 +253,9 @@ data = np.array([np.ravel(temp) for temp in data]).T
 
 pame = para.postpath + "ES1D_zy.dat"
 np.savetxt(pame, data, header=header, comments='')
-if not system("preplot " + pame):
-	system("rm -f " + pame)
+if not os.system("preplot " + pame):
+	# os.system("rm -f " + pame)
+	pass
 
 
 

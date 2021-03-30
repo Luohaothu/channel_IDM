@@ -1,4 +1,6 @@
-from basic import *
+import numpy as np
+
+from basic import read_channel, Field
 from operators import Operators
 
 
@@ -12,7 +14,7 @@ class Budgets:
 		Ny = self.para.Ny
 		if tsteps is None: tsteps = self.para.tsteps
 
-		opt = Operator(self.para)
+		oprt = Operators(self.para)
 		self.epsl = np.zeros(Ny+1)
 
 		for tstep in tsteps:
@@ -25,7 +27,7 @@ class Budgets:
 			v.T[:] -= np.mean(v, axis=(-1,-2))
 			w.T[:] -= np.mean(w, axis=(-1,-2))
 
-			ux,vx,wx, uy,vy,wy, uz,vz,wz = opt.gradient(u,v,w)
+			ux,vx,wx, uy,vy,wy, uz,vz,wz = oprt.gradient(u,v,w)
 
 			self.epsl += 1./Re * np.mean(
 				ux**2 + uy**2 + uz**2 + \
@@ -34,6 +36,82 @@ class Budgets:
 
 	def flipy(self):
 		self.epsl[:] = .5 * (self.epsl + self.epsl[::-1])
+
+	def calc_budgets(self, tsteps=None):
+
+		self.Prod = np.zeros([self.para.Ny+1])
+		self.Dtur = np.zeros([self.para.Ny+1])
+		self.Dpre = np.zeros([self.para.Ny+1])
+		self.Dvis = np.zeros([self.para.Ny+1])
+		self.Epsl = np.zeros([self.para.Ny+1])
+		self.Rdis = np.zeros([self.para.Ny+1])
+
+		if tsteps is None: tsteps = self.para.tsteps
+
+		for tstep in tsteps:
+			print('Reading budgets: step', tstep)
+
+			uf, um = Field(self.para).read_fluc_mean('U%08i.bin'%tstep)
+			vf, vm = Field(self.para).read_fluc_mean('V%08i.bin'%tstep)
+			wf, wm = Field(self.para).read_fluc_mean('W%08i.bin'%tstep)
+			pf, pm = Field(self.para).read_fluc_mean('P%08i.bin'%tstep)
+
+			bgts = self.__budgets(
+				uf, vf, wf, pf,
+				um, vm, wm,
+				self.para.xc[1:-1],
+				self.para.yc,
+				self.para.zc[1:-1],
+				self.para.Re, lambda q: np.mean(q, axis=(-1,-2)))
+
+			self.Prod += .5 * np.sum(bgts['Prod'], axis=0) / len(tsteps)
+			self.Dtur += .5 * np.sum(bgts['Dtur'], axis=0) / len(tsteps)
+			self.Dpre += .5 * np.sum(bgts['Dpre'], axis=0) / len(tsteps)
+			self.Dvis += .5 * np.sum(bgts['Dvis'], axis=0) / len(tsteps)
+			self.Epsl += .5 * np.sum(bgts['Epsl'], axis=0) / len(tsteps)
+			self.Rdis += .5 * np.sum(bgts['Rdis'], axis=0) / len(tsteps)
+
+		self.Baln = self.Prod + self.Dtur + self.Dpre + self.Dvis + self.Epsl + self.Rdis
+
+
+	@staticmethod
+	def __budgets(uf, vf, wf, pf, um, vm, wm, xs, ys, zs, Re, mean):
+		''' input/output all on cell centers '''
+
+		grady = lambda q: np.gradient(q, ys, edge_order=2)
+
+		Prod11 = -2 * mean(uf*vf) * grady(um)
+		Prod22 = 0
+		Prod33 = 0
+
+		Dtur11 = - grady(mean(uf**2*vf))
+		Dtur22 = - grady(mean(vf**3))
+		Dtur33 = - grady(mean(wf**2*vf))
+
+		Dpre11 = 0
+		Dpre22 = -2 * grady(mean(pf*vf))
+		Dpre33 = 0
+
+		Dvis11 = 1./Re * grady(grady(mean(uf**2)))
+		Dvis22 = 1./Re * grady(grady(mean(vf**2)))
+		Dvis33 = 1./Re * grady(grady(mean(wf**2)))
+
+		Epsl11 = -2./Re * mean(np.sum(list(map(lambda _:_**2, np.gradient(uf, ys, zs, xs, edge_order=2))), axis=0))
+		Epsl22 = -2./Re * mean(np.sum(list(map(lambda _:_**2, np.gradient(vf, ys, zs, xs, edge_order=2))), axis=0))
+		Epsl33 = -2./Re * mean(np.sum(list(map(lambda _:_**2, np.gradient(wf, ys, zs, xs, edge_order=2))), axis=0))
+
+		Rdis11 = 2 * mean(pf * np.gradient(uf, xs, axis=-1, edge_order=2))
+		Rdis22 = 2 * mean(pf * np.gradient(vf, ys, axis=0,  edge_order=2))
+		Rdis33 = 2 * mean(pf * np.gradient(wf, zs, axis=-2, edge_order=2))
+
+		return {
+			'Prod': np.array([Prod11, Prod22, Prod33]), # production
+			'Dtur': np.array([Dtur11, Dtur22, Dtur33]), # turbulent diffusion
+			'Dpre': np.array([Dpre11, Dpre22, Dpre33]), # pressure diffusion
+			'Dvis': np.array([Dvis11, Dvis22, Dvis33]), # viscous diffusion
+			'Epsl': np.array([Epsl11, Epsl22, Epsl33]), # dissipation
+			'Rdis': np.array([Rdis11, Rdis22, Rdis33]), # pressure redistribution
+		}
 
 
 	# def _dissipation(self, tsteps=None):

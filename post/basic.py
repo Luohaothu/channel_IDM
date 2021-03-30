@@ -120,11 +120,11 @@ class DataSetInfo:
 		self.uc = self.utau
 		self.pc = self.tauw
 
-	def scale_velo(self, uc):
+	def scale_velo(self, uc, lc=1.):
 		''' specify a characteristic velocity to scale, with h and rho be 1 by default '''
-		self.uc = self.uc
-		self.lc = 1.
-		self.tc = 1. / uc
+		self.uc = uc
+		self.lc = lc
+		self.tc = lc / uc
 		self.pc = uc**2
 
 	def __get_Interval(self, y, yc):
