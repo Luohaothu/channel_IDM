@@ -256,6 +256,169 @@ void PIO::PredictBoundary(Vctr &veltmp, const Vctr &vel, const Vctr &velmfu, dou
 	// 	PIO::Predict(yb1, vel, velmfu, Ret, rsclx, rsclu, cnt);
 }
 
+void PIO::PredictBoundary(Vctr &veltmp, const Vctr &vel, double time, double Ret)
+{
+	const Mesh &ms = vel.ms;
+
+	double yb1 = ms.y(1); // position to predict
+	double yb2 = ms.y(ms.Ny);
+
+	double yo1 = 3.9 / sqrt(Ret); // position of outer signal
+	double yo2 = 2. - yo1;
+
+	Vctr &velo = veltmp;
+	Vctr &velb = veltmp;
+	Scla &uo = velo[1], &vo = velo[2], &wo = velo[3]; // to hold uL
+	Scla &ub = velb[1], &vb = velb[2], &wb = velb[3]; // to hold u_p
+
+	// PIO coefficients
+	double *hr = new double[ms.Nxc], alfv, dxav, dzav;
+	double *hi = new double[ms.Nxc], alfw, dxaw, dzaw;
+
+	read_PIO_Sup(hr, hi, alfv, dxav, dzav,
+					 alfw, dxaw, dzaw, 1./Ret, yb1, ms.kx(), ms.Nxc);
+
+	double gmaup, dxup, dzup;
+	double gmaum, dxum, dzum;
+	double gmav,  dxv,  dzv;
+	double gmaw,  dxw,  dzw;
+
+	read_PIO_Mod(gmaup, dxup, dzup,
+				 gmaum, dxum, dzum,
+				 gmav,  dxv,  dzv,
+				 gmaw,  dxw,  dzw, 1./Ret, yb1);
+
+
+	int jo1 = 2; // position in veltmp to store uOL
+	int jo2 = jo1 + 1;
+	
+	#pragma omp parallel
+	{
+		// interpolate from LES outer region, mean values will be removed later
+		#pragma omp for collapse(2)
+		for (int k=1; k<ms.Nz; k++) {
+		for (int i=1; i<ms.Nx; i++) {
+
+			double x = ms.x(i), xc = ms.xc(i);
+			double z = ms.z(k), zc = ms.zc(k);
+
+			uo(i,jo1,k) = Interp::InterpNodeU(x, yo1,zc,vel[1]);
+			vo(i,jo1,k) = Interp::InterpNodeV(xc,yo1,zc,vel[2]);
+			wo(i,jo1,k) = Interp::InterpNodeW(xc,yo1,z, vel[3]);
+
+			uo(i,jo2,k) = Interp::InterpNodeU(x, yo2,zc,vel[1]);
+			vo(i,jo2,k) = Interp::InterpNodeV(xc,yo2,zc,vel[2]);
+			wo(i,jo2,k) = Interp::InterpNodeW(xc,yo2,z, vel[3]);
+		}}
+
+		uo.fftx (jo1, jo2);
+		vo.fftxz(jo1, jo2);
+		wo.fftxz(jo1, jo2);
+
+		#pragma omp for collapse(2)
+		for (int j=jo1; j<=jo2; j++) {
+		for (int i=0; i<ms.Nxc; i++) {
+
+			// get mean value at wave number k_x = 0
+			double um = 0;
+			if (i == 0)
+				for (int k=1; k<ms.Nz; k++)
+					um += uo(2*i,j,k) / (ms.Nz-1.);
+
+			for (int k=1; k<ms.Nz; k++) {
+				double ur = uo(2*i,  j,k) - um;
+				double ui = uo(2*i+1,j,k);
+				// H needs conj because the fft defined in calibration is inversed
+				uo(2*i,  j,k) = hr[i] * ur + hi[i] * ui;
+				uo(2*i+1,j,k) = hr[i] * ui - hi[i] * ur;
+			}
+		}}
+
+		#pragma omp for collapse(2)
+		for (int k=0; k<ms.Nz-1; k++) {
+		for (int i=0; i<ms.Nxc; i++) {
+			// keep only the fluctuations with scale strictly larger than MFU
+			if (fabs(ms.kx(i)/Ret) >= 2e-3 ||
+				fabs(ms.kz(k)/Ret) >= 2e-2 ||
+				(k==0 && i==0))
+			{
+				vo(2*i,jo1,k) = 0; vo(2*i+1,jo1,k) = 0;
+				wo(2*i,jo1,k) = 0; wo(2*i+1,jo1,k) = 0;
+				vo(2*i,jo2,k) = 0; vo(2*i+1,jo2,k) = 0;
+				wo(2*i,jo2,k) = 0; wo(2*i+1,jo2,k) = 0;
+			}
+		}}
+
+		uo.ifftx (jo1, jo2);
+		vo.ifftxz(jo1, jo2);
+		wo.ifftxz(jo1, jo2);
+	}
+
+	Bcond::SetBoundaryX(velo);
+	Bcond::SetBoundaryZ(velo);
+
+	delete[] hr;
+	delete[] hi;
+
+	// filter from MFU matching inner scale
+	PIO::ReadSynthe(velb, time, Ret);
+
+#ifdef MODULATION
+	// modulation
+	for (int j=0; j<=ms.Ny; j+=(j ? ms.Ny-1 : 1)) {
+
+		double um = ub.meanxz(j);
+		double vm = vb.meanxz(j);
+		double wm = wb.meanxz(j);
+		double uom= uo.meanxz(j<=1 ? jo1 : jo2);
+
+		#pragma omp parallel for collapse(2)
+		for (int k=1; k<ms.Nz; k++) {
+		for (int i=1; i<ms.Nx; i++) {
+
+			double x = ms.x(i), xc = ms.xc(i);
+			double z = ms.z(k), zc = ms.zc(k);
+			double y = j<=1 ? ms.yc(jo1) : ms.yc(jo2);
+
+			double modu;
+			double modv = gmav * (Interp::InterpNodeU(xc+dxv,y,zc+dzv,uo) - uom);
+			double modw = gmaw * (Interp::InterpNodeU(xc+dxw,y,z +dzw,uo) - uom);
+
+			if (ub(i,j,k) > um) modu = gmaup * (Interp::InterpNodeU(x+dxup,y,zc+dzup,uo) - uom);
+			else                modu = gmaum * (Interp::InterpNodeU(x+dxum,y,zc+dzum,uo) - uom);
+
+			if (j != 1) ub(i,j,k) = um + (ub(i,j,k) - um) * (1 + modu);
+			if (j != 0) vb(i,j,k) = vm + (vb(i,j,k) - vm) * (1 + modv);
+			if (j != 1) wb(i,j,k) = wm + (wb(i,j,k) - wm) * (1 + modw);
+		}}
+	}
+#endif
+
+	// combine small- & large-scales
+	#pragma omp parallel for collapse(2)
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+
+		ub(i,0,    k) += uo(i,jo1,k);
+		ub(i,ms.Ny,k) += uo(i,jo2,k);
+
+		double x = ms.xc(i) + dxav;
+		double z = ms.zc(k) + dzav;
+
+		vb(i,1,    k) += alfv * Interp::InterpNodeV(x,ms.y(jo1),z,vo);
+		vb(i,ms.Ny,k) += alfv * Interp::InterpNodeV(x,ms.y(jo2),z,vo);
+
+		x = ms.xc(i) + dxaw;
+		z = ms.z (k) + dzaw;
+
+		wb(i,0,    k) += alfw * Interp::InterpNodeW(x,ms.yc(jo1),z,wo);
+		wb(i,ms.Ny,k) += alfw * Interp::InterpNodeW(x,ms.yc(jo2),z,wo);
+	}}
+
+	Bcond::SetBoundaryX(velb);
+	Bcond::SetBoundaryZ(velb);
+}
+
 
 // Vctr PIO::Predict(double y, const Vctr &velout, const Vctr &veluni, double Ret, double rsclx, double rsclu, int cnt)
 // {
@@ -731,6 +894,101 @@ void read_PIO_Mod(
 	delete[] gmaws;  delete[] dxws;  delete[] dzws;
 }
 
+
+void PIO::ReadSynthe(Vctr &vel, double time, double Ret)
+// read synthetic field from '.bin' files to boundaries of vel
+{
+	// read info section
+	int   n1, n2, n3;
+	float dx, dz, dt;
+
+	ifstream us("probedata/us.bin", ios::in|ios::binary);
+	ifstream vs("probedata/vs.bin", ios::in|ios::binary);
+	ifstream ws("probedata/ws.bin", ios::in|ios::binary);
+
+	us.read((char*)(&n1), sizeof(int));
+	us.read((char*)(&n2), sizeof(int));
+	us.read((char*)(&n3), sizeof(int));
+	us.read((char*)(&dx), sizeof(float));
+	us.read((char*)(&dz), sizeof(float));
+	us.read((char*)(&dt), sizeof(float));
+
+	dx /= Ret;
+	dz /= Ret;
+	dt /= Ret;
+
+	// prepare space to hold data
+	const Mesh &ms = vel.ms;
+	Scla &u = vel[1];
+	Scla &v = vel[2];
+	Scla &w = vel[3];
+
+	for (int k=1; k<ms.Nz; k++) {
+	for (int i=1; i<ms.Nx; i++) {
+		u(i,0,k) = u(i,ms.Ny,k) = 0;
+		v(i,1,k) = v(i,ms.Ny,k) = 0;
+		w(i,0,k) = w(i,ms.Ny,k) = 0;
+	}}
+
+	// file data input and interpolate to velocity
+	double *buf = new double[n1*n2];
+	double *bvf = new double[n1*n2];
+	double *bwf = new double[n1*n2];
+
+	int    t1 = fmod(time/dt,n3), t2 = (t1 + 1) % n3;
+	double c1 = fmod(time,dt)/dt, c2 = 1. - c1;
+
+	// double r12 = 0;
+	
+	for (int t=t1; t>=0; t=(t==t2 ? -1 : t2)) {
+
+		double c = t==t2 ? c1 : c2;
+
+		us.seekg(n1*n2*(t+1) * sizeof(double), ios::beg);
+		vs.seekg(n1*n2*(t+1) * sizeof(double), ios::beg);
+		ws.seekg(n1*n2*(t+1) * sizeof(double), ios::beg);
+
+		us.read((char*)buf, n1*n2 * sizeof(double));
+		vs.read((char*)bvf, n1*n2 * sizeof(double));
+		ws.read((char*)bwf, n1*n2 * sizeof(double));
+
+		// for (int k1=0; k1<n2; k1++) {
+		// for (int i1=0; i1<n1; i1++) {
+		// 	r12 += c/(n1*n2) * (buf[k1*n1+i1] * bvf[k1*n1+i1]);
+		// }}
+
+		#pragma omp parallel for collapse(2)
+		for (int k=1; k<ms.Nz; k++) {
+		for (int i=1; i<ms.Nx; i++) {
+			// interpolation must be precise to ensure correct Reynolds stress
+			int i1 = Interp::ShiftPrd(ms.x(i), 0, n1*dx) / dx, i2 = (i1+1)%n1;
+			int k1 = Interp::ShiftPrd(ms.z(k), 0, n2*dz) / dz, k2 = (k1+1)%n2;
+
+			double a1 = fmod(fmod(ms.x(i), dx) + dx, dx) / dx, a2 = 1. - a1;
+			double b1 = fmod(fmod(ms.z(k), dz) + dz, dz) / dz, b2 = 1. - b1;
+
+			double ub = c * (
+				b2 * (a2 * buf[k1*n1+i1] + a1 * buf[k1*n1+i2]) +
+				b1 * (a2 * buf[k2*n1+i1] + a1 * buf[k2*n1+i2]) );
+
+			double vb = c * (
+				b2 * (a2 * bvf[k1*n1+i1] + a1 * bvf[k1*n1+i2]) +
+				b1 * (a2 * bvf[k2*n1+i1] + a1 * bvf[k2*n1+i2]) );
+
+			double wb = c * (
+				b2 * (a2 * bwf[k1*n1+i1] + a1 * bwf[k1*n1+i2]) +
+				b1 * (a2 * bwf[k2*n1+i1] + a1 * bwf[k2*n1+i2]) );
+
+			u(i,0,k) += ub; u(i,ms.Ny,k) += ub;
+			v(i,1,k) += vb; v(i,ms.Ny,k) -= vb;
+			w(i,0,k) += wb; w(i,ms.Ny,k) += wb;
+		}}
+	}
+
+	// FILE* fp = fopen("r12ref.dat", "a");
+	// fprintf(fp, "%.6e\n", r12);
+	// fclose(fp);
+}
 
 
 

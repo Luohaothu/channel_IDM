@@ -26,6 +26,7 @@ void Solver::Manipulation()
 // #define _FULLCHANNEL_SLIPWM
 // #define _TBL
 #define _ETBL
+// #define _SYNMFU
 #define _TESTCHANNEL
 
 // *********************************** //
@@ -144,6 +145,23 @@ void Solver::Evolve(const Solver &slv)
 	CalcVis(vis, fld.SeeVec(), para.Re, para.bftype);
 	OFW::OffWallSubGridUniform(vis, fld.SeeVec(), slv.fld.SeeVec(), para.Re, Ret, rsclx, rsclu);
 	OFW::OffWallVelo(bc, sbc, fldh.GetVec(), fld.SeeVec(), slv.fld.SeeVec(), Ret, rsclx, rsclu);
+	CalcFb(fb, mpg);
+	IDM::calc(fldh, fld, vis, fb, bc, sbc, para.dt);
+	SetBoundaries(fldh.GetVec(), bc, sbc);
+	Manipulation();
+
+	fld += (fldh -= fld);
+}
+#endif
+
+#ifdef _SYNMFU // off-wall channel with synthetic MFU
+void Solver::Evolve()
+{
+	step ++; time += para.dt;
+	
+	CalcVis(vis, fld.SeeVec(), para.Re, para.bftype);
+	WM::UniformReyShear(vis, fld.SeeVec(), -.9419, 0, para.Re);
+	OFW::OffWallVelo(bc, sbc, fldh.GetVec(), fld.SeeVec(), time, InnerScale());
 	CalcFb(fb, mpg);
 	IDM::calc(fldh, fld, vis, fb, bc, sbc, para.dt);
 	SetBoundaries(fldh.GetVec(), bc, sbc);

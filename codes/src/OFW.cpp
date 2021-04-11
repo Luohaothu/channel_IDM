@@ -189,6 +189,13 @@ void OFW::OffWallVelo(Boundaries &bc, Boundaries &sbc, Vctr &veltmp,
 	Bcond::ChannelDirichlet(bc, sbc, vel.ms, veltmp);
 }
 
+void OFW::OffWallVelo(Boundaries &bc, Boundaries &sbc, Vctr &veltmp,
+	const Vctr &vel, double time, double Ret)
+{
+	PIO::PredictBoundary(veltmp, vel, time, Ret);
+	Bcond::ChannelDirichlet(bc, sbc, vel.ms, veltmp);
+}
+
 
 double OFW::ReynoldsStressDefect(int j, const Vctr &vel, const Vctr &veldns, double Re, double Ret, double rsclx, double rsclu)
 // calculate Reynolds stress R12 - R12^r at Z-edge of layer j
