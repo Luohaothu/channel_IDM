@@ -154,9 +154,12 @@ void Flow::WriteTecplot(const char *path, int tstep, double time) const
 	Scla v(ms);
 	Scla w(ms);
 
-	v_[1].Ugrid2CellCenter(u);
-	v_[2].Vgrid2CellCenter(v);
-	v_[3].Wgrid2CellCenter(w);
+	#pragma omp parallel
+	{
+		u.Ugrid2CellCenter(v_[1]);
+		v.Vgrid2CellCenter(v_[2]);
+		w.Wgrid2CellCenter(v_[3]);
+	}
 
 	sprintf(filename, "%sFIELD%08i.dat", path, tstep);
 

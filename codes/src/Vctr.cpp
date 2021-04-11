@@ -190,5 +190,12 @@ const double* Vctr::Gradient(int i, int j, int k) const
 }
 
 
+Vctr& Vctr::Sgrid2CellCenter(const Vctr &src)
+{
+	v1_.Ugrid2CellCenter(src[1]);
+	v2_.Vgrid2CellCenter(src[2]);
+	v3_.Wgrid2CellCenter(src[3]);
+	return *this;
+}
 
 

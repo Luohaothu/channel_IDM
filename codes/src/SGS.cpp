@@ -138,12 +138,9 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 	/***** solve Lij *****/
 
 	// Ui, cell-centered, stored in Lij
-	#pragma omp single
-	{
-		u.Ugrid2CellCenter(uc);
-		v.Vgrid2CellCenter(vc);
-		w.Wgrid2CellCenter(wc);
-	}
+	uc.Ugrid2CellCenter(u);
+	vc.Vgrid2CellCenter(v);
+	wc.Wgrid2CellCenter(w);
 
 	// F(Ui) and Ui*Uj
 	#pragma omp for collapse(3)
@@ -390,9 +387,16 @@ void SGS::SubGridStress(Vctr &shear, Vctr &normal, const Vctr &veldns, double rs
 	Scla &tau22 = normal[2], &tau23 = shear[2];
 	Scla &tau33 = normal[3], &tau13 = shear[3];
 
-	Scla uu(ms0), uv(ms0), &uc = uu; u.Ugrid2CellCenter(uc); // cell-center-interpolation are for cross terms
-	Scla vv(ms0), vw(ms0), &vc = vv; v.Vgrid2CellCenter(vc); // virtual boundary use linear extrapolation
-	Scla ww(ms0), uw(ms0), &wc = ww; w.Wgrid2CellCenter(wc); // with periodicity ignored
+	Scla uu(ms0), uv(ms0), &uc = uu;
+	Scla vv(ms0), vw(ms0), &vc = vv;
+	Scla ww(ms0), uw(ms0), &wc = ww;
+
+	#pragma omp parallel
+	{
+		uc.Ugrid2CellCenter(u); // cell-center-interpolation are for cross terms
+		vc.Vgrid2CellCenter(v); // virtual boundary use linear extrapolation
+		wc.Wgrid2CellCenter(w); // with periodicity ignored
+	}
 
 	// calculate cross terms at cell-centers
 	(uv.Set(uc)) *= vc;
@@ -456,9 +460,16 @@ void SGS::SubGridShearStress(Vctr &shear, const Vctr &veldns, double rsclx, doub
 	const Scla &v = veldns[2];
 	const Scla &w = veldns[3];
 
-	Scla uv(ms0), &tau12 = shear[1], &uc = uv; u.Ugrid2CellCenter(uc); // cell-center-interpolation are for cross terms
-	Scla vw(ms0), &tau23 = shear[2], &vc = vw; v.Vgrid2CellCenter(vc); // virtual boundary use linear extrapolation
-	Scla uw(ms0), &tau13 = shear[3], &wc = uw; w.Wgrid2CellCenter(wc); // with periodicity ignored
+	Scla uv(ms0), &tau12 = shear[1], &uc = uv;
+	Scla vw(ms0), &tau23 = shear[2], &vc = vw;
+	Scla uw(ms0), &tau13 = shear[3], &wc = uw;
+
+	#pragma omp parallel
+	{
+		uc.Ugrid2CellCenter(u); // cell-center-interpolation are for cross terms
+		vc.Vgrid2CellCenter(v); // virtual boundary use linear extrapolation
+		wc.Wgrid2CellCenter(w); // with periodicity ignored
+	}
 
 	// calculate cross terms at cell-centers
 	Scla temp(uc);

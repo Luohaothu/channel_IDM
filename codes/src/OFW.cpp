@@ -130,7 +130,8 @@ void OFW::OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veld
 		Bcond::SetBoundaryY(nuc, 1); // homogeneous Neumann
 		Bcond::SetBoundaryX(nuc, 3); // periodic
 		Bcond::SetBoundaryZ(nuc, 3); // periodic
-		vis.CellCenter2Edge();
+		#pragma omp parallel
+		vis.CellCenter2Edges();
 	}
 
 	double t12sgs = 0;
@@ -169,7 +170,8 @@ void OFW::OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veld
 		Bcond::SetBoundaryY(nuc, 1); // homogeneous Neumann
 		Bcond::SetBoundaryX(nuc, 3); // periodic
 		Bcond::SetBoundaryZ(nuc, 3); // periodic
-		vis.CellCenter2Edge();
+		#pragma omp parallel
+		vis.CellCenter2Edges();
 	}
 
 	// note: when OffWallSubGridDissipation is used in conjuction with OffWallSubGridShear,

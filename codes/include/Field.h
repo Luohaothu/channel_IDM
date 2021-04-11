@@ -65,12 +65,10 @@ public:
 	double MeanA() const;
 
 	// interpolation (among faces, edges and cell-centers)
-	void Ugrid2CellCenter(Scla &dst) const;
-	void Vgrid2CellCenter(Scla &dst) const;
-	void Wgrid2CellCenter(Scla &dst) const;
-	void CellCenter2EdgeX(Scla &dst) const;
-	void CellCenter2EdgeY(Scla &dst) const;
-	void CellCenter2EdgeZ(Scla &dst) const;
+	Scla& Ugrid2CellCenter(const Scla &src);
+	Scla& Vgrid2CellCenter(const Scla &src);
+	Scla& Wgrid2CellCenter(const Scla &src);
+	void CellCenter2Edges(Scla &dst1, Scla &dst2, Scla &dst3) const;
 
 	// differential operators (operating on cell-centered quantities)
 	const double* Gradient(int i, int j, int k) const;
@@ -159,6 +157,8 @@ public:
 	const double* Strainrate(int i, int j, int k) const;
 	const double* Gradient  (int i, int j, int k) const;
 
+	Vctr& Sgrid2CellCenter(const Vctr &src);
+
 private:
 	Scla v1_;
 	Scla v2_;
@@ -193,11 +193,7 @@ public:
 	const Scla& SeeVec(int n) const { return SeeVec()[n]; };
 
 	// interpolate
-	void CellCenter2Edge() {
-		s_.CellCenter2EdgeX(v_[1]);
-		s_.CellCenter2EdgeY(v_[2]);
-		s_.CellCenter2EdgeZ(v_[3]);
-	};
+	void CellCenter2Edges() { s_.CellCenter2Edges(v_[1], v_[2], v_[3]); };
 
 	void CleanBoundary();
 	void CombineBoundary(const Flow &fld, double a, double b);

@@ -335,9 +335,12 @@ double Statis::CheckProf(const Flow &fld, const Flow &vis, double velm[3])
 	Scla nuc(ms);
 
 	// interpolate to cell-centered points
-	fld.SeeVec(1).Ugrid2CellCenter(u);
-	fld.SeeVec(2).Vgrid2CellCenter(v);
-	fld.SeeVec(3).Wgrid2CellCenter(w);
+	#pragma omp parallel
+	{
+		u.Ugrid2CellCenter(fld.SeeVec(1));
+		v.Vgrid2CellCenter(fld.SeeVec(2));
+		w.Wgrid2CellCenter(fld.SeeVec(3));
+	}
 	
 	p.Set(fld.SeeScl());
 	p.SetLyr(p.SeeLyr(1), 0);

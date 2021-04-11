@@ -197,8 +197,8 @@ void Solver::CalcVis(Flow &vis, const Vctr &vel, double Re, int sgstyp)
 
 		nuc += 1./Re;
 	}
-
-	vis.CellCenter2Edge();
+	#pragma omp parallel
+	vis.CellCenter2Edges();
 }
 
 
