@@ -137,8 +137,8 @@ void ChannelRobin(Boundaries &bc, Boundaries &sbc, const Vctr &vel, const Flow &
 // Channel half: no-slip on bottom wall; v=0, du/dy=dw/dy=0 on top boundary
 void ChannelHalf(Boundaries &bc, Boundaries &sbc, const Mesh &ms);
 
-// TBL: no-slip on bottom wall; u=U, dv/dy=dw/dy=0 on top boundary
-void TblCycling(Boundaries &bc, Boundaries &sbc, const Mesh &ms, double ufree);
+// TBL: no-slip on bottom wall; v=0, du/dy=dw/dy=0 on top boundary; du/dt + C du/dx = 0 on exit; inlet flipped from outlet
+void TblEquiv(Boundaries &bc, Boundaries &sbc, const Vctr &vel, double dt);
 
 // TBL: no-slip on bottom wall; u=U, dv/dy=dw/dy=0 on top boundary; du/dt + C du/dx = 0 on exit
 void TblDevelop(Boundaries &bc, Boundaries &sbc, const Vctr &vel, double ufree, double dt);

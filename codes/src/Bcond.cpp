@@ -270,21 +270,49 @@ void Bcond::ChannelHalf(Boundaries &bc, Boundaries &sbc, const Mesh &ms)
 	}}
 }
 
-void Bcond::TblCycling(Boundaries &bc, Boundaries &sbc, const Mesh &ms, double ufree)
+void Bcond::TblEquiv(Boundaries &bc, Boundaries &sbc, const Vctr &vel, double dt)
 {
+	const Mesh &ms = vel.ms;
+	const Scla &u = vel[1];
+	const Scla &v = vel[2];
+	const Scla &w = vel[3];
+
+	double dx0 = ms.dx(0), dxn = ms.hx(ms.Nx); // dxn is for v & w
+	double dx1 = ms.dx(1), dxm = ms.dx(ms.Nx-1);
 	double dy0 = ms.dy(0), dyn = ms.dy(ms.Ny);
 	double dy1 = ms.dy(1), dym = ms.dy(ms.Ny-1);
+
+	double UC = u.MeanUyz(ms.Nx);
+	double c1 = 2./UC * dxm/dt;
+	double c2 = 2./UC * dxn/dt;
+
+	for (int j=0; j<=ms.Ny; j++) {
+	for (int k=0; k<=ms.Nz; k++) {
+		// inlet: spanwise flip from outlet
+		bc.ub1(j,k) = u(ms.Nx*.66,j,ms.Nz-k);
+		bc.vb1(j,k) = v(ms.Nx*.66,j,ms.Nz-k);
+		bc.wb1(j,k) = k==0 ? 0 : -w(ms.Nx*.66,j,ms.Nz-k+1);
+
+		sbc.ub1(j,k) = 0;
+		sbc.vb1(j,k) = dx0 / dx1;
+		sbc.wb1(j,k) = dx0 / dx1;
+
+		// outlet: convection (dq/dt + UC dq/dx = 0)
+		bc.ub2(j,k) = (c1-1)/(c1+1) * u(ms.Nx,j,k) + 1./(c1+1) * u(ms.Nx-1,j,k); sbc.ub2(j,k) = -1./(c1+1);
+		bc.vb2(j,k) = (c2-1)/(c2+1) * v(ms.Nx,j,k) + 1./(c2+1) * v(ms.Nx-1,j,k); sbc.vb2(j,k) = -1./(c2+1);
+		bc.wb2(j,k) = (c2-1)/(c2+1) * w(ms.Nx,j,k) + 1./(c2+1) * w(ms.Nx-1,j,k); sbc.wb2(j,k) = -1./(c2+1);
+	}}
 
 	for (int k=0; k<=ms.Nz; k++) {
 	for (int i=0; i<=ms.Nx; i++) {
 
-		bc.ub3(i,k) = 0; sbc.ub3(i,k) = dy0 / dy1;
-		bc.wb3(i,k) = 0; sbc.wb3(i,k) = dy0 / dy1;
+		bc.ub3(i,k) = 0; sbc.ub3(i,k) = dy0 / dy1; // for points deployed on virtual boundary,
+		bc.wb3(i,k) = 0; sbc.wb3(i,k) = dy0 / dy1; // interpolation is needed to satisfy BC on real boundary
 		bc.vb3(i,k) = 0; sbc.vb3(i,k) = 0;
 
-		bc.ub4(i,k) = ufree; sbc.ub4(i,k) = dyn / dym;
-		bc.wb4(i,k) = 0;     sbc.wb4(i,k) = -1;
-		bc.vb4(i,k) = 0;     sbc.vb4(i,k) = -1;
+		bc.ub4(i,k) = 0; sbc.ub4(i,k) = -1;
+		bc.wb4(i,k) = 0; sbc.wb4(i,k) = -1;
+		bc.vb4(i,k) = 0; sbc.vb4(i,k) = 0;
 	}}
 }
 
