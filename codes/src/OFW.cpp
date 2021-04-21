@@ -78,7 +78,7 @@ void OFW::OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veld
 	for (int k=1; k<ms0.Nz; k++) {
 	for (int i=1; i<ms0.Nx; i++) {
 
-		const double *sr = veldns.Strainrate(i,j,k); // cannot parallelize because sr is static
+		vector<double> sr = veldns.Strainrate(i,j,k); // cannot parallelize because sr is static
 
 		s11(i,j,k) = sr[0]; s22(i,j,k) = sr[1]; s33(i,j,k) = sr[2];
 		s12(i,j,k) = sr[3]; s23(i,j,k) = sr[4]; s13(i,j,k) = sr[5];
@@ -114,7 +114,7 @@ void OFW::OffWallSubGridDissipation(Flow &vis, const Vctr &vel, const Vctr &veld
 			tau23sgs[id] * Filter::FilterNodeA(x,y,z,dx,dy,dz,s23) +
 			tau13sgs[id] * Filter::FilterNodeA(x,y,z,dx,dy,dz,s13) ) * 2 );
 
-		const double *sr = vel.Strainrate(i,j,k); // cannot parallelize because sr is static
+		vector<double> sr = vel.Strainrate(i,j,k); // cannot parallelize because sr is static
 
 		double ss =
 			sr[0]*sr[0] + sr[1]*sr[1] + sr[2]*sr[2] +

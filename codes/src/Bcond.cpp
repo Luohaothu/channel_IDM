@@ -592,7 +592,7 @@ void DeltaTau(double dtau[3], int j, const Vctr &vel, const Flow &vis, const Vct
 		double tau23dns = 0;//Filter::FilterNodeV(xc, y, z+offsetz, dx,0,hz, tau23);
 
 		// strain rate of the current velocity field
-		const double *sr = vel.ShearStrain(i,j,k);
+		vector<double> sr = vel.ShearStrain(i,j,k);
 
 		// Fij = <tau^DNS_ij - tau_ij>
 		dtau[0] += (tau12dns - 2 * nuz(i,j,k) * sr[0]) / ((ms.Nx-1) * (ms.Nz-1));
@@ -687,7 +687,7 @@ void ShearStress(Vctr &shear, const Vctr &vel, const Flow &vis)
 	for (int k=0; k<=ms.Nz; k++) {
 	for (int i=0; i<=ms.Nx; i++) {
 
-		const double *sr = vel.ShearStrain(i,j,k);
+		vector<double> sr = vel.ShearStrain(i,j,k);
 
 		if (i>0 && j>0) tau12(i,j,k) = 2 * nuz(i,j,k) * sr[0];
 		if (j>0 && k>0) tau23(i,j,k) = 2 * nux(i,j,k) * sr[1];

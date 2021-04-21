@@ -187,7 +187,7 @@ vector<double> Statis::MeanVisShearStresses(int j, const Vctr &vel, const Flow &
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
 
-		const double *sr = vel.ShearStrain(i,j,k);
+		vector<double> sr = vel.ShearStrain(i,j,k);
 
 		tau12 += 2. * nuz(i,j,k) * sr[0];
 		tau23 += 2. * nux(i,j,k) * sr[1];
@@ -521,6 +521,7 @@ double Statis::GetLog(const char *path, int tstep, vector<double> &mpg)
 		fclose(fp);
 	}
 
+	delete dummy;
 	return t;
 }
 

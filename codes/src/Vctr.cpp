@@ -57,7 +57,7 @@ double Vctr::Convection(int i, int j, int k) const
 		+	.5 * fabs(w[kp] + w[id]) / ms.dz(k);
 }
 
-const double* Vctr::ShearStrain(int i, int j, int k) const
+vector<double> Vctr::ShearStrain(int i, int j, int k) const
 // compute the 3 shear components of strain rate tensor on cell edges up to virtual boundary
 {
 	int id =              ms.idx(i,j,k);
@@ -68,8 +68,7 @@ const double* Vctr::ShearStrain(int i, int j, int k) const
 	const Scla &v = v2_;
 	const Scla &w = v3_;
 
-	static double sr[3]; // will be overwritten even called from different objects of this class
-	#pragma omp threadprivate(sr)
+	vector<double> sr(3,0.);
 
 	sr[0] = .5 * ((u[id]-u[jm]) / hyc + (v[id]-v[im]) / hxc); // S_12
 	sr[1] = .5 * ((v[id]-v[km]) / hzc + (w[id]-w[jm]) / hyc); // S_23
@@ -78,7 +77,7 @@ const double* Vctr::ShearStrain(int i, int j, int k) const
 	return sr;
 }
 
-const double* Vctr::Strainrate(int i, int j, int k) const
+vector<double> Vctr::Strainrate(int i, int j, int k) const
 /* compute the strain rate tensor of a vector field at the center of cell (i,j,k) */
 // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
 {
@@ -101,8 +100,7 @@ const double* Vctr::Strainrate(int i, int j, int k) const
 	const Scla &v = v2_;
 	const Scla &w = v3_;
 
-	static double sr[6]; // will be overwritten even called from different objects of this class
-	#pragma omp threadprivate(sr)
+	vector<double> sr(6,0.);
 
 	// S_ii
 	sr[0] = (u[ip] - u[id]) / dxc;
@@ -130,7 +128,7 @@ const double* Vctr::Strainrate(int i, int j, int k) const
 	return sr;
 }
 
-const double* Vctr::Gradient(int i, int j, int k) const
+vector<double> Vctr::Gradient(int i, int j, int k) const
 /* compute the gradient tensor of a vector field at the center of cell (i,j,k) */
 // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
 {
@@ -154,8 +152,7 @@ const double* Vctr::Gradient(int i, int j, int k) const
 	const Scla &v = v2_;
 	const Scla &w = v3_;
 	
-	static double gr[9]; // will be overwritten even called from different objects of this class
-	#pragma omp threadprivate(gr)
+	vector<double> gr(9,0.);
 
 	// a_ii
 	gr[0] = (u[ip] - u[id]) / dxc;	// a11

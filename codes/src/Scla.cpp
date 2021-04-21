@@ -455,11 +455,11 @@ void Scla::CellCenter2Edges(Scla &dst1, Scla &dst2, Scla &dst3) const
 
 /***** differentiation operators *****/
 
-const double* Scla::Gradient(int i, int j, int k) const
+vector<double>  Scla::Gradient(int i, int j, int k) const
 /* compute Gradient of a cell-centered scalar field to corresponding U,V,W grids */
 
 {
-	static double grad[3]; // will be overwritten even called from different objects of this class
+	vector<double> grad(3,0.);
 
 	int id =        ms.idx(i,j,k);
 	int im, jm, km; ms.imx(i,j,k,im,jm,km);
@@ -468,7 +468,7 @@ const double* Scla::Gradient(int i, int j, int k) const
 	grad[1] = (q_[id] - q_[jm]) / ms.hy(j); // [0,Nx], [1,NY], [0,Nz]
 	grad[2] = (q_[id] - q_[km]) / ms.hz(k); // [0,Nx], [0,NY], [1,Nz]
 
-	return grad; // CAUTION: avoid successive calling to this function, because the static return variable will be overwritten every time
+	return grad;
 }
 
 

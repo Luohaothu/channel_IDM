@@ -22,7 +22,7 @@ void WM::UniformVisShear(Flow &vis, const Vctr &vel, double tau12, double tau23)
 	for (int i=1; i<=ms.Nx; i++) {
 
 		double sgn = j==1 ? 1 : -1;
-		const double *sr = vel.ShearStrain(i,j,k);
+		vector<double> sr = vel.ShearStrain(i,j,k);
 
 		if (k<ms.Nz) nuz(i,j,k) = fmin(fmax(sgn * .5 * tau12 / sr[0], -.1), .1);
 		if (i<ms.Nx) nux(i,j,k) = fmin(fmax(sgn * .5 * tau23 / sr[1], -.1), .1);
@@ -51,7 +51,7 @@ void WM::UniformReyShear(Flow &vis, const Vctr &vel, double r12ref, double r23re
 	for (int i=1; i<=ms.Nx; i++) {
 
 		double sgn = j==1 ? 1 : -1;
-		const double *sr = vel.ShearStrain(i,j,k);
+		vector<double> sr = vel.ShearStrain(i,j,k);
 
 		if (k<ms.Nz) nuz(i,j,k) = rsclvis/Re + fmin(fmax(sgn * .5 * tau12 / sr[0], -.1), .1);
 		if (i<ms.Nx) nux(i,j,k) = rsclvis/Re + fmin(fmax(sgn * .5 * tau23 / sr[1], -.1), .1);
@@ -91,7 +91,7 @@ void WM::LogLawWallShear(Flow &vis, const Vctr &vel, double Ret)
 		double tau12 = sgn * law * Interp::InterpNodeU(dlt+ms.x(i),yyy,ms.zc(k),u);
 		double tau23 = sgn * law * Interp::InterpNodeW(dlt+ms.xc(i),yyy,ms.z(k),w);
 
-		const double *sr = vel.ShearStrain(i,j,k);
+		vector<double> sr = vel.ShearStrain(i,j,k);
 
 		if (k<ms.Nz) nuz(i,j,k) = fmin(fmax(.5 * tau12 / sr[0], -.1), .1);
 		if (i<ms.Nx) nux(i,j,k) = fmin(fmax(.5 * tau23 / sr[1], -.1), .1);
@@ -115,7 +115,7 @@ void WM::SubGridShear(Flow &vis, const Vctr &vel, const Vctr &shearsgs, double R
 	for (int k=1; k<=ms.Nz; k++) {
 	for (int i=1; i<=ms.Nx; i++) {
 
-		const double *sr = vel.ShearStrain(i,j,k);
+		vector<double> sr = vel.ShearStrain(i,j,k);
 
 		// it is necessary to allow negative eddy viscosity on boundary for correct tau
 		if (k<ms.Nz) nuz(i,j,k) = rsclvis/Re + fmin(fmax(.5 * tau12(i,j,k) / sr[0], -.1), .1);

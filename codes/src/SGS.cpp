@@ -47,7 +47,7 @@ void SGS::Smargorinsky(Scla &nut, const Vctr &vel, double Re, double Cs)
 		double dlt = pow(ms.dx(i)*ms.dy(j)*ms.dz(k), 1./3); // filter size
 		double dmp = 1 - exp( (fabs(1-ms.yc(j)) - 1) * Ret / 25. ); // Van Driest damping: 1-exp(-y^+/A^+), with A^+ = 25
 
-		const double *sr = vel.Strainrate(i,j,k);
+		vector<double> sr = vel.Strainrate(i,j,k);
 
 		double sra = sqrt(
 			2. * ( sr[0]*sr[0] + sr[1]*sr[1] + sr[2]*sr[2] +
@@ -82,7 +82,7 @@ void SGS::DynamicSmarg(Scla &nut, const Vctr &vel)
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
 
-		const double *sr = vel.Strainrate(i,j,k); // returned value in Strainrate is static and may not be parallised
+		vector<double> sr = vel.Strainrate(i,j,k);
 
 		double sra = sqrt(
 			2. * ( sr[0]*sr[0] + sr[1]*sr[1] + sr[2]*sr[2] +
@@ -242,7 +242,7 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 	for (int j=1; j<ms.Ny; j++) {
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
-		const double *sr = vel.Strainrate(i,j,k);
+		vector<double> sr = vel.Strainrate(i,j,k);
 
 		s11(i,j,k) = sr[0]; s22(i,j,k) = sr[1]; s33(i,j,k) = sr[2];
 		s12(i,j,k) = sr[3]; s23(i,j,k) = sr[4]; s13(i,j,k) = sr[5];
@@ -255,7 +255,7 @@ void SGS::DynamicVreman(Scla &nut, const Vctr &vel, double Re)
 	for (int k=1; k<ms.Nz; k++) {
 	for (int i=1; i<ms.Nx; i++) {
 		// Gij = dUj/dXi
-		const double *gr = vel.Gradient(i,j,k);
+		vector<double> gr = vel.Gradient(i,j,k);
 
 		g11(i,j,k) = gr[0]; g12(i,j,k) = gr[1]; g13(i,j,k) = gr[2];
 		g21(i,j,k) = gr[3]; g22(i,j,k) = gr[4]; g23(i,j,k) = gr[5];

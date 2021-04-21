@@ -71,7 +71,7 @@ public:
 	void CellCenter2Edges(Scla &dst1, Scla &dst2, Scla &dst3) const;
 
 	// differential operators (operating on cell-centered quantities)
-	const double* Gradient(int i, int j, int k) const;
+	std::vector<double> Gradient(int i, int j, int k) const;
 
 	// arithmetic
 	Scla& SetLyr(double a, int j=0) { TravLyr(a, j, set); return *this; }; // set to a
@@ -153,9 +153,9 @@ public:
 	double  Module    (int i, int j, int k) const;
 	double  Divergence(int i, int j, int k) const;
 	double  Convection(int i, int j, int k) const;
-	const double* ShearStrain(int i, int j, int k) const;
-	const double* Strainrate(int i, int j, int k) const;
-	const double* Gradient  (int i, int j, int k) const;
+	std::vector<double> ShearStrain(int i, int j, int k) const;
+	std::vector<double> Strainrate (int i, int j, int k) const;
+	std::vector<double> Gradient   (int i, int j, int k) const;
 
 	Vctr& Sgrid2CellCenter(const Vctr &src);
 
