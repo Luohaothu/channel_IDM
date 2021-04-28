@@ -259,10 +259,13 @@ void Solver::CalcFb(Vctr &fb, const vector<double> &mpg, const char *filename)
 
 void Solver::CalcMpg(vector<double> &mpg, Vctr &vel, double dt)
 {
+	double du = vel[1].MeanU() - 1.;
+	double dw = vel[3].MeanW();
+
 	vector<double> mpgref(3,0);
 	// solve mpg increment with streamwise flowrate 2.0 and spanwise 0
-	mpgref[0] = mpg[0] + (vel[1].MeanU() - 1.) / dt;
-	mpgref[2] = mpg[2] +  vel[3].MeanW()       / dt;
+	mpgref[0] = mpg[0] + du / dt;
+	mpgref[2] = mpg[2] + dw / dt;
 	CalcMpg(mpg, vel, dt, mpgref);
 }
 void Solver::CalcMpg(vector<double> &mpg, Vctr &vel, double dt, const vector<double> &mpgref)
@@ -277,8 +280,8 @@ void Solver::CalcMpg(vector<double> &mpg, Vctr &vel, double dt, const vector<dou
 	double dmpg3 = mpgref[2] - mpg[2];
 
 	double limiter = 100;
-	dmpg1 = limiter / (PI/2) * atan(dmpg1 / limiter);
-	dmpg3 = limiter / (PI/2) * atan(dmpg3 / limiter);
+	dmpg1 = limiter / (PI/2) * atan(dmpg1 / limiter * (PI/2));
+	dmpg3 = limiter / (PI/2) * atan(dmpg3 / limiter * (PI/2));
 
 	// update mpg
 	mpg[0] += dmpg1;
