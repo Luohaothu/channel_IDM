@@ -55,6 +55,7 @@ private:
 	// ***** adjusting mean pressure gradient ***** //
 	static void CalcMpg(std::vector<double> &mpg, Vctr &vel, double dt);
 	static void CalcMpg(std::vector<double> &mpg, Vctr &vel, double dt, const std::vector<double> &mpgref);
+	static void CalcMpg(std::vector<double> &mpg, Vctr &vel, const Vctr &fb, double dt);
 
 	// ***** utilitis ***** //
 	double InnerScale() const;

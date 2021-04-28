@@ -252,13 +252,14 @@ void Solver::CalcFb(Vctr &fb, const vector<double> &mpg, const char *filename)
 		double a = (y[j1] - yc) / (y[j1] - y[j0]);
 		double b = (yc - y[j0]) / (y[j1] - y[j0]);
 
-		fb[1].AddLyr(a * f[j0] + b * f[j1], j);
+		fb[1].MltLyr(a * f[j0] + b * f[j1], j); // transformed from inner-scale to outer-scale by -mpg
 	}
 }
 
 
 void Solver::CalcMpg(vector<double> &mpg, Vctr &vel, double dt)
 {
+	// double du = vel[1].meanxz(Interp::BiSearch(1., vel.ms.yc(), 0, vel.ms.Ny+1)) - .99;
 	double du = vel[1].MeanU() - 1.;
 	double dw = vel[3].MeanW();
 
@@ -298,6 +299,39 @@ void Solver::CalcMpg(vector<double> &mpg, Vctr &vel, double dt, const vector<dou
 	}}}
 
 	// note: since BC has been applied before, this function should maintain boundary relations
+}
+
+void Solver::CalcMpg(vector<double> &mpg, Vctr &vel, const Vctr &fb, double dt)
+{
+	const Mesh &ms = vel.ms;
+	Scla &u = vel[1];
+	Scla &w = vel[3];
+
+	int j = Interp::BiSearch(1., ms.yc(), 0, ms.Ny+1);
+
+	double du = vel[1].meanxz(j) - .99;
+	double dw = vel[3].MeanW();
+
+	double dmpg1 = du/dt / fb[1](1,j,1) * (mpg[0] ? -mpg[0] : 1.);
+	double dmpg3 = dw/dt;
+
+	double limiter = 100;
+	dmpg1 = limiter / (PI/2) * atan(dmpg1 / limiter * (PI/2));
+	dmpg3 = limiter / (PI/2) * atan(dmpg3 / limiter * (PI/2));
+
+	// complement mpg increment that was not included in the velocity update step
+	#pragma omp parallel for collapse(3)
+	for (int j=1; j<ms.Ny; j++) {
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
+
+		if (i>0) u(i,j,k) -= dt * dmpg1 * fb[1](1,j,1) / (mpg[0] ? -mpg[0] : 1.); // add a fraction of Fx profile
+		if (k>0) w(i,j,k) -= dt * dmpg3;
+	}}}
+
+	// update mpg
+	mpg[0] += dmpg1;
+	mpg[2] += dmpg3;
 }
 
 

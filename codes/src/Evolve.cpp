@@ -13,6 +13,7 @@ using namespace std;
 void Solver::Manipulation()
 {
 	// CalcMpg(mpg, fldh.GetVec(), para.dt);
+	CalcMpg(mpg, fldh.GetVec(), fb, para.dt);
 
 	if (para.bftype == 1)
 		RemoveSpanMean(fldh.GetVec());
@@ -117,12 +118,12 @@ void Solver::Evolve()
 {
 	step ++; time += para.dt;
 
-	mpg[0] = mpg[1] = mpg[2] = 0;
+	if (step==1) {mpg[0] = -1.; mpg[1] = mpg[2] = 0;}
 
 	CalcVis(vis, fld.SeeVec(), para.Re, para.bftype);
-	// Bcond::ChannelHalf(bc, sbc, ms);
-	Bcond::TblEquiv(bc, sbc, fld.SeeVec(), para.dt);
+	Bcond::ChannelHalf(bc, sbc, ms);
 	CalcFb(fb, mpg, "Fx.txt");
+	// Bcond::TblEquiv(bc, sbc, fld.SeeVec(), fb, vis, para.dt);
 	IDM::calc(fldh, fld, vis, fb, bc, sbc, para.dt);
 	SetBoundaries(fldh.GetVec(), bc, sbc);
 	Manipulation();
