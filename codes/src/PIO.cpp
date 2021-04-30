@@ -316,7 +316,7 @@ void PIO::PredictBoundary(Vctr &veltmp, const Vctr &vel, double time, double Ret
 		wo.fftxz(jo1, jo2);
 
 		#pragma omp for collapse(2)
-		for (int j=jo1; j<=jo2; j++) {
+		for (int j=jo1; j<=jo2; j+=jo2-jo1) {
 		for (int i=0; i<ms.Nxc; i++) {
 
 			// get mean value at wave number k_x = 0
@@ -342,10 +342,29 @@ void PIO::PredictBoundary(Vctr &veltmp, const Vctr &vel, double time, double Ret
 				fabs(ms.kz(k)/Ret) >= 2e-2 ||
 				(k==0 && i==0))
 			{
-				vo(2*i,jo1,k) = 0; vo(2*i+1,jo1,k) = 0;
-				wo(2*i,jo1,k) = 0; wo(2*i+1,jo1,k) = 0;
-				vo(2*i,jo2,k) = 0; vo(2*i+1,jo2,k) = 0;
-				wo(2*i,jo2,k) = 0; wo(2*i+1,jo2,k) = 0;
+				vo[ms.idfxz(2*i,jo1,k)] = 0; vo[ms.idfxz(2*i+1,jo1,k)] = 0;
+				wo[ms.idfxz(2*i,jo1,k)] = 0; wo[ms.idfxz(2*i+1,jo1,k)] = 0;
+				vo[ms.idfxz(2*i,jo2,k)] = 0; vo[ms.idfxz(2*i+1,jo2,k)] = 0;
+				wo[ms.idfxz(2*i,jo2,k)] = 0; wo[ms.idfxz(2*i+1,jo2,k)] = 0;
+			} else {
+				// impose shift in superposition
+				double vr, vi, wr, wi;
+				double cv, sv, cw, sw;
+
+				cv = cos(fabs(ms.kx(i)) * dxav + ms.kz(k) * dzav);
+				sv = sin(fabs(ms.kx(i)) * dxav + ms.kx(k) * dzav);
+				cw = cos(fabs(ms.kx(i)) * dxaw + ms.kz(k) * dzaw);
+				sw = sin(fabs(ms.kx(i)) * dxaw + ms.kx(k) * dzaw);
+
+				for (int j=jo1; j<=jo2; j+=jo2-jo1) {
+					vr = vo[ms.idfxz(2*i,j,k)]; vi = vo[ms.idfxz(2*i+1,j,k)];
+					wr = wo[ms.idfxz(2*i,j,k)]; wi = wo[ms.idfxz(2*i+1,j,k)];
+
+					vo[ms.idfxz(2*i,  j,k)] = alfv * (vr * cv - vi * sv);
+					vo[ms.idfxz(2*i+1,j,k)] = alfv * (vi * cv + vr * sv);
+					wo[ms.idfxz(2*i,  j,k)] = alfw * (wr * cw - wi * sw);
+					wo[ms.idfxz(2*i+1,j,k)] = alfw * (wi * cw + wr * sw);
+				}
 			}
 		}}
 
@@ -400,20 +419,17 @@ void PIO::PredictBoundary(Vctr &veltmp, const Vctr &vel, double time, double Ret
 	for (int i=1; i<ms.Nx; i++) {
 
 		ub(i,0,    k) += uo(i,jo1,k);
+		vb(i,1,    k) += vo(i,jo1,k);
+		wb(i,0,    k) += wo(i,jo1,k);
+
 		ub(i,ms.Ny,k) += uo(i,jo2,k);
-
-		double x = ms.xc(i) + dxav;
-		double z = ms.zc(k) + dzav;
-
-		vb(i,1,    k) += alfv * Interp::InterpNodeV(x,ms.y(jo1),z,vo);
-		vb(i,ms.Ny,k) += alfv * Interp::InterpNodeV(x,ms.y(jo2),z,vo);
-
-		x = ms.xc(i) + dxaw;
-		z = ms.z (k) + dzaw;
-
-		wb(i,0,    k) += alfw * Interp::InterpNodeW(x,ms.yc(jo1),z,wo);
-		wb(i,ms.Ny,k) += alfw * Interp::InterpNodeW(x,ms.yc(jo2),z,wo);
+		vb(i,ms.Ny,k) += vo(i,jo2,k);
+		wb(i,ms.Ny,k) += wo(i,jo2,k);
 	}}
+
+	// must avoid mean transpiration (this bug, inducing asymmetry and flowrate grow, took me 1 week to find)
+	vb.AddLyr(-vb.meanxz(1),     1);
+	vb.AddLyr(-vb.meanxz(ms.Ny), ms.Ny);
 
 	Bcond::SetBoundaryX(velb);
 	Bcond::SetBoundaryZ(velb);
@@ -923,8 +939,8 @@ void PIO::ReadSynthe(Vctr &vel, double time, double Ret)
 	Scla &v = vel[2];
 	Scla &w = vel[3];
 
-	for (int k=1; k<ms.Nz; k++) {
-	for (int i=1; i<ms.Nx; i++) {
+	for (int k=0; k<=ms.Nz; k++) {
+	for (int i=0; i<=ms.Nx; i++) {
 		u(i,0,k) = u(i,ms.Ny,k) = 0;
 		v(i,1,k) = v(i,ms.Ny,k) = 0;
 		w(i,0,k) = w(i,ms.Ny,k) = 0;
