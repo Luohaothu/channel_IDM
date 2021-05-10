@@ -1,10 +1,12 @@
 #include "Bcond.h"
 #include "Interp.h"
 #include "Filter.h"
+#include "Statis.h"
 
 using namespace std;
 
 
+double TotalStress(int i3, int j, const Vctr &vel, const Flow &vis);
 double SlipLength(int i, int j, int k, const Vctr &vel, const Flow &vis, const Vctr &shear);
 void ShearStress(Vctr &shear, const Vctr &vel, const Flow &vis);
 
@@ -270,7 +272,7 @@ void Bcond::ChannelHalf(Boundaries &bc, Boundaries &sbc, const Mesh &ms)
 	}}
 }
 
-void Bcond::TblEquiv(Boundaries &bc, Boundaries &sbc, const Vctr &vel, double dt)
+void Bcond::TblEquiv(Boundaries &bc, Boundaries &sbc, const Vctr &vel, const Vctr &fb, const Flow &vis, double dt)
 {
 	const Mesh &ms = vel.ms;
 	const Scla &u = vel[1];
@@ -282,25 +284,56 @@ void Bcond::TblEquiv(Boundaries &bc, Boundaries &sbc, const Vctr &vel, double dt
 	double dy0 = ms.dy(0), dyn = ms.dy(ms.Ny);
 	double dy1 = ms.dy(1), dym = ms.dy(ms.Ny-1);
 
+	// inlet: spanwise flip from recycling position
+	int i1 = 1;
+	int i2 = ms.Nx * .66;
+	double xrec = ms.x(i2);
+
+	for (int j=0; j<=ms.Ny; j++) {
+		// the mean velocity of inflow evolves in response to the mean velocity of the domain
+		double um1 = 0, um2 = 0;
+		double fm2 = 0, dum = 0;
+
+		for (int k=1; k<ms.Nz; k++) {
+			um1 += u(i1,j,k) / (ms.Nz-1.);
+			um2 += u(i2,j,k) / (ms.Nz-1.);
+			fm2 += fb[1](i2,j,k) / (ms.Nz-1.);
+		}
+		// upper & lower BCs has higher priority than inlet, so it does not matter
+		dum = ! (0<j && j<ms.Ny) ? um2 - um1 : dt * (fm2 + 1./ms.dy(j) * (
+			TotalStress(-1, ms.jpa(j), vel, vis) - TotalStress(-1, j, vel, vis)));
+
+		for (int k=0; k<=ms.Nz; k++) {
+			bc.ub1(j,k) = Interp::InterpNodeU(xrec, ms.yc(j), ms.zc(ms.Nz-k), u) + (um1 - um2 + dum);
+			bc.vb1(j,k) = Interp::InterpNodeV(xrec, ms.y (j), ms.zc(ms.Nz-k), v); if (k>0)
+			bc.wb1(j,k) =-Interp::InterpNodeW(xrec, ms.yc(j), ms.z(ms.Nz-k+1),w); else bc.wb1(j,k) = 0;
+
+			sbc.ub1(j,k) = 0;
+			sbc.vb1(j,k) = dx0 / dx1;
+			sbc.wb1(j,k) = dx0 / dx1;
+	}}
+
+	// outlet: convection (dq/dt + UC dq/dx = 0)
 	double UC = u.MeanUyz(ms.Nx);
 	double c1 = 2./UC * dxm/dt;
 	double c2 = 2./UC * dxn/dt;
 
+	double um = 0;
+	for (int j=1; j<ms.Ny; j++)
+	for (int k=1; k<ms.Nz; k++)
+		um += bc.ub1(j,k) * ms.dy(j) * ms.dz(k);
+	um /= ms.Ly * ms.Lz; // inlet flowrate
+	um -= u.MeanUyz(ms.Nx); // to keep the flowrate constant at every x-section as required by lateral BCs, the outer flowrate must be corrected to match that of the inlet
+
 	for (int j=0; j<=ms.Ny; j++) {
 	for (int k=0; k<=ms.Nz; k++) {
-		// inlet: spanwise flip from outlet
-		bc.ub1(j,k) = u(ms.Nx*.66,j,ms.Nz-k);
-		bc.vb1(j,k) = v(ms.Nx*.66,j,ms.Nz-k);
-		bc.wb1(j,k) = k==0 ? 0 : -w(ms.Nx*.66,j,ms.Nz-k+1);
+		bc.ub2(j,k) = (c1-1)/(c1+1) * u(ms.Nx,j,k) + 1./(c1+1) * u(ms.Nx-1,j,k) + um;
+		bc.vb2(j,k) = (c2-1)/(c2+1) * v(ms.Nx,j,k) + 1./(c2+1) * v(ms.Nx-1,j,k);
+		bc.wb2(j,k) = (c2-1)/(c2+1) * w(ms.Nx,j,k) + 1./(c2+1) * w(ms.Nx-1,j,k);
 
-		sbc.ub1(j,k) = 0;
-		sbc.vb1(j,k) = dx0 / dx1;
-		sbc.wb1(j,k) = dx0 / dx1;
-
-		// outlet: convection (dq/dt + UC dq/dx = 0)
-		bc.ub2(j,k) = (c1-1)/(c1+1) * u(ms.Nx,j,k) + 1./(c1+1) * u(ms.Nx-1,j,k); sbc.ub2(j,k) = -1./(c1+1);
-		bc.vb2(j,k) = (c2-1)/(c2+1) * v(ms.Nx,j,k) + 1./(c2+1) * v(ms.Nx-1,j,k); sbc.vb2(j,k) = -1./(c2+1);
-		bc.wb2(j,k) = (c2-1)/(c2+1) * w(ms.Nx,j,k) + 1./(c2+1) * w(ms.Nx-1,j,k); sbc.wb2(j,k) = -1./(c2+1);
+		sbc.ub2(j,k) = -1./(c1+1);
+		sbc.vb2(j,k) = -1./(c2+1);
+		sbc.wb2(j,k) = -1./(c2+1);
 	}}
 
 	for (int k=0; k<=ms.Nz; k++) {
@@ -564,6 +597,46 @@ void Bcond::SetBoundaryZ(Scla &q, int ord)
 
 
 
+
+double TotalStress(int i3, int j, const Vctr &vel, const Flow &vis)
+{
+	const Mesh &ms = vel.ms;
+	const Scla &u = vel[1], &nux = vis.SeeVec(1);
+	const Scla &v = vel[2], &nuy = vis.SeeVec(2);
+	const Scla &w = vel[3], &nuz = vis.SeeVec(3);
+
+	double rs = 0; // Reynolds stress
+	double um = 0, ua;
+	double vm = 0, va;
+	double vs = 0; // mean viscous shear stress
+
+	if (i3 < 0) {
+		rs = Statis::ReynoldsStress(j, vel);
+		vs = Statis::MeanVisShearStresses(j, vel, vis)[0];
+		return vs - rs;
+	}
+
+	for (int i=1; i<=i3; i++) {
+	for (int k=1; k<ms.Nz; k++) {
+		// interpolation to edges
+		ua = .5/ms.hy(j) * (u(i,j,k) * ms.dy(j-1) + u(i,ms.jma(j),k) * ms.dy(j));
+		va = .5/ms.hx(i) * (v(i,j,k) * ms.dx(i-1) + v(ms.ima(i),j,k) * ms.dx(i));
+		// Reynolds stress
+		rs += ua * va;
+		um += ua;
+		vm += va;
+		// mean viscous shear stress
+		vs += 2. * nuz(i,j,k) * vel.ShearStrain(i,j,k)[0];
+	}}
+
+	double weight = 1./i3 / (ms.Nz-1.);
+
+	rs -= weight * um * vm;
+	rs *= weight;
+	vs *= weight;
+
+	return vs - rs;
+}
 
 
 void DeltaTau(double dtau[3], int j, const Vctr &vel, const Flow &vis, const Vctr &shear)

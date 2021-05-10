@@ -121,9 +121,9 @@ void Solver::Evolve()
 	if (step==1) {mpg[0] = -1.; mpg[1] = mpg[2] = 0;}
 
 	CalcVis(vis, fld.SeeVec(), para.Re, para.bftype);
-	Bcond::ChannelHalf(bc, sbc, ms);
+	// Bcond::ChannelHalf(bc, sbc, ms);
 	CalcFb(fb, mpg, "Fx.txt");
-	// Bcond::TblEquiv(bc, sbc, fld.SeeVec(), fb, vis, para.dt);
+	Bcond::TblEquiv(bc, sbc, fld.SeeVec(), fb, vis, para.dt);
 	IDM::calc(fldh, fld, vis, fb, bc, sbc, para.dt);
 	SetBoundaries(fldh.GetVec(), bc, sbc);
 	Manipulation();

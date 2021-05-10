@@ -309,8 +309,8 @@ void Solver::CalcMpg(vector<double> &mpg, Vctr &vel, const Vctr &fb, double dt)
 
 	int j = Interp::BiSearch(1., ms.yc(), 0, ms.Ny+1);
 
-	double du = vel[1].meanxz(j) - .99;
-	double dw = vel[3].MeanW();
+	double du = u.meanz(1,j) - 1.; // u.meanxz(j) - 1.;
+	double dw = 0;                 // w.MeanW();
 
 	double dmpg1 = du/dt / fb[1](1,j,1) * (mpg[0] ? -mpg[0] : 1.);
 	double dmpg3 = dw/dt;
@@ -318,6 +318,10 @@ void Solver::CalcMpg(vector<double> &mpg, Vctr &vel, const Vctr &fb, double dt)
 	double limiter = 100;
 	dmpg1 = limiter / (PI/2) * atan(dmpg1 / limiter * (PI/2));
 	dmpg3 = limiter / (PI/2) * atan(dmpg3 / limiter * (PI/2));
+
+	FILE* fp = fopen("dmpg1.dat", "a");
+	fprintf(fp, "%.6e\n", dmpg1);
+	fclose(fp);
 
 	// complement mpg increment that was not included in the velocity update step
 	#pragma omp parallel for collapse(3)
