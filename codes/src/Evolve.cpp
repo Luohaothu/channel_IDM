@@ -26,7 +26,7 @@ void Solver::Manipulation()
 // #define _FULLCHANNEL_ALGEWM
 // #define _FULLCHANNEL_SLIPWM
 // #define _TBL
-#define _ETBL
+#define _EBL
 // #define _SYNMFU
 #define _TESTCHANNEL
 
@@ -113,7 +113,7 @@ void Solver::Evolve()
 }
 #endif
 
-#ifdef _ETBL
+#ifdef _EBL
 void Solver::Evolve()
 {
 	step ++; time += para.dt;

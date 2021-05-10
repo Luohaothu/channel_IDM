@@ -31,6 +31,10 @@ step(0)
 
 	if (! ifinit) return;
 
+	// initiate the mean pressure gradient with default values, can be adjusted in Evolve
+	if (para.prd == 010) { mpg[0] = -1.; mpg[1] = mpg[2] = 0; }
+	if (para.prd == 110) { mpg[0] = mpg[1] = mpg[2] = 0; }
+
 	// initiate the flow field for computation
 	if (para.inread) {
 		ContinueCase();
@@ -38,10 +42,6 @@ step(0)
 		if (para.dy_min >= 0) InitFieldChan(bc, sbc, para.inener);
 		if (para.dy_min <  0) InitFieldBlyr(bc, sbc, para.inener);
 	}
-
-	// initiate the mean pressure gradient with default values, can be adjusted in Evolve
-	if (para.prd == 010) { mpg[0] = -1.; mpg[1] = mpg[2] = 0; }
-	if (para.prd == 110) { mpg[0] = mpg[1] = mpg[2] = 0; }
 
 	ShowInfo();
 
@@ -165,7 +165,7 @@ void Solver::Output()
 	if (step % para.nwrite == 0) {
 		fld .WriteField(para.fieldpath, step, "");
 		(fldh *= 1./para.dt).WriteField(para.fieldpath, step, "T");
-		// fld.WriteTecplot(para.fieldpath, 0, time);
+		fld.WriteTecplot(para.fieldpath, 0, time);
 		cout << "Files successfully written for step " << step << endl;
 	}
 	if (step % para.nprint == 0) {
