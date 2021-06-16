@@ -15,6 +15,7 @@ public:
 
 	void checkPara(int tstep = 0);
 	void showPara() const;
+	bool isInplaceContinue() const;
 	
 	// file paths
 	char fieldpath[1024];

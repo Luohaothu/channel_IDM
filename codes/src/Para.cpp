@@ -78,7 +78,6 @@ void Para::checkPara(int tstep)
 	}
 }
 
-
 void parseJprbs(int *jprbs, char *str)
 {
 	char *s = strchr(str, '=');
@@ -174,6 +173,22 @@ void Para::showPara() const
 		cout << "total " << jprbs[0] << " layers to be probed." << endl;
 
 	cout << "----------------------------------------------------" << endl;
+}
+
+bool Para::isInplaceContinue() const
+{
+	struct isPrefix {
+		const std::string foo;
+		const std::string foobar;
+
+		isPrefix(const char *foo, const char *foobar): foo(foo), foobar(foobar) {}
+		
+		bool operator()() {
+			return std::mismatch(foo.begin(), foo.end(), foobar.begin()).first == foo.end();
+		};
+	} ispref(inpath, statpath); // whether inpath is a prefix of statpath
+
+	return ispref();
 }
 
 

@@ -54,7 +54,7 @@ step(0)
 
 void Solver::ContinueCase()
 {
-	if (para.inpath[0]) {
+	if (! para.isInplaceContinue()) {
 		// interpolate from another case
 		Solver slv_(para.inpath, false);
 		slv_.para.inpath[0] = 0;
@@ -147,7 +147,7 @@ void Solver::ShowInfo() const
 	para.showPara();
 
 	if (para.inread) {
-		if (para.inpath[0]) {
+		if (! para.isInplaceContinue()) {
 			cout << endl << "Flow fields initiated from existing fields with parameters:" << endl;
 			Para(para.inpath).showPara();
 		} else
