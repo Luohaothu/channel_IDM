@@ -25,10 +25,10 @@ void Solver::Manipulation()
 // #define _HALFCHANNEL
 // #define _FULLCHANNEL_ALGEWM
 // #define _FULLCHANNEL_SLIPWM
-// #define _TBL
+#define _TBL
 #define _EBL
 // #define _SYNMFU
-#define _TESTCHANNEL
+// #define _TESTCHANNEL
 
 // *********************************** //
 
@@ -98,16 +98,18 @@ void Solver::Evolve()
 #endif
 
 #ifdef _TBL // boundary layer with Ufree = 1
-void Solver::Evolve()
+void Solver::Evolve(const Solver &slv)
 {
 	step ++; time += para.dt;
 
+	if (step==1) {mpg[0] = mpg[1] = mpg[2] = 0; fb.Set(0);}
+
 	CalcVis(vis, fld.SeeVec(), para.Re, para.bftype);
-	Bcond::TblDevelop(bc, sbc, fld.SeeVec(), 1., para.dt);
-	CalcFb(fb, mpg);
+	Bcond::TblDevelop(bc, sbc, fld.SeeVec(), slv.fld.SeeVec(), 1./*Ufree*/, para.dt);
+	// CalcFb(fb, mpg);
 	IDM::calc(fldh, fld, vis, fb, bc, sbc, para.dt);
 	SetBoundaries(fldh.GetVec(), bc, sbc);
-	Manipulation();
+	// Manipulation();
 
 	fld += (fldh -= fld);
 }
@@ -118,7 +120,7 @@ void Solver::Evolve()
 {
 	step ++; time += para.dt;
 
-	if (step==1) {mpg[0] = -1.; mpg[1] = mpg[2] = 0;}
+	if (step==1) {mpg[0] = -0.001942256; mpg[1] = mpg[2] = 0;}
 
 	CalcVis(vis, fld.SeeVec(), para.Re, para.bftype);
 	// Bcond::ChannelHalf(bc, sbc, ms);
@@ -126,7 +128,7 @@ void Solver::Evolve()
 	Bcond::TblEquiv(bc, sbc, fld.SeeVec(), fb, vis, para.dt);
 	IDM::calc(fldh, fld, vis, fb, bc, sbc, para.dt);
 	SetBoundaries(fldh.GetVec(), bc, sbc);
-	Manipulation();
+	// Manipulation();
 
 	fld += (fldh -= fld);
 }

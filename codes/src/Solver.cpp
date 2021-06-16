@@ -114,7 +114,7 @@ void Solver::InitFieldBlyr(Boundaries &bc, Boundaries &sbc, double energy)
 		u.AddLyr(um, j);
 	}
 
-	Bcond::TblDevelop(bc, sbc, fld.SeeVec(), Ufree, 1);	
+	Bcond::TblDevelop(bc, sbc, fld.SeeVec(), fld.SeeVec(), Ufree, 1);	
 	SetBoundaries(fld.GetVec(), bc, sbc);
 }
 

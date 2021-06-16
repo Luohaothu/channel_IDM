@@ -11,7 +11,7 @@ void Config(int n);
 
 
 /***** computation mode *****/
-# define DEFAULT // AUXIMAIN //
+# define AUXIMAIN // DEFAULT //
 
 #ifdef DEFAULT
 

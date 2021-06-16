@@ -6,6 +6,7 @@
 using namespace std;
 
 
+void ReadUm(vector<double> &um1, vector<double> &vm1, const Mesh &ms, const char *filename);
 double TotalStress(int i3, int j, const Vctr &vel, const Flow &vis);
 double SlipLength(int i, int j, int k, const Vctr &vel, const Flow &vis, const Vctr &shear);
 void ShearStress(Vctr &shear, const Vctr &vel, const Flow &vis);
@@ -286,27 +287,25 @@ void Bcond::TblEquiv(Boundaries &bc, Boundaries &sbc, const Vctr &vel, const Vct
 
 	// inlet: spanwise flip from recycling position
 	int i1 = 1;
-	int i2 = ms.Nx * .66;
+	int i2 = ms.Nx * .75;
 	double xrec = ms.x(i2);
 
 	for (int j=0; j<=ms.Ny; j++) {
 		// the mean velocity of inflow evolves in response to the mean velocity of the domain
-		double um1 = 0, um2 = 0;
-		double fm2 = 0, dum = 0;
-
-		for (int k=1; k<ms.Nz; k++) {
-			um1 += u(i1,j,k) / (ms.Nz-1.);
-			um2 += u(i2,j,k) / (ms.Nz-1.);
-			fm2 += fb[1](i2,j,k) / (ms.Nz-1.);
-		}
-		// upper & lower BCs has higher priority than inlet, so it does not matter
-		dum = ! (0<j && j<ms.Ny) ? um2 - um1 : dt * (fm2 + 1./ms.dy(j) * (
-			TotalStress(-1, ms.jpa(j), vel, vis) - TotalStress(-1, j, vel, vis)));
+		double fm2 = fb[1](i2,j,ms.Nz/2);
+		double dum = (0<j && j<ms.Ny) ? dt * (fm2 + 1./ms.dy(j) * (
+			TotalStress(-1, ms.jpa(j), vel, vis) - TotalStress(-1, j, vel, vis))) : 0; // upper & lower BCs has higher priority than inlet, so it does not matter
 
 		for (int k=0; k<=ms.Nz; k++) {
-			bc.ub1(j,k) = Interp::InterpNodeU(xrec, ms.yc(j), ms.zc(ms.Nz-k), u) + (um1 - um2 + dum);
-			bc.vb1(j,k) = Interp::InterpNodeV(xrec, ms.y (j), ms.zc(ms.Nz-k), v); if (k>0)
-			bc.wb1(j,k) =-Interp::InterpNodeW(xrec, ms.yc(j), ms.z(ms.Nz-k+1),w); else bc.wb1(j,k) = 0;
+			// z mirroring
+			// bc.ub1(j,k) = Interp::InterpNodeU(xrec, ms.yc(j), ms.zc(ms.Nz-k), u) + dum;
+			// bc.vb1(j,k) = Interp::InterpNodeV(xrec, ms.y (j), ms.zc(ms.Nz-k), v); if (k>0)
+			// bc.wb1(j,k) =-Interp::InterpNodeW(xrec, ms.yc(j), ms.z(ms.Nz-k+1),w); else bc.wb1(j,k) = 0;
+
+			// z shifting ( k+ms.Nz/2*(k>ms.Nz/2 ? -1 : 1) for even Nz )
+			bc.ub1(j,k) = Interp::InterpNodeU(xrec, ms.yc(j), ms.zc(k)+ms.Lz/2, u) + dum;
+			bc.vb1(j,k) = Interp::InterpNodeV(xrec, ms.y (j), ms.zc(k)+ms.Lz/2, v); if (k>0)
+			bc.wb1(j,k) = Interp::InterpNodeW(xrec, ms.yc(j), ms.z (k)+ms.Lz/2, w); else bc.wb1(j,k) = 0;
 
 			sbc.ub1(j,k) = 0;
 			sbc.vb1(j,k) = dx0 / dx1;
@@ -349,12 +348,12 @@ void Bcond::TblEquiv(Boundaries &bc, Boundaries &sbc, const Vctr &vel, const Vct
 	}}
 }
 
-void Bcond::TblDevelop(Boundaries &bc, Boundaries &sbc, const Vctr &vel, double ufree, double dt)
+void Bcond::TblDevelop(Boundaries &bc, Boundaries &sbc, const Vctr &vel, const Vctr &vel0, double ufree, double dt)
 {
-	const Mesh &ms = vel.ms;
-	const Scla &u = vel[1];
-	const Scla &v = vel[2];
-	const Scla &w = vel[3];
+	const Mesh &ms= vel.ms, &ms0= vel0.ms;
+	const Scla &u = vel[1], &u0 = vel0[1];
+	const Scla &v = vel[2], &v0 = vel0[2];
+	const Scla &w = vel[3], &w0 = vel0[3];
 
 	double dx0 = ms.dx(0), dxn = ms.hx(ms.Nx); // dxn is for v & w
 	double dx1 = ms.dx(1), dxm = ms.dx(ms.Nx-1);
@@ -365,18 +364,45 @@ void Bcond::TblDevelop(Boundaries &bc, Boundaries &sbc, const Vctr &vel, double 
 	double c1 = 2./UC * dxm/dt;
 	double c2 = 2./UC * dxn/dt;
 
+	double xrec = ms0.x(ms0.Nx * .75);
+
+	vector<double> um1(ms.Ny+1, 0.), um2(ms.Ny+1, 0.);
+	vector<double> vm1(ms.Ny+1, 0.), vm2(ms.Ny+1, 0.);
+
+	ReadUm(um1, vm1, ms, "Um.txt");
+
+	for (int j=0; j<=ms.Ny; j++) {
+		int j1 = Interp::BiSearch(ms.yc(j), ms0.yc(), 0, ms0.Ny);
+		int j2 = Interp::BiSearch(ms.y (j), ms0.y (), 1, ms0.Ny);
+
+		um2[j] = (u0.meanxz(j1) * (ms0.yc(j1+1)-ms.yc(j)) + u0.meanxz(j1+1) * (ms.yc(j)-ms0.yc(j1))) / (ms0.yc(j1+1)-ms0.yc(j1));
+		vm2[j] = (v0.meanxz(j2) * (ms0.y (j2+1)-ms.y (j)) + v0.meanxz(j2+1) * (ms.y (j)-ms0.y (j2))) / (ms0.y (j2+1)-ms0.y (j2));
+	}
+
 	for (int j=0; j<=ms.Ny; j++) {
 	for (int k=0; k<=ms.Nz; k++) {
-		// inlet: invariant from initial
-		bc.ub1(j,k) = u(1,j,k); // BL can only get thicker downstream, not thinner, therefore inlet must contain enough momentum
-		sbc.ub1(j,k)= 0;
-		bc.vb1(j,k) = 0; sbc.vb1(j,k) = dx0 / dx1;
-		bc.wb1(j,k) = 0; sbc.wb1(j,k) = dx0 / dx1;
+		// // inlet: invariant from initial
+		// bc.ub1(j,k) = u(1,j,k); // BL can only get thicker downstream, not thinner, therefore inlet must contain enough momentum
+		// bc.vb1(j,k) = 0;
+		// bc.wb1(j,k) = 0;
+
+		// inlet: from recycling position of the auxiliary simulation
+		bc.ub1(j,k) = (Interp::InterpNodeU(xrec, ms.yc(j), ms.zc(k), u0) - um2[j]) * (ms.yc(j)<=ms0.Ly) + um1[j]; if (j>0)
+		bc.vb1(j,k) = (Interp::InterpNodeV(xrec, ms.y (j), ms.zc(k), v0) - vm2[j]) * (ms.y (j)<=ms0.Ly) + vm1[j]; if (k>0)
+		bc.wb1(j,k) =  Interp::InterpNodeW(xrec, ms.yc(j), ms.z(k),  w0)           * (ms.yc(j)<=ms0.Ly);
+
+		sbc.ub1(j,k) = 0;
+		sbc.vb1(j,k) = dx0 / dx1;
+		sbc.wb1(j,k) = dx0 / dx1;
 
 		// outlet: convection (dq/dt + UC dq/dx = 0)
-		bc.ub2(j,k) = (c1-1)/(c1+1) * u(ms.Nx,j,k) + 1./(c1+1) * u(ms.Nx-1,j,k); sbc.ub2(j,k) = -1./(c1+1);
-		bc.vb2(j,k) = (c2-1)/(c2+1) * v(ms.Nx,j,k) + 1./(c2+1) * v(ms.Nx-1,j,k); sbc.vb2(j,k) = -1./(c2+1);
-		bc.wb2(j,k) = (c2-1)/(c2+1) * w(ms.Nx,j,k) + 1./(c2+1) * w(ms.Nx-1,j,k); sbc.wb2(j,k) = -1./(c2+1);
+		bc.ub2(j,k) = (c1-1)/(c1+1) * u(ms.Nx,j,k) + 1./(c1+1) * u(ms.Nx-1,j,k);
+		bc.vb2(j,k) = (c2-1)/(c2+1) * v(ms.Nx,j,k) + 1./(c2+1) * v(ms.Nx-1,j,k);
+		bc.wb2(j,k) = (c2-1)/(c2+1) * w(ms.Nx,j,k) + 1./(c2+1) * w(ms.Nx-1,j,k);
+
+		sbc.ub2(j,k) = -1./(c1+1);
+		sbc.vb2(j,k) = -1./(c2+1);
+		sbc.wb2(j,k) = -1./(c2+1);
 	}}
 
 	for (int k=0; k<=ms.Nz; k++) {
@@ -597,6 +623,44 @@ void Bcond::SetBoundaryZ(Scla &q, int ord)
 
 
 
+void ReadUm(vector<double> &um1, vector<double> &vm1, const Mesh &ms, const char *filename)
+{
+	// read mean velocity from file
+	vector<double> ys, um, vm;
+
+	string line;
+	ifstream fin; fin.open(filename);
+	while (getline(fin, line)) {
+		double ys_, um_, vm_;
+		sscanf(line.c_str(), "%le%le%le",  &ys_, &um_, &vm_);
+		ys.push_back(ys_);
+		um.push_back(um_);
+		vm.push_back(vm_);
+	}
+	fin.close();
+
+	// interpolation
+	for (int j=0; j<=ms.Ny; j++) {
+
+		double yc = ms.yc(j);
+		double y  = ms.y (j);
+
+		int j0 = Interp::BiSearch(yc, ys.data(), 0, ys.size()-1), j1 = j0 + 1;
+		int j2 = Interp::BiSearch(y , ys.data(), 0, ys.size()-1), j3 = j2 + 1;
+
+		double a = (ys[j1] - yc) / (ys[j1] - ys[j0]);
+		double b = (yc - ys[j0]) / (ys[j1] - ys[j0]);
+		double c = (ys[j3] - y ) / (ys[j3] - ys[j2]);
+		double d = (y  - ys[j2]) / (ys[j3] - ys[j2]);
+
+		um1[j] = a * um[j0] + b * um[j1];
+		vm1[j] = c * vm[j2] + d * vm[j3];
+	}
+
+	// correct the mean streamwise to fulfill the upper BC
+	for (int j=0; j<=ms.Ny; j++)
+		um1[j] += ms.yc(j) / ms.Ly * (1. - um1[ms.Ny]);
+}
 
 double TotalStress(int i3, int j, const Vctr &vel, const Flow &vis)
 {
