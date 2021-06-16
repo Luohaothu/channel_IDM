@@ -110,3 +110,97 @@ class Statis:
 		self.Evw[:] = .5 * (self.Evw - self.Evw[::-1])
 		self.Euw[:] = .5 * (self.Euw + self.Euw[::-1])
 
+
+
+class Statis_x(Statis):
+
+	def calc_statis(self, tsteps=None):
+
+		Nx = self.para.Nx
+		Ny = self.para.Ny
+		if tsteps is None: tsteps = self.para.tsteps
+
+		self.Um  = np.zeros([Ny+1, Nx-1])
+		self.Vm  = np.zeros([Ny+1, Nx-1])
+		self.Wm  = np.zeros([Ny+1, Nx-1])
+		self.Pm  = np.zeros([Ny+1, Nx-1])
+		self.Ruu = np.zeros([Ny+1, Nx-1])
+		self.Rvv = np.zeros([Ny+1, Nx-1])
+		self.Rww = np.zeros([Ny+1, Nx-1])
+		self.Ruv = np.zeros([Ny+1, Nx-1])
+		self.Rvw = np.zeros([Ny+1, Nx-1])
+		self.Ruw = np.zeros([Ny+1, Nx-1])
+		self.Rpu = np.zeros([Ny+1, Nx-1])
+		self.Rpv = np.zeros([Ny+1, Nx-1])
+		self.Rpw = np.zeros([Ny+1, Nx-1])
+		self.Rpp = np.zeros([Ny+1, Nx-1])
+
+		for tstep in tsteps:
+
+			print('reading step %i'%tstep)
+
+			u = self.feld.read('U%08i.bin'%tstep)
+			v = self.feld.read('V%08i.bin'%tstep)
+			w = self.feld.read('W%08i.bin'%tstep)
+			p = self.feld.read('P%08i.bin'%tstep)
+
+			um = np.mean(u, axis=1)
+			vm = np.mean(v, axis=1)
+			wm = np.mean(w, axis=1)
+			pm = np.mean(p, axis=1)
+
+			self.Um += um
+			self.Vm += vm
+			self.Wm += wm
+			self.Pm += pm
+
+			self.Ruu += np.mean(u**2, axis=1) - um**2
+			self.Rvv += np.mean(v**2, axis=1) - vm**2
+			self.Rww += np.mean(w**2, axis=1) - wm**2
+			self.Ruv += np.mean(u*v,  axis=1) - um*vm
+			self.Rvw += np.mean(v*w,  axis=1) - vm*wm
+			self.Ruw += np.mean(u*w,  axis=1) - um*wm
+			self.Rpu += np.mean(p*u,  axis=1) - pm*um
+			self.Rpv += np.mean(p*v,  axis=1) - pm*vm
+			self.Rpw += np.mean(p*w,  axis=1) - pm*wm
+			self.Rpp += np.mean(p**2, axis=1) - pm**2
+
+		self.Um  /= len(tsteps)
+		self.Vm  /= len(tsteps)
+		self.Wm  /= len(tsteps)
+		self.Pm  /= len(tsteps)
+		self.Ruu /= len(tsteps)
+		self.Rvv /= len(tsteps)
+		self.Rww /= len(tsteps)
+		self.Ruv /= len(tsteps)
+		self.Rvw /= len(tsteps)
+		self.Ruw /= len(tsteps)
+		self.Rpu /= len(tsteps)
+		self.Rpv /= len(tsteps)
+		self.Rpw /= len(tsteps)
+		self.Rpp /= len(tsteps)
+
+	def calc_develops(self, para):
+
+		# take yc to bescaled by inlet \delta by default
+
+		def wrapped_interp(x, xps, fp):
+			return np.array([np.interp(x, xp, fp) for xp in xps])
+
+		umdlt = np.interp(1., para.yc, self.Um.T[0])
+		uminf = self.Um[-1]
+
+		self.dlt  = wrapped_interp(umdlt, self.Um.T, para.yc)
+		self.dlt1 = np.trapz( 1. - self.Um/uminf,                      para.yc, axis=0)
+		self.dlt2 = np.trapz((1. - self.Um/uminf)     * self.Um/uminf, para.yc, axis=0)
+		self.dlt3 = np.trapz((1. -(self.Um/uminf)**2) * self.Um/uminf, para.yc, axis=0)
+		
+		tauw = self.Um[1] / para.yc[1] / para.Re
+		utau = tauw**.5
+		
+		self.Re_tau = utau * self.dlt * para.Re
+		self.Re_the = self.dlt2 * para.Re
+		self.Cf = 2 * tauw
+		self.H = self.dlt1/self.dlt2
+
+
